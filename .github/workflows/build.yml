@@ -11,22 +11,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
       - name: Setup Flutter environment
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.x'
+          flutter-version: '3.22.x'
           channel: 'stable'
 
-      - name: Initialize full Flutter project structure
+      - name: Initialize clean Flutter project structure
         run: |
-          # Создаем временный проект со всеми android/ios папками
-          flutter create temp_project --platforms=android --org=com.fpv
-          
-          # Копируем созданные системные папки (android и т.д.) в корень нашего репозитория
-          cp -r temp_project/android ./
-          
-          # Удаляем временную папку
-          rm -rf temp_project
+          flutter create . --org com.fpv --project-name fpv_configurator --platforms=android
 
       - name: Install dependencies
         run: flutter pub get
@@ -39,5 +38,6 @@ jobs:
         with:
           name: app-release
           path: build/app/outputs/flutter-apk/app-release.apk
+
 
 
