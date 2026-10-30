@@ -342,7 +342,7 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
                   );
                   if (scene.world.children.isNotEmpty) {
                     droneModel = scene.world.children.first;
-                    droneModel!.scale.setAll(1.5);
+                    droneModel!.scale.setValues(1.5, 1.5, 1.5);
                   }
                   scene.camera.zoom = 5.0;
                 },
