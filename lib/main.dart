@@ -291,6 +291,9 @@ class _TerminalTabState extends State<TerminalTab> {
   }
 }
 
+// ==========================================
+// РАЗДЕЛ 2: Абсолютно все настройки дрона
+// ==========================================
 class SettingsTab extends StatefulWidget {
   const SettingsTab({super.key});
 
@@ -299,11 +302,34 @@ class SettingsTab extends StatefulWidget {
 }
 
 class _SettingsTabState extends State<SettingsTab> {
-  double _deadbandVal = 20.0;
-  double _lpfGyroVal = 0.4;
-  double _lpfAccelVal = 0.15;
-  double _fsBattVal = 14.0;
-  double _rollPVal = 0.5;
+  // 1. Полетные режимы и лимиты
+  double _flightMode = 0; // 0: Angle, 1: Horizon, 2: Acro
+  double _angleMax = 20.0;
+  double _vzMax = 1.2;
+
+  // 2. RC & Rates
+  double _deadband = 20.0;
+  double _rcSmooth = 0.30;
+  double _rcRate = 0.40, _superExpo = 0.05, _stickExpo = 0.50;
+  double _yawRcRate = 0.35, _yawSuperExpo = 0.05, _yawExpo = 0.40;
+
+  // 3. Фильтры
+  double _filterMode = 3; // 0: Off, 1: LPF, 2: LPF+Notch, 3: DynNotch
+  double _lpfGyro = 0.40;
+  double _lpfAccel = 0.15;
+  double _notchFreq = 65.0;
+  double _dynNotchMin = 45.0, _dynNotchMax = 120.0;
+
+  // 4. Питание и безопасность
+  double _fsBatt = 14.0;
+  double _cells = 4; // 0: Auto, 2-6
+  double _fsSpeed = 0.8;
+
+  // 5. ПИД-регуляторы
+  double _rollP = 0.50, _rollI = 0.015, _rollD = 0.02;
+  double _pitchP = 0.50, _pitchI = 0.015, _pitchD = 0.02;
+  double _yawP = 0.65, _yawI = 0.010, _yawD = 0.0;
+  double _vzP = 7.5, _vzI = 1.3, _vzD = 0.35;
 
   Widget _buildSliderCard({
     required String title,
@@ -325,7 +351,7 @@ class _SettingsTabState extends State<SettingsTab> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
@@ -365,77 +391,214 @@ class _SettingsTabState extends State<SettingsTab> {
     return ListView(
       padding: const EdgeInsets.all(12.0),
       children: [
+        // --- 1. FLIGHT MODES & LIMITS ---
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-          child: Text("RC & DEADBAND", style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+          child: Text("FLIGHT MODES & LIMITS", style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
         ),
         _buildSliderCard(
-          title: "Stick Deadband",
-          value: _deadbandVal,
-          min: 0,
-          max: 100,
-          divisions: 100,
-          unit: "us",
-          onChanged: (val) => setState(() => _deadbandVal = val),
+          title: "Flight Mode (0:Angle, 1:Horizon, 2:Acro)",
+          value: _flightMode, min: 0, max: 2, divisions: 2, unit: "",
+          onChanged: (val) => setState(() => _flightMode = val),
+          onChangeEnd: (val) => UsbService.sendCommand("mode ${val.round()}"),
+        ),
+        _buildSliderCard(
+          title: "Max Angle (angle_max)",
+          value: _angleMax, min: 10.0, max: 80.0, divisions: 14, unit: "deg",
+          onChanged: (val) => setState(() => _angleMax = val),
+          onChangeEnd: (val) => UsbService.sendCommand("angle_max ${val.round()}"),
+        ),
+        _buildSliderCard(
+          title: "Max Vertical Speed (vz_max)",
+          value: _vzMax, min: 0.5, max: 5.0, divisions: 45, unit: "m/s",
+          onChanged: (val) => setState(() => _vzMax = val),
+          onChangeEnd: (val) => UsbService.sendCommand("vz_max ${val.toStringAsFixed(1)}"),
+        ),
+
+        // --- 2. RC & RATES ---
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+          child: Text("RC & RATES", style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+        ),
+        _buildSliderCard(
+          title: "Stick Deadband (deadband)",
+          value: _deadband, min: 0, max: 100, divisions: 100, unit: "us",
+          onChanged: (val) => setState(() => _deadband = val),
           onChangeEnd: (val) => UsbService.sendCommand("deadband ${val.round()}"),
         ),
+        _buildSliderCard(
+          title: "RC Smoothing (rc_smooth)",
+          value: _rcSmooth, min: 0.05, max: 1.0, divisions: 19, unit: "",
+          onChanged: (val) => setState(() => _rcSmooth = val),
+          onChangeEnd: (val) => UsbService.sendCommand("rc_smooth ${val.toStringAsFixed(2)}"),
+        ),
+        _buildSliderCard(
+          title: "Roll/Pitch Rate (rates)",
+          value: _rcRate, min: 0.1, max: 2.0, divisions: 19, unit: "",
+          onChanged: (val) => setState(() => _rcRate = val),
+          onChangeEnd: (val) => UsbService.sendCommand("rates $_rcRate $_superExpo $_stickExpo"),
+        ),
+        _buildSliderCard(
+          title: "Yaw Rate (yaw_rates)",
+          value: _yawRcRate, min: 0.1, max: 2.0, divisions: 19, unit: "",
+          onChanged: (val) => setState(() => _yawRcRate = val),
+          onChangeEnd: (val) => UsbService.sendCommand("yaw_rates $_yawRcRate $_yawSuperExpo $_yawExpo"),
+        ),
+
+        // --- 3. FILTERS ---
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
           child: Text("SENSORS & FILTERS", style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
         ),
         _buildSliderCard(
+          title: "Filter Mode (0:Off, 1:LPF, 2:Notch, 3:Dyn)",
+          value: _filterMode, min: 0, max: 3, divisions: 3, unit: "",
+          onChanged: (val) => setState(() => _filterMode = val),
+          onChangeEnd: (val) => UsbService.sendCommand("filter ${val.round()}"),
+        ),
+        _buildSliderCard(
           title: "Gyro LPF Alpha (lpf_gyro)",
-          value: _lpfGyroVal,
-          min: 0.05,
-          max: 1.0,
-          divisions: 19,
-          unit: "",
-          onChanged: (val) => setState(() => _lpfGyroVal = val),
+          value: _lpfGyro, min: 0.05, max: 1.0, divisions: 19, unit: "",
+          onChanged: (val) => setState(() => _lpfGyro = val),
           onChangeEnd: (val) => UsbService.sendCommand("lpf_gyro ${val.toStringAsFixed(2)}"),
         ),
         _buildSliderCard(
           title: "Accel LPF Alpha (lpf_accel)",
-          value: _lpfAccelVal,
-          min: 0.01,
-          max: 1.0,
-          divisions: 99,
-          unit: "",
-          onChanged: (val) => setState(() => _lpfAccelVal = val),
+          value: _lpfAccel, min: 0.01, max: 1.0, divisions: 99, unit: "",
+          onChanged: (val) => setState(() => _lpfAccel = val),
           onChangeEnd: (val) => UsbService.sendCommand("lpf_accel ${val.toStringAsFixed(2)}"),
         ),
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-          child: Text("PID TUNING", style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+        _buildSliderCard(
+          title: "Notch Center Freq (notch_freq)",
+          value: _notchFreq, min: 20.0, max: 200.0, divisions: 36, unit: "Hz",
+          onChanged: (val) => setState(() => _notchFreq = val),
+          onChangeEnd: (val) => UsbService.sendCommand("notch_freq ${val.round()}"),
         ),
         _buildSliderCard(
-          title: "Roll P Gain",
-          value: _rollPVal,
-          min: 0.0,
-          max: 2.0,
-          divisions: 40,
-          unit: "",
-          onChanged: (val) => setState(() => _rollPVal = val),
-          onChangeEnd: (val) => UsbService.sendCommand("pid_roll $val 0.015 0.02"),
+          title: "Dyn Notch Min Hz",
+          value: _dynNotchMin, min: 20.0, max: 100.0, divisions: 16, unit: "Hz",
+          onChanged: (val) => setState(() => _dynNotchMin = val),
+          onChangeEnd: (val) => UsbService.sendCommand("dyn_notch $val $_dynNotchMax"),
         ),
+        _buildSliderCard(
+          title: "Dyn Notch Max Hz",
+          value: _dynNotchMax, min: 60.0, max: 200.0, divisions: 28, unit: "Hz",
+          onChanged: (val) => setState(() => _dynNotchMax = val),
+          onChangeEnd: (val) => UsbService.sendCommand("dyn_notch $_dynNotchMin $val"),
+        ),
+
+        // --- 4. POWER & SAFETY ---
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
           child: Text("POWER & SAFETY", style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
         ),
         _buildSliderCard(
+          title: "Battery Cells (0: Auto, 2-6)",
+          value: _cells, min: 0, max: 6, divisions: 6, unit: "S",
+          onChanged: (val) => setState(() => _cells = val),
+          onChangeEnd: (val) => UsbService.sendCommand("cells ${val.round()}"),
+        ),
+        _buildSliderCard(
           title: "Failsafe Voltage (fs_batt)",
-          value: _fsBattVal,
-          min: 6.0,
-          max: 25.0,
-          divisions: 38,
-          unit: "V",
-          onChanged: (val) => setState(() => _fsBattVal = val),
+          value: _fsBatt, min: 6.0, max: 25.0, divisions: 38, unit: "V",
+          onChanged: (val) => setState(() => _fsBatt = val),
           onChangeEnd: (val) => UsbService.sendCommand("fs_batt ${val.toStringAsFixed(1)}"),
+        ),
+        _buildSliderCard(
+          title: "Failsafe Descent Speed (fs_speed)",
+          value: _fsSpeed, min: 0.2, max: 3.0, divisions: 28, unit: "m/s",
+          onChanged: (val) => setState(() => _fsSpeed = val),
+          onChangeEnd: (val) => UsbService.sendCommand("fs_speed ${val.toStringAsFixed(1)}"),
+        ),
+
+        // --- 5. PID TUNING ---
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+          child: Text("PID TUNING (ROLL)", style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+        ),
+        _buildSliderCard(
+          title: "Roll P Gain", value: _rollP, min: 0.0, max: 2.0, divisions: 40, unit: "",
+          onChanged: (val) => setState(() => _rollP = val),
+          onChangeEnd: (val) => UsbService.sendCommand("pid_roll $val $_rollI $_rollD"),
+        ),
+        _buildSliderCard(
+          title: "Roll I Gain", value: _rollI, min: 0.0, max: 0.1, divisions: 50, unit: "",
+          onChanged: (val) => setState(() => _rollI = val),
+          onChangeEnd: (val) => UsbService.sendCommand("pid_roll $_rollP $val $_rollD"),
+        ),
+        _buildSliderCard(
+          title: "Roll D Gain", value: _rollD, min: 0.0, max: 0.1, divisions: 50, unit: "",
+          onChanged: (val) => setState(() => _rollD = val),
+          onChangeEnd: (val) => UsbService.sendCommand("pid_roll $_rollP $_rollI $val"),
+        ),
+
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+          child: Text("PID TUNING (PITCH)", style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+        ),
+        _buildSliderCard(
+          title: "Pitch P Gain", value: _pitchP, min: 0.0, max: 2.0, divisions: 40, unit: "",
+          onChanged: (val) => setState(() => _pitchP = val),
+          onChangeEnd: (val) => UsbService.sendCommand("pid_pitch $val $_pitchI $_pitchD"),
+        ),
+        _buildSliderCard(
+          title: "Pitch I Gain", value: _pitchI, min: 0.0, max: 0.1, divisions: 50, unit: "",
+          onChanged: (val) => setState(() => _pitchI = val),
+          onChangeEnd: (val) => UsbService.sendCommand("pid_pitch $_pitchP $val $_pitchD"),
+        ),
+        _buildSliderCard(
+          title: "Pitch D Gain", value: _pitchD, min: 0.0, max: 0.1, divisions: 50, unit: "",
+          onChanged: (val) => setState(() => _pitchD = val),
+          onChangeEnd: (val) => UsbService.sendCommand("pid_pitch $_pitchP $_pitchI $val"),
+        ),
+
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+          child: Text("PID TUNING (YAW)", style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+        ),
+        _buildSliderCard(
+          title: "Yaw P Gain", value: _yawP, min: 0.0, max: 2.0, divisions: 40, unit: "",
+          onChanged: (val) => setState(() => _yawP = val),
+          onChangeEnd: (val) => UsbService.sendCommand("pid_yaw $val $_yawI $_yawD"),
+        ),
+        _buildSliderCard(
+          title: "Yaw I Gain", value: _yawI, min: 0.0, max: 0.1, divisions: 50, unit: "",
+          onChanged: (val) => setState(() => _yawI = val),
+          onChangeEnd: (val) => UsbService.sendCommand("pid_yaw $_yawP $val $_yawD"),
+        ),
+        _buildSliderCard(
+          title: "Yaw D Gain", value: _yawD, min: 0.0, max: 0.1, divisions: 50, unit: "",
+          onChanged: (val) => setState(() => _yawD = val),
+          onChangeEnd: (val) => UsbService.sendCommand("pid_yaw $_yawP $_yawI $val"),
+        ),
+
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+          child: Text("PID TUNING (THROTTLE VZ)", style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+        ),
+        _buildSliderCard(
+          title: "Vz P Gain", value: _vzP, min: 1.0, max: 20.0, divisions: 38, unit: "",
+          onChanged: (val) => setState(() => _vzP = val),
+          onChangeEnd: (val) => UsbService.sendCommand("pid_vz $val $_vzI $_vzD"),
+        ),
+        _buildSliderCard(
+          title: "Vz I Gain", value: _vzI, min: 0.0, max: 5.0, divisions: 50, unit: "",
+          onChanged: (val) => setState(() => _vzI = val),
+          onChangeEnd: (val) => UsbService.sendCommand("pid_vz $_vzP $val $_vzD"),
+        ),
+        _buildSliderCard(
+          title: "Vz D Gain", value: _vzD, min: 0.0, max: 2.0, divisions: 40, unit: "",
+          onChanged: (val) => setState(() => _vzD = val),
+          onChangeEnd: (val) => UsbService.sendCommand("pid_vz $_vzP $_vzI $val"),
         ),
       ],
     );
   }
 }
 
+// ==========================================
+// РАЗДЕЛ 3: Команды и тесты
+// ==========================================
 class CommandsTab extends StatelessWidget {
   const CommandsTab({super.key});
 
