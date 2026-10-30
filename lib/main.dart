@@ -23,7 +23,7 @@ class MyApp extends StatelessWidget {
           error: Colors.redAccent.shade700,
         ),
         scaffoldBackgroundColor: const Color(0xFF0A0A0A),
-        cardTheme: CardThemeData(
+        cardTheme: CardTheme(
           color: const Color(0xFF1E1E1E),
           elevation: 2,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -60,7 +60,7 @@ class _MainContainerState extends State<MainContainer> {
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
-        onDestinationSelected: (index) => setState(() => _currentIndex = index,
+        onDestinationSelected: (index) => setState(() => _currentIndex = index),
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.terminal_outlined),
@@ -83,7 +83,6 @@ class _MainContainerState extends State<MainContainer> {
   }
 }
 
-// Глобальный сервис для связи с дроном
 class UsbService {
   static UsbPort? port;
   static String lastResponse = ">> Ready. Connect drone via OTG.";
@@ -111,7 +110,6 @@ class UsbService {
   }
 }
 
-// Стильная верхняя плашка телеметрии/ответа
 class DroneStatusHeader extends StatefulWidget {
   const DroneStatusHeader({super.key});
 
@@ -173,9 +171,6 @@ class _DroneStatusHeaderState extends State<DroneStatusHeader> {
   }
 }
 
-// ==========================================
-// РАЗДЕЛ 1: Терминал
-// ==========================================
 class TerminalTab extends StatefulWidget {
   const TerminalTab({super.key});
 
@@ -208,7 +203,6 @@ class _TerminalTabState extends State<TerminalTab> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // Быстрая кнопка Info
         Padding(
           padding: const EdgeInsets.all(12.0),
           child: Row(
@@ -227,7 +221,6 @@ class _TerminalTabState extends State<TerminalTab> {
             ],
           ),
         ),
-        // Черное поле терминала
         Expanded(
           child: Container(
             margin: const EdgeInsets.symmetric(horizontal: 12),
@@ -250,7 +243,6 @@ class _TerminalTabState extends State<TerminalTab> {
             ),
           ),
         ),
-        // Поле ввода
         Padding(
           padding: const EdgeInsets.all(12.0),
           child: Row(
@@ -299,9 +291,6 @@ class _TerminalTabState extends State<TerminalTab> {
   }
 }
 
-// ==========================================
-// РАЗДЕЛ 2: Настройки (Minimalist Cards & Sliders)
-// ==========================================
 class SettingsTab extends StatefulWidget {
   const SettingsTab({super.key});
 
@@ -318,7 +307,6 @@ class _SettingsTabState extends State<SettingsTab> {
 
   Widget _buildSliderCard({
     required String title,
-    required String commandPrefix,
     required double value,
     required double min,
     required double max,
@@ -383,7 +371,6 @@ class _SettingsTabState extends State<SettingsTab> {
         ),
         _buildSliderCard(
           title: "Stick Deadband",
-          commandPrefix: "deadband",
           value: _deadbandVal,
           min: 0,
           max: 100,
@@ -392,14 +379,12 @@ class _SettingsTabState extends State<SettingsTab> {
           onChanged: (val) => setState(() => _deadbandVal = val),
           onChangeEnd: (val) => UsbService.sendCommand("deadband ${val.round()}"),
         ),
-
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
           child: Text("SENSORS & FILTERS", style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
         ),
         _buildSliderCard(
           title: "Gyro LPF Alpha (lpf_gyro)",
-          commandPrefix: "lpf_gyro",
           value: _lpfGyroVal,
           min: 0.05,
           max: 1.0,
@@ -410,7 +395,6 @@ class _SettingsTabState extends State<SettingsTab> {
         ),
         _buildSliderCard(
           title: "Accel LPF Alpha (lpf_accel)",
-          commandPrefix: "lpf_accel",
           value: _lpfAccelVal,
           min: 0.01,
           max: 1.0,
@@ -419,14 +403,12 @@ class _SettingsTabState extends State<SettingsTab> {
           onChanged: (val) => setState(() => _lpfAccelVal = val),
           onChangeEnd: (val) => UsbService.sendCommand("lpf_accel ${val.toStringAsFixed(2)}"),
         ),
-
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
           child: Text("PID TUNING", style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
         ),
         _buildSliderCard(
           title: "Roll P Gain",
-          commandPrefix: "pid_roll",
           value: _rollPVal,
           min: 0.0,
           max: 2.0,
@@ -435,14 +417,12 @@ class _SettingsTabState extends State<SettingsTab> {
           onChanged: (val) => setState(() => _rollPVal = val),
           onChangeEnd: (val) => UsbService.sendCommand("pid_roll $val 0.015 0.02"),
         ),
-
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
           child: Text("POWER & SAFETY", style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
         ),
         _buildSliderCard(
           title: "Failsafe Voltage (fs_batt)",
-          commandPrefix: "fs_batt",
           value: _fsBattVal,
           min: 6.0,
           max: 25.0,
@@ -456,9 +436,6 @@ class _SettingsTabState extends State<SettingsTab> {
   }
 }
 
-// ==========================================
-// РАЗДЕЛ 3: Команды и тесты (Grid Buttons)
-// ==========================================
 class CommandsTab extends StatelessWidget {
   const CommandsTab({super.key});
 
@@ -557,4 +534,3 @@ class CommandsTab extends StatelessWidget {
     );
   }
 }
-
