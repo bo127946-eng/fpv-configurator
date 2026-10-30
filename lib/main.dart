@@ -556,7 +556,7 @@ class _SettingsTabState extends State<SettingsTab> {
         _buildSliderCard(title: "Accel LPF Alpha", subtitleCommand: "(lpf_accel)", value: _lpfAccel, min: 0.01, max: 1.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _lpfAccel = v), onChangeEnd: (v) => UsbService.sendCommand("lpf_accel $v")),
         _buildSliderCard(title: "Notch Center Frequency", subtitleCommand: "(notch_freq)", value: _notchFreq, min: 20.0, max: 200.0, divisions: 36, unit: "Hz", onChanged: (v) => setState(() => _notchFreq = v), onChangeEnd: (v) => UsbService.sendCommand("notch_freq $v")),
 
-        _buildSectionHeader("RC RATES & STICKS", Icons.joystick),
+        _buildSectionHeader("RC RATES & STICKS", Icons.gamepad),
         _buildSliderCard(title: "RC Rate", subtitleCommand: "(rates)", value: _rcRate, min: 0.1, max: 2.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcRate = v), onChangeEnd: (v) => UsbService.sendCommand("rates $v 0.05 0.50")),
         _buildSliderCard(title: "Super Expo", subtitleCommand: "(rates)", value: _superExpo, min: 0.0, max: 1.0, divisions: 20, unit: "", onChanged: (v) => setState(() => _superExpo = v), onChangeEnd: (v) => UsbService.sendCommand("rates 0.40 $v 0.50")),
         _buildSliderCard(title: "Stick Deadband", subtitleCommand: "(deadband)", value: _deadband, min: 0, max: 100, divisions: 20, unit: "us", onChanged: (v) => setState(() => _deadband = v), onChangeEnd: (v) => UsbService.sendCommand("deadband $v")),
