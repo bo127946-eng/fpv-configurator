@@ -9,7 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  usb_serial: ^0.4.1
+  usb_serial: ^0.5.2
   cupertino_icons: ^1.0.2
   flutter_cube: ^0.1.1
 
@@ -22,4 +22,3 @@ flutter:
   uses-material-design: true
   assets:
     - assets/drone.obj
-
