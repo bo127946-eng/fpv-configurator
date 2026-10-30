@@ -63,11 +63,28 @@ class _MainContainerState extends State<MainContainer> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (index) => setState(() => _currentIndex = index),
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.terminal_outlined), selectedIcon: Icon(Icons.terminal), label: 'Terminal'),
-          NavigationDestination(icon: Icon(Icons.tune_outlined), selectedIcon: Icon(Icons.tune), label: 'Settings'),
-          NavigationDestination(icon: Icon(Icons.gamepad_outlined), selectedIcon: Icon(Icons.gamepad), label: 'Commands'),
-          NavigationDestination(icon: Icon(Icons.threed_rotation), selectedIcon: Icon(Icons.view_in_ar), label: '3D View'),
+          NavigationDestination(
+            icon: Icon(Icons.terminal_outlined),
+            selectedIcon: Icon(Icons.terminal),
+            label: 'Terminal',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.tune_outlined),
+            selectedIcon: Icon(Icons.tune),
+            label: 'Settings',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.gamepad_outlined),
+            selectedIcon: Icon(Icons.gamepad),
+            label: 'Commands',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.threed_rotation),
+            selectedIcon: Icon(Icons.view_in_ar),
+            label: '3D View',
+          ),
         ],
       ),
     );
@@ -415,6 +432,9 @@ class _TerminalTabState extends State<TerminalTab> {
   }
 }
 
+// ==========================================
+// ВКЛАДКА НАСТРОЕК (С логическими группами)
+// ==========================================
 class SettingsTab extends StatefulWidget {
   const SettingsTab({super.key});
 
@@ -423,24 +443,68 @@ class SettingsTab extends StatefulWidget {
 }
 
 class _SettingsTabState extends State<SettingsTab> {
+  // Полетные параметры
   double _flightMode = 0;
   double _angleMax = 20.0;
   double _vzMax = 1.2;
   double _fsSpeed = 0.8;
+
+  // Питание и Failsafe
   double _cells = 4.0;
+  double _fsBatt = 14.0;
+
+  // Фильтры
   double _lpfGyro = 0.40;
   double _lpfAccel = 0.15;
-  double _fsBatt = 14.0;
+  double _notchFreq = 65.0;
+
+  // RC Рейты и мертвые зоны
+  double _rcRate = 0.40;
+  double _superExpo = 0.05;
+  double _deadband = 20.0;
+
+  // ПИД-коэффициенты (P)
   double _rollP = 0.50;
   double _pitchP = 0.50;
   double _yawP = 0.65;
   double _vzP = 7.5;
 
-  Widget _buildSliderCard({required String title, required String subtitleCommand, required double value, required double min, required double max, required int divisions, required String unit, required ValueChanged<double> onChanged, required ValueChanged<double> onChangeEnd}) {
+  Widget _buildSectionHeader(String title, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: Colors.amberAccent),
+          const SizedBox(width: 8),
+          Text(
+            title,
+            style: const TextStyle(
+              color: Colors.amberAccent,
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSliderCard({
+    required String title,
+    required String subtitleCommand,
+    required double value,
+    required double min,
+    required double max,
+    required int divisions,
+    required String unit,
+    required ValueChanged<double> onChanged,
+    required ValueChanged<double> onChangeEnd,
+  }) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 10),
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(14.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -464,7 +528,7 @@ class _SettingsTabState extends State<SettingsTab> {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Slider(value: value, min: min, max: max, divisions: divisions, onChanged: onChanged, onChangeEnd: onChangeEnd),
           ],
         ),
@@ -477,14 +541,27 @@ class _SettingsTabState extends State<SettingsTab> {
     return ListView(
       padding: const EdgeInsets.all(12.0),
       children: [
+        _buildSectionHeader("FLIGHT MODES & LIMITS", Icons.flight),
         _buildSliderCard(title: "Flight Mode", subtitleCommand: "(mode)", value: _flightMode, min: 0, max: 2, divisions: 2, unit: "", onChanged: (v) => setState(() => _flightMode = v), onChangeEnd: (v) => UsbService.sendCommand("mode ${v.round()}")),
         _buildSliderCard(title: "Max Angle", subtitleCommand: "(angle_max)", value: _angleMax, min: 10, max: 80, divisions: 14, unit: "deg", onChanged: (v) => setState(() => _angleMax = v), onChangeEnd: (v) => UsbService.sendCommand("angle_max ${v.round()}")),
         _buildSliderCard(title: "Max Vertical Speed", subtitleCommand: "(vz_max)", value: _vzMax, min: 0.5, max: 5.0, divisions: 9, unit: "m/s", onChanged: (v) => setState(() => _vzMax = v), onChangeEnd: (v) => UsbService.sendCommand("vz_max $v")),
         _buildSliderCard(title: "Failsafe Descent Speed", subtitleCommand: "(fs_speed)", value: _fsSpeed, min: 0.2, max: 3.0, divisions: 14, unit: "m/s", onChanged: (v) => setState(() => _fsSpeed = v), onChangeEnd: (v) => UsbService.sendCommand("fs_speed $v")),
+
+        _buildSectionHeader("POWER & SAFETY", Icons.battery_charging_full),
         _buildSliderCard(title: "Battery Cells", subtitleCommand: "(cells)", value: _cells, min: 2, max: 6, divisions: 4, unit: "S", onChanged: (v) => setState(() => _cells = v), onChangeEnd: (v) => UsbService.sendCommand("cells ${v.round()}")),
+        _buildSliderCard(title: "Failsafe Battery V", subtitleCommand: "(fs_batt)", value: _fsBatt, min: 6.0, max: 25.0, divisions: 19, unit: "V", onChanged: (v) => setState(() => _fsBatt = v), onChangeEnd: (v) => UsbService.sendCommand("fs_batt $v")),
+
+        _buildSectionHeader("SENSORS & FILTERS", Icons.waves),
         _buildSliderCard(title: "Gyro LPF Alpha", subtitleCommand: "(lpf_gyro)", value: _lpfGyro, min: 0.05, max: 1.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _lpfGyro = v), onChangeEnd: (v) => UsbService.sendCommand("lpf_gyro $v")),
         _buildSliderCard(title: "Accel LPF Alpha", subtitleCommand: "(lpf_accel)", value: _lpfAccel, min: 0.01, max: 1.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _lpfAccel = v), onChangeEnd: (v) => UsbService.sendCommand("lpf_accel $v")),
-        _buildSliderCard(title: "Failsafe Battery V", subtitleCommand: "(fs_batt)", value: _fsBatt, min: 6.0, max: 25.0, divisions: 19, unit: "V", onChanged: (v) => setState(() => _fsBatt = v), onChangeEnd: (v) => UsbService.sendCommand("fs_batt $v")),
+        _buildSliderCard(title: "Notch Center Frequency", subtitleCommand: "(notch_freq)", value: _notchFreq, min: 20.0, max: 200.0, divisions: 36, unit: "Hz", onChanged: (v) => setState(() => _notchFreq = v), onChangeEnd: (v) => UsbService.sendCommand("notch_freq $v")),
+
+        _buildSectionHeader("RC RATES & STICKS", Icons.joystick),
+        _buildSliderCard(title: "RC Rate", subtitleCommand: "(rates)", value: _rcRate, min: 0.1, max: 2.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcRate = v), onChangeEnd: (v) => UsbService.sendCommand("rates $v 0.05 0.50")),
+        _buildSliderCard(title: "Super Expo", subtitleCommand: "(rates)", value: _superExpo, min: 0.0, max: 1.0, divisions: 20, unit: "", onChanged: (v) => setState(() => _superExpo = v), onChangeEnd: (v) => UsbService.sendCommand("rates 0.40 $v 0.50")),
+        _buildSliderCard(title: "Stick Deadband", subtitleCommand: "(deadband)", value: _deadband, min: 0, max: 100, divisions: 20, unit: "us", onChanged: (v) => setState(() => _deadband = v), onChangeEnd: (v) => UsbService.sendCommand("deadband $v")),
+
+        _buildSectionHeader("PID CONTROLLERS (P GAINS)", Icons.tune),
         _buildSliderCard(title: "Roll P Gain", subtitleCommand: "(pid_roll)", value: _rollP, min: 0, max: 2, divisions: 40, unit: "", onChanged: (v) => setState(() => _rollP = v), onChangeEnd: (v) => UsbService.sendCommand("pid_roll $v 0.015 0.02")),
         _buildSliderCard(title: "Pitch P Gain", subtitleCommand: "(pid_pitch)", value: _pitchP, min: 0, max: 2, divisions: 40, unit: "", onChanged: (v) => setState(() => _pitchP = v), onChangeEnd: (v) => UsbService.sendCommand("pid_pitch $v 0.015 0.02")),
         _buildSliderCard(title: "Yaw P Gain", subtitleCommand: "(pid_yaw)", value: _yawP, min: 0, max: 2, divisions: 40, unit: "", onChanged: (v) => setState(() => _yawP = v), onChangeEnd: (v) => UsbService.sendCommand("pid_yaw $v 0.010 0.0")),
