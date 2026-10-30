@@ -17,6 +17,17 @@ jobs:
           flutter-version: '3.19.x'
           channel: 'stable'
 
+      - name: Initialize full Flutter project structure
+        run: |
+          # Создаем временный проект со всеми android/ios папками
+          flutter create temp_project --platforms=android --org=com.fpv
+          
+          # Копируем созданные системные папки (android и т.д.) в корень нашего репозитория
+          cp -r temp_project/android ./
+          
+          # Удаляем временную папку
+          rm -rf temp_project
+
       - name: Install dependencies
         run: flutter pub get
 
@@ -28,3 +39,4 @@ jobs:
         with:
           name: app-release
           path: build/app/outputs/flutter-apk/app-release.apk
+
