@@ -19,3 +19,13 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+dependencies:
+  flutter:
+    sdk: flutter
+  usb_serial: ^0.4.1
+  flutter_cube: ^0.1.1  # Пакет для 3D-моделей
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/drone.obj
