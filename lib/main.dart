@@ -433,7 +433,7 @@ class _TerminalTabState extends State<TerminalTab> {
 }
 
 // ==========================================
-// ВКЛАДКА НАСТРОЕК (С логическими группами)
+// ВКЛАДКА НАСТРОЕК (Полная карта параметров EEPROM)
 // ==========================================
 class SettingsTab extends StatefulWidget {
   const SettingsTab({super.key});
@@ -443,31 +443,46 @@ class SettingsTab extends StatefulWidget {
 }
 
 class _SettingsTabState extends State<SettingsTab> {
-  // Полетные параметры
+  // 1. Gyro Biases
+  double _gyroBiasX = 0.0, _gyroBiasY = 0.0, _gyroBiasZ = 0.0;
+  // 2. Temp Coefficients
+  double _tempCoeffX = 0.5, _tempCoeffY = 0.5, _tempCoeffZ = 0.2;
+  // 3. Accel Biases
+  double _accelBiasX = 0.0, _accelBiasY = 0.0, _accelBiasZ = 0.0;
+  // 4. Flight & System Modes
   double _flightMode = 0;
-  double _angleMax = 20.0;
-  double _vzMax = 1.2;
-  double _fsSpeed = 0.8;
-
-  // Питание и Failsafe
-  double _cells = 4.0;
-  double _fsBatt = 14.0;
-
-  // Фильтры
+  double _filterMode = 3;
+  double _dynamicNotchEnabled = 1;
+  // 5. Failsafe & Battery Flags/Configs
+  double _fsRcEn = 1;
+  double _fsBattEn = 1;
+  double _batteryCells = 4.0;
+  double _battFsV = 14.0;
+  // 6. Filters (LPF & Notch)
   double _lpfGyro = 0.40;
   double _lpfAccel = 0.15;
-  double _notchFreq = 65.0;
-
-  // RC Рейты и мертвые зоны
-  double _rcRate = 0.40;
-  double _superExpo = 0.05;
+  double _notchCenterFreq = 65.0;
+  double _notchBandwidth = 18.0;
+  double _dynNotchMinHz = 45.0;
+  double _dynNotchMaxHz = 120.0;
+  // 7. Horizon Trainer & Transition
+  double _horizonTransition = 0.75;
+  double _horizonTrainerGain = 0.15;
+  double _horizonTrainerDead = 0.05;
+  // 8. RC Rates & Expo
+  double _rcRate = 0.40, _superExpo = 0.05, _stickExpo = 0.50;
+  double _yawRcRate = 0.35, _yawSuperExpo = 0.05, _yawExpo = 0.40;
   double _deadband = 20.0;
-
-  // ПИД-коэффициенты (P)
-  double _rollP = 0.50;
-  double _pitchP = 0.50;
-  double _yawP = 0.65;
-  double _vzP = 7.5;
+  double _rcSmoothingAlpha = 0.30;
+  // 9. Limits & Speeds
+  double _maxAngleDeg = 20.0;
+  double _maxVz = 1.2;
+  double _fsSpeed = 0.8;
+  // 10. PIDs (Roll, Pitch, Yaw, VZ -> Kp, Ki, Kd)
+  double _rollKp = 0.50, _rollKi = 0.015, _rollKd = 0.02;
+  double _pitchKp = 0.50, _pitchKi = 0.015, _pitchKd = 0.02;
+  double _yawKp = 0.65, _yawKi = 0.010, _yawKd = 0.0;
+  double _vzKp = 7.5, _vzKi = 1.3, _vzKd = 0.35;
 
   Widget _buildSectionHeader(String title, IconData icon) {
     return Padding(
@@ -524,7 +539,7 @@ class _SettingsTabState extends State<SettingsTab> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
-                  child: Text("${value.toStringAsFixed(value.truncate() == value ? 0 : 2)} $unit", style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                  child: Text("${value.toStringAsFixed(value.truncate() == value ? 0 : 3)} $unit", style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 12)),
                 ),
               ],
             ),
@@ -541,31 +556,76 @@ class _SettingsTabState extends State<SettingsTab> {
     return ListView(
       padding: const EdgeInsets.all(12.0),
       children: [
-        _buildSectionHeader("FLIGHT MODES & LIMITS", Icons.flight),
+        _buildSectionHeader("GYRO BIASES", Icons.explore),
+        _buildSliderCard(title: "Gyro Bias X", subtitleCommand: "(gyro_bias_x)", value: _gyroBiasX, min: -500, max: 500, divisions: 100, unit: "raw", onChanged: (v) => setState(() => _gyroBiasX = v), onChangeEnd: (v) => UsbService.sendCommand("gyro_bias_x $v")),
+        _buildSliderCard(title: "Gyro Bias Y", subtitleCommand: "(gyro_bias_y)", value: _gyroBiasY, min: -500, max: 500, divisions: 100, unit: "raw", onChanged: (v) => setState(() => _gyroBiasY = v), onChangeEnd: (v) => UsbService.sendCommand("gyro_bias_y $v")),
+        _buildSliderCard(title: "Gyro Bias Z", subtitleCommand: "(gyro_bias_z)", value: _gyroBiasZ, min: -500, max: 500, divisions: 100, unit: "raw", onChanged: (v) => setState(() => _gyroBiasZ = v), onChangeEnd: (v) => UsbService.sendCommand("gyro_bias_z $v")),
+
+        _buildSectionHeader("TEMP COEFFICIENTS", Icons.thermostat),
+        _buildSliderCard(title: "Temp Coeff X", subtitleCommand: "(temp_coeff_x)", value: _tempCoeffX, min: 0.0, max: 2.0, divisions: 20, unit: "", onChanged: (v) => setState(() => _tempCoeffX = v), onChangeEnd: (v) => UsbService.sendCommand("temp_coeff_x $v")),
+        _buildSliderCard(title: "Temp Coeff Y", subtitleCommand: "(temp_coeff_y)", value: _tempCoeffY, min: 0.0, max: 2.0, divisions: 20, unit: "", onChanged: (v) => setState(() => _tempCoeffY = v), onChangeEnd: (v) => UsbService.sendCommand("temp_coeff_y $v")),
+        _buildSliderCard(title: "Temp Coeff Z", subtitleCommand: "(temp_coeff_z)", value: _tempCoeffZ, min: 0.0, max: 2.0, divisions: 20, unit: "", onChanged: (v) => setState(() => _tempCoeffZ = v), onChangeEnd: (v) => UsbService.sendCommand("temp_coeff_z $v")),
+
+        _buildSectionHeader("ACCEL BIASES", Icons.speed),
+        _buildSliderCard(title: "Accel Bias X", subtitleCommand: "(accel_bias_x)", value: _accelBiasX, min: -1000, max: 1000, divisions: 100, unit: "raw", onChanged: (v) => setState(() => _accelBiasX = v), onChangeEnd: (v) => UsbService.sendCommand("accel_bias_x $v")),
+        _buildSliderCard(title: "Accel Bias Y", subtitleCommand: "(accel_bias_y)", value: _accelBiasY, min: -1000, max: 1000, divisions: 100, unit: "raw", onChanged: (v) => setState(() => _accelBiasY = v), onChangeEnd: (v) => UsbService.sendCommand("accel_bias_y $v")),
+        _buildSliderCard(title: "Accel Bias Z", subtitleCommand: "(accel_bias_z)", value: _accelBiasZ, min: -1000, max: 1000, divisions: 100, unit: "raw", onChanged: (v) => setState(() => _accelBiasZ = v), onChangeEnd: (v) => UsbService.sendCommand("accel_bias_z $v")),
+
+        _buildSectionHeader("FLIGHT & SYSTEM MODES", Icons.flight),
         _buildSliderCard(title: "Flight Mode", subtitleCommand: "(mode)", value: _flightMode, min: 0, max: 2, divisions: 2, unit: "", onChanged: (v) => setState(() => _flightMode = v), onChangeEnd: (v) => UsbService.sendCommand("mode ${v.round()}")),
-        _buildSliderCard(title: "Max Angle", subtitleCommand: "(angle_max)", value: _angleMax, min: 10, max: 80, divisions: 14, unit: "deg", onChanged: (v) => setState(() => _angleMax = v), onChangeEnd: (v) => UsbService.sendCommand("angle_max ${v.round()}")),
-        _buildSliderCard(title: "Max Vertical Speed", subtitleCommand: "(vz_max)", value: _vzMax, min: 0.5, max: 5.0, divisions: 9, unit: "m/s", onChanged: (v) => setState(() => _vzMax = v), onChangeEnd: (v) => UsbService.sendCommand("vz_max $v")),
-        _buildSliderCard(title: "Failsafe Descent Speed", subtitleCommand: "(fs_speed)", value: _fsSpeed, min: 0.2, max: 3.0, divisions: 14, unit: "m/s", onChanged: (v) => setState(() => _fsSpeed = v), onChangeEnd: (v) => UsbService.sendCommand("fs_speed $v")),
+        _buildSliderCard(title: "Filter Mode", subtitleCommand: "(filter)", value: _filterMode, min: 0, max: 3, divisions: 3, unit: "", onChanged: (v) => setState(() => _filterMode = v), onChangeEnd: (v) => UsbService.sendCommand("filter ${v.round()}")),
+        _buildSliderCard(title: "Dynamic Notch Enabled", subtitleCommand: "(dyn_notch_en)", value: _dynamicNotchEnabled, min: 0, max: 1, divisions: 1, unit: "", onChanged: (v) => setState(() => _dynamicNotchEnabled = v), onChangeEnd: (v) => UsbService.sendCommand("dyn_notch_en ${v.round()}")),
 
-        _buildSectionHeader("POWER & SAFETY", Icons.battery_charging_full),
-        _buildSliderCard(title: "Battery Cells", subtitleCommand: "(cells)", value: _cells, min: 2, max: 6, divisions: 4, unit: "S", onChanged: (v) => setState(() => _cells = v), onChangeEnd: (v) => UsbService.sendCommand("cells ${v.round()}")),
-        _buildSliderCard(title: "Failsafe Battery V", subtitleCommand: "(fs_batt)", value: _fsBatt, min: 6.0, max: 25.0, divisions: 19, unit: "V", onChanged: (v) => setState(() => _fsBatt = v), onChangeEnd: (v) => UsbService.sendCommand("fs_batt $v")),
+        _buildSectionHeader("FAILSAFE & BATTERY", Icons.battery_charging_full),
+        _buildSliderCard(title: "FS RC Enable", subtitleCommand: "(fs_rc_en)", value: _fsRcEn, min: 0, max: 1, divisions: 1, unit: "", onChanged: (v) => setState(() => _fsRcEn = v), onChangeEnd: (v) => UsbService.sendCommand("fs_rc_en ${v.round()}")),
+        _buildSliderCard(title: "FS Batt Enable", subtitleCommand: "(fs_batt_en)", value: _fsBattEn, min: 0, max: 1, divisions: 1, unit: "", onChanged: (v) => setState(() => _fsBattEn = v), onChangeEnd: (v) => UsbService.sendCommand("fs_batt_en ${v.round()}")),
+        _buildSliderCard(title: "Battery Cells", subtitleCommand: "(cells)", value: _batteryCells, min: 2, max: 6, divisions: 4, unit: "S", onChanged: (v) => setState(() => _batteryCells = v), onChangeEnd: (v) => UsbService.sendCommand("cells ${v.round()}")),
+        _buildSliderCard(title: "Failsafe Battery V", subtitleCommand: "(fs_batt)", value: _battFsV, min: 6.0, max: 25.0, divisions: 19, unit: "V", onChanged: (v) => setState(() => _battFsV = v), onChangeEnd: (v) => UsbService.sendCommand("fs_batt $v")),
 
-        _buildSectionHeader("SENSORS & FILTERS", Icons.waves),
+        _buildSectionHeader("SENSORS & FILTERS (LPF / NOTCH)", Icons.waves),
         _buildSliderCard(title: "Gyro LPF Alpha", subtitleCommand: "(lpf_gyro)", value: _lpfGyro, min: 0.05, max: 1.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _lpfGyro = v), onChangeEnd: (v) => UsbService.sendCommand("lpf_gyro $v")),
         _buildSliderCard(title: "Accel LPF Alpha", subtitleCommand: "(lpf_accel)", value: _lpfAccel, min: 0.01, max: 1.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _lpfAccel = v), onChangeEnd: (v) => UsbService.sendCommand("lpf_accel $v")),
-        _buildSliderCard(title: "Notch Center Frequency", subtitleCommand: "(notch_freq)", value: _notchFreq, min: 20.0, max: 200.0, divisions: 36, unit: "Hz", onChanged: (v) => setState(() => _notchFreq = v), onChangeEnd: (v) => UsbService.sendCommand("notch_freq $v")),
+        _buildSliderCard(title: "Notch Center Frequency", subtitleCommand: "(notch_freq)", value: _notchCenterFreq, min: 20.0, max: 200.0, divisions: 36, unit: "Hz", onChanged: (v) => setState(() => _notchCenterFreq = v), onChangeEnd: (v) => UsbService.sendCommand("notch_freq $v")),
+        _buildSliderCard(title: "Notch Bandwidth", subtitleCommand: "(notch_bw)", value: _notchBandwidth, min: 5.0, max: 50.0, divisions: 45, unit: "Hz", onChanged: (v) => setState(() => _notchBandwidth = v), onChangeEnd: (v) => UsbService.sendCommand("notch_bw $v")),
+        _buildSliderCard(title: "Dyn Notch Min Hz", subtitleCommand: "(dyn_notch_min)", value: _dynNotchMinHz, min: 20.0, max: 100.0, divisions: 16, unit: "Hz", onChanged: (v) => setState(() => _dynNotchMinHz = v), onChangeEnd: (v) => UsbService.sendCommand("dyn_notch_min $v")),
+        _buildSliderCard(title: "Dyn Notch Max Hz", subtitleCommand: "(dyn_notch_max)", value: _dynNotchMaxHz, min: 80.0, max: 200.0, divisions: 24, unit: "Hz", onChanged: (v) => setState(() => _dynNotchMaxHz = v), onChangeEnd: (v) => UsbService.sendCommand("dyn_notch_max $v")),
+
+        _buildSectionHeader("HORIZON TRAINER & TRANSITION", Icons.threesixty),
+        _buildSliderCard(title: "Horizon Transition", subtitleCommand: "(horizon_trans)", value: _horizonTransition, min: 0.0, max: 1.0, divisions: 20, unit: "", onChanged: (v) => setState(() => _horizonTransition = v), onChangeEnd: (v) => UsbService.sendCommand("horizon_trans $v")),
+        _buildSliderCard(title: "Horizon Trainer Gain", subtitleCommand: "(horizon_gain)", value: _horizonTrainerGain, min: 0.0, max: 1.0, divisions: 20, unit: "", onChanged: (v) => setState(() => _horizonTrainerGain = v), onChangeEnd: (v) => UsbService.sendCommand("horizon_gain $v")),
+        _buildSliderCard(title: "Horizon Trainer Dead", subtitleCommand: "(horizon_dead)", value: _horizonTrainerDead, min: 0.0, max: 0.5, divisions: 25, unit: "", onChanged: (v) => setState(() => _horizonTrainerDead = v), onChangeEnd: (v) => UsbService.sendCommand("horizon_dead $v")),
 
         _buildSectionHeader("RC RATES & STICKS", Icons.gamepad),
-        _buildSliderCard(title: "RC Rate", subtitleCommand: "(rates)", value: _rcRate, min: 0.1, max: 2.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcRate = v), onChangeEnd: (v) => UsbService.sendCommand("rates $v 0.05 0.50")),
-        _buildSliderCard(title: "Super Expo", subtitleCommand: "(rates)", value: _superExpo, min: 0.0, max: 1.0, divisions: 20, unit: "", onChanged: (v) => setState(() => _superExpo = v), onChangeEnd: (v) => UsbService.sendCommand("rates 0.40 $v 0.50")),
+        _buildSliderCard(title: "Roll/Pitch RC Rate", subtitleCommand: "(rates)", value: _rcRate, min: 0.1, max: 2.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcRate = v), onChangeEnd: (v) => UsbService.sendCommand("rates $v $_superExpo $_stickExpo")),
+        _buildSliderCard(title: "Roll/Pitch Super Expo", subtitleCommand: "(rates)", value: _superExpo, min: 0.0, max: 1.0, divisions: 20, unit: "", onChanged: (v) => setState(() => _superExpo = v), onChangeEnd: (v) => UsbService.sendCommand("rates $_rcRate $v $_stickExpo")),
+        _buildSliderCard(title: "Roll/Pitch Stick Expo", subtitleCommand: "(rates)", value: _stickExpo, min: 0.0, max: 1.0, divisions: 20, unit: "", onChanged: (v) => setState(() => _stickExpo = v), onChangeEnd: (v) => UsbService.sendCommand("rates $_rcRate $_superExpo $v")),
+        _buildSliderCard(title: "Yaw RC Rate", subtitleCommand: "(yaw_rates)", value: _yawRcRate, min: 0.1, max: 2.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _yawRcRate = v), onChangeEnd: (v) => UsbService.sendCommand("yaw_rates $v $_yawSuperExpo $_yawExpo")),
+        _buildSliderCard(title: "Yaw Super Expo", subtitleCommand: "(yaw_rates)", value: _yawSuperExpo, min: 0.0, max: 1.0, divisions: 20, unit: "", onChanged: (v) => setState(() => _yawSuperExpo = v), onChangeEnd: (v) => UsbService.sendCommand("yaw_rates $_yawRcRate $v $_yawExpo")),
+        _buildSliderCard(title: "Yaw Expo", subtitleCommand: "(yaw_rates)", value: _yawExpo, min: 0.0, max: 1.0, divisions: 20, unit: "", onChanged: (v) => setState(() => _yawExpo = v), onChangeEnd: (v) => UsbService.sendCommand("yaw_rates $_yawRcRate $_yawSuperExpo $v")),
         _buildSliderCard(title: "Stick Deadband", subtitleCommand: "(deadband)", value: _deadband, min: 0, max: 100, divisions: 20, unit: "us", onChanged: (v) => setState(() => _deadband = v), onChangeEnd: (v) => UsbService.sendCommand("deadband $v")),
+        _buildSliderCard(title: "RC Smoothing Alpha", subtitleCommand: "(rc_smooth)", value: _rcSmoothingAlpha, min: 0.05, max: 1.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcSmoothingAlpha = v), onChangeEnd: (v) => UsbService.sendCommand("rc_smooth $v")),
 
-        _buildSectionHeader("PID CONTROLLERS (P GAINS)", Icons.tune),
-        _buildSliderCard(title: "Roll P Gain", subtitleCommand: "(pid_roll)", value: _rollP, min: 0, max: 2, divisions: 40, unit: "", onChanged: (v) => setState(() => _rollP = v), onChangeEnd: (v) => UsbService.sendCommand("pid_roll $v 0.015 0.02")),
-        _buildSliderCard(title: "Pitch P Gain", subtitleCommand: "(pid_pitch)", value: _pitchP, min: 0, max: 2, divisions: 40, unit: "", onChanged: (v) => setState(() => _pitchP = v), onChangeEnd: (v) => UsbService.sendCommand("pid_pitch $v 0.015 0.02")),
-        _buildSliderCard(title: "Yaw P Gain", subtitleCommand: "(pid_yaw)", value: _yawP, min: 0, max: 2, divisions: 40, unit: "", onChanged: (v) => setState(() => _yawP = v), onChangeEnd: (v) => UsbService.sendCommand("pid_yaw $v 0.010 0.0")),
-        _buildSliderCard(title: "VZ P Gain", subtitleCommand: "(pid_vz)", value: _vzP, min: 1.0, max: 20.0, divisions: 38, unit: "", onChanged: (v) => setState(() => _vzP = v), onChangeEnd: (v) => UsbService.sendCommand("pid_vz $v 1.3 0.35")),
+        _buildSectionHeader("FLIGHT LIMITS", Icons.speed_outlined),
+        _buildSliderCard(title: "Max Angle", subtitleCommand: "(angle_max)", value: _maxAngleDeg, min: 10, max: 80, divisions: 14, unit: "deg", onChanged: (v) => setState(() => _maxAngleDeg = v), onChangeEnd: (v) => UsbService.sendCommand("angle_max ${v.round()}")),
+        _buildSliderCard(title: "Max Vertical Speed", subtitleCommand: "(vz_max)", value: _maxVz, min: 0.5, max: 5.0, divisions: 9, unit: "m/s", onChanged: (v) => setState(() => _maxVz = v), onChangeEnd: (v) => UsbService.sendCommand("vz_max $v")),
+        _buildSliderCard(title: "Failsafe Descent Speed", subtitleCommand: "(fs_speed)", value: _fsSpeed, min: 0.2, max: 3.0, divisions: 14, unit: "m/s", onChanged: (v) => setState(() => _fsSpeed = v), onChangeEnd: (v) => UsbService.sendCommand("fs_speed $v")),
+
+        _buildSectionHeader("PID CONTROLLERS (ROLL, PITCH, YAW, VZ)", Icons.tune),
+        _buildSliderCard(title: "Roll P Gain", subtitleCommand: "(pid_roll)", value: _rollKp, min: 0, max: 2, divisions: 40, unit: "P", onChanged: (v) => setState(() => _rollKp = v), onChangeEnd: (v) => UsbService.sendCommand("pid_roll $v $_rollKi $_rollKd")),
+        _buildSliderCard(title: "Roll I Gain", subtitleCommand: "(pid_roll)", value: _rollKi, min: 0, max: 0.1, divisions: 20, unit: "I", onChanged: (v) => setState(() => _rollKi = v), onChangeEnd: (v) => UsbService.sendCommand("pid_roll $_rollKp $v $_rollKd")),
+        _buildSliderCard(title: "Roll D Gain", subtitleCommand: "(pid_roll)", value: _rollKd, min: 0, max: 0.1, divisions: 20, unit: "D", onChanged: (v) => setState(() => _rollKd = v), onChangeEnd: (v) => UsbService.sendCommand("pid_roll $_rollKp $_rollKi $v")),
+
+        _buildSliderCard(title: "Pitch P Gain", subtitleCommand: "(pid_pitch)", value: _pitchKp, min: 0, max: 2, divisions: 40, unit: "P", onChanged: (v) => setState(() => _pitchKp = v), onChangeEnd: (v) => UsbService.sendCommand("pid_pitch $v $_pitchKi $_pitchKd")),
+        _buildSliderCard(title: "Pitch I Gain", subtitleCommand: "(pid_pitch)", value: _pitchKi, min: 0, max: 0.1, divisions: 20, unit: "I", onChanged: (v) => setState(() => _pitchKi = v), onChangeEnd: (v) => UsbService.sendCommand("pid_pitch $_pitchKp $v $_pitchKd")),
+        _buildSliderCard(title: "Pitch D Gain", subtitleCommand: "(pid_pitch)", value: _pitchKd, min: 0, max: 0.1, divisions: 20, unit: "D", onChanged: (v) => setState(() => _pitchKd = v), onChangeEnd: (v) => UsbService.sendCommand("pid_pitch $_pitchKp $_pitchKi $v")),
+
+        _buildSliderCard(title: "Yaw P Gain", subtitleCommand: "(pid_yaw)", value: _yawKp, min: 0, max: 2, divisions: 40, unit: "P", onChanged: (v) => setState(() => _yawKp = v), onChangeEnd: (v) => UsbService.sendCommand("pid_yaw $v $_yawKi $_yawKd")),
+        _buildSliderCard(title: "Yaw I Gain", subtitleCommand: "(pid_yaw)", value: _yawKi, min: 0, max: 0.1, divisions: 20, unit: "I", onChanged: (v) => setState(() => _yawKi = v), onChangeEnd: (v) => UsbService.sendCommand("pid_yaw $_yawKp $v $_yawKd")),
+        _buildSliderCard(title: "Yaw D Gain", subtitleCommand: "(pid_yaw)", value: _yawKd, min: 0, max: 0.1, divisions: 20, unit: "D", onChanged: (v) => setState(() => _yawKd = v), onChangeEnd: (v) => UsbService.sendCommand("pid_yaw $_yawKp $_yawKi $v")),
+
+        _buildSliderCard(title: "VZ P Gain", subtitleCommand: "(pid_vz)", value: _vzKp, min: 1.0, max: 20.0, divisions: 38, unit: "P", onChanged: (v) => setState(() => _vzKp = v), onChangeEnd: (v) => UsbService.sendCommand("pid_vz $v $_vzKi $_vzKd")),
+        _buildSliderCard(title: "VZ I Gain", subtitleCommand: "(pid_vz)", value: _vzKi, min: 0.0, max: 5.0, divisions: 25, unit: "I", onChanged: (v) => setState(() => _vzKi = v), onChangeEnd: (v) => UsbService.sendCommand("pid_vz $_vzKp $v $_vzKd")),
+        _buildSliderCard(title: "VZ D Gain", subtitleCommand: "(pid_vz)", value: _vzKd, min: 0.0, max: 2.0, divisions: 20, unit: "D", onChanged: (v) => setState(() => _vzKd = v), onChangeEnd: (v) => UsbService.sendCommand("pid_vz $_vzKp $_vzKi $v")),
       ],
     );
   }
