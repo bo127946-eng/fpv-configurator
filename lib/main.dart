@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:usb_serial/usb_serial.dart';
+import 'package:flutter_cube/flutter_cube.dart';
 import 'dart:async';
 import 'dart:typed_data';
 
@@ -47,6 +48,7 @@ class _MainContainerState extends State<MainContainer> {
     const TerminalTab(),
     const SettingsTab(),
     const CommandsTab(),
+    const ThreeDViewTab(), // Новая вкладка 3D и телеметрии
   ];
 
   @override
@@ -77,19 +79,36 @@ class _MainContainerState extends State<MainContainer> {
             selectedIcon: Icon(Icons.gamepad),
             label: 'Commands',
           ),
+          NavigationDestination(
+            icon: Icon(Icons.threed_rotation),
+            selectedIcon: Icon(Icons.view_in_ar),
+            label: '3D View',
+          ),
         ],
       ),
     );
   }
 }
 
-// Глобальный сервис для работы с USB и логами
 class UsbService {
   static UsbPort? port;
   static String lastResponse = ">> Ready. Connect USB device.";
   static String terminalLog = "";
   static StreamController<String> logController = StreamController.broadcast();
   static StreamSubscription<Uint8List>? _subscription;
+
+  // Данные телеметрии для 3D и баров
+  static double gyroRoll = 0.0;
+  static double gyroPitch = 0.0;
+  static double gyroYaw = 0.0;
+  static double accelZ = 1.0;
+  static double motor1 = 0.0;
+  static double motor2 = 0.0;
+  static double motor3 = 0.0;
+  static double motor4 = 0.0;
+  static double batteryVoltage = 16.2;
+
+  static StreamController<void> telemetryController = StreamController.broadcast();
 
   static Future<void> sendCommand(String cmd) async {
     if (port != null) {
@@ -110,10 +129,10 @@ class UsbService {
       lastResponse = lines.last.trim();
     }
     logController.add(terminalLog);
+    telemetryController.add(null);
   }
 }
 
-// Верхняя плашка с телеметрией и кнопкой подключения USB
 class DroneStatusHeader extends StatefulWidget {
   const DroneStatusHeader({super.key});
 
@@ -236,7 +255,134 @@ class _DroneStatusHeaderState extends State<DroneStatusHeader> {
 }
 
 // ==========================================
-// РАЗДЕЛ 1: Терминал
+// НОВАЯ ВКЛАДКА: 3D ВИЗУАЛИЗАЦИЯ И ШКАЛЫ ДАТЧИКОВ
+// ==========================================
+class ThreeDViewTab extends StatefulWidget {
+  const ThreeDViewTab({super.key});
+
+  @override
+  State<ThreeDViewTab> createState() => _ThreeDViewTabState();
+}
+
+class _ThreeDViewTabState extends State<ThreeDViewTab> {
+  Object? droneModel;
+  late StreamSubscription<void> _telemetrySub;
+
+  @override
+  void initState() {
+    super.initState();
+    _telemetrySub = UsbService.telemetryController.stream.listen((_) {
+      if (droneModel != null) {
+        // Обновляем углы поворота 3D модели по данным гироскопа
+        droneModel!.rotation.x = UsbService.gyroPitch;
+        droneModel!.rotation.y = UsbService.gyroYaw;
+        droneModel!.rotation.z = UsbService.gyroRoll;
+        droneModel!.updateTransform();
+        setState(() {});
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _telemetrySub.cancel();
+    super.dispose();
+  }
+
+  Widget _buildSensorBar(String label, double value, double min, double max, String unit, Color color) {
+    double percent = ((value - min) / (max - min)).clamp(0.0, 1.0);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(label, style: const TextStyle(fontSize: 11, color: Colors.white70)),
+              Text("${value.toStringAsFixed(2)} $unit", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color)),
+            ],
+          ),
+          const SizedBox(height: 3),
+          LinearProgressIndicator(
+            value: percent,
+            color: color,
+            backgroundColor: Colors.white12,
+            minHeight: 6,
+            borderRadius: BorderRadius.circular(3),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // 3D Модель сверху
+        Expanded(
+          flex: 5,
+          child: Container(
+            margin: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.black,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withOpacity(0.08)),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Cube(
+                onSceneCreated: (Scene scene) {
+                  scene.world.add(
+                    Object(
+                      fileName: 'assets/drone.obj',
+                      lighting: true,
+                    ),
+                  );
+                  if (scene.world.children.isNotEmpty) {
+                    droneModel = scene.world.children.first;
+                    droneModel!.scale.setAll(1.5);
+                  }
+                  scene.camera.zoom = 5.0;
+                },
+              ),
+            ),
+          ),
+        ),
+        // Панель шкал (баров) внизу
+        Expanded(
+          flex: 4,
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E1E1E),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                const Text("SENSORS & MOTORS TELEMETRY", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+                const SizedBox(height: 6),
+                _buildSensorBar("Gyro Roll", UsbService.gyroRoll, -3.14, 3.14, "rad", Colors.blueAccent),
+                _buildSensorBar("Gyro Pitch", UsbService.gyroPitch, -3.14, 3.14, "rad", Colors.blueAccent),
+                _buildSensorBar("Accel Z", UsbService.accelZ, 0.0, 2.0, "G", Colors.cyanAccent),
+                const Divider(height: 12, color: Colors.white12),
+                _buildSensorBar("Motor 1 (FL)", UsbService.motor1, 0, 100, "%", Colors.amber),
+                _buildSensorBar("Motor 2 (FR)", UsbService.motor2, 0, 100, "%", Colors.amber),
+                _buildSensorBar("Battery Voltage", UsbService.batteryVoltage, 10.0, 25.2, "V", Colors.greenAccent),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ==========================================
+// ВКЛАДКА 1: Терминал
 // ==========================================
 class TerminalTab extends StatefulWidget {
   const TerminalTab({super.key});
@@ -359,7 +505,7 @@ class _TerminalTabState extends State<TerminalTab> {
 }
 
 // ==========================================
-// РАЗДЕЛ 2: Настройки дрона
+// ВКЛАДКА 2: Настройки дрона
 // ==========================================
 class SettingsTab extends StatefulWidget {
   const SettingsTab({super.key});
@@ -489,7 +635,6 @@ class _SettingsTabState extends State<SettingsTab> {
           onChanged: (val) => setState(() => _vzMax = val),
           onChangeEnd: (val) => UsbService.sendCommand("vz_max ${val.toStringAsFixed(1)}"),
         ),
-
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
           child: Text("RC & RATES", style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
@@ -522,7 +667,6 @@ class _SettingsTabState extends State<SettingsTab> {
           onChanged: (val) => setState(() => _yawRcRate = val),
           onChangeEnd: (val) => UsbService.sendCommand("yaw_rates $_yawRcRate $_yawSuperExpo $_yawExpo"),
         ),
-
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
           child: Text("SENSORS & FILTERS", style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
@@ -569,7 +713,6 @@ class _SettingsTabState extends State<SettingsTab> {
           onChanged: (val) => setState(() => _dynNotchMax = val),
           onChangeEnd: (val) => UsbService.sendCommand("dyn_notch $_dynNotchMin $val"),
         ),
-
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
           child: Text("POWER & SAFETY", style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
@@ -595,7 +738,6 @@ class _SettingsTabState extends State<SettingsTab> {
           onChanged: (val) => setState(() => _fsSpeed = val),
           onChangeEnd: (val) => UsbService.sendCommand("fs_speed ${val.toStringAsFixed(1)}"),
         ),
-
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
           child: Text("PID TUNING (ROLL)", style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
@@ -633,7 +775,7 @@ class _SettingsTabState extends State<SettingsTab> {
 }
 
 // ==========================================
-// РАЗДЕЛ 3: Команды и тесты
+// ВКЛАДКА 3: Команды и тесты
 // ==========================================
 class CommandsTab extends StatelessWidget {
   const CommandsTab({super.key});
