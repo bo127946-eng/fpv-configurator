@@ -75,32 +75,32 @@ class _MainContainerState extends State<MainContainer> {
         selectedIndex: _currentIndex,
         onDestinationSelected: (index) => setState(() => _currentIndex = index),
         backgroundColor: const Color(0xFF121214),
-        indicatorColor: Colors.blueAccent.withOpacity(0.3),
+        indicatorColor: Colors.blueAccent,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         destinations: const [
           NavigationDestination(
-            icon: Icon(Icons.terminal_outlined),
-            selectedIcon: Icon(Icons.terminal),
+            icon: Icon(Icons.terminal_outlined, color: Colors.white70),
+            selectedIcon: Icon(Icons.terminal, color: Colors.white),
             label: 'CLI',
           ),
           NavigationDestination(
-            icon: Icon(Icons.tune_outlined),
-            selectedIcon: Icon(Icons.tune),
+            icon: Icon(Icons.tune_outlined, color: Colors.white70),
+            selectedIcon: Icon(Icons.tune, color: Colors.white),
             label: 'Tuning',
           ),
           NavigationDestination(
-            icon: Icon(Icons.science_outlined),
-            selectedIcon: Icon(Icons.science),
+            icon: Icon(Icons.gavel_outlined, color: Colors.white70),
+            selectedIcon: Icon(Icons.gavel, color: Colors.white),
             label: 'Tests',
           ),
           NavigationDestination(
-            icon: Icon(Icons.threed_rotation),
-            selectedIcon: Icon(Icons.view_in_ar),
-            label: 'Horizon',
+            icon: Icon(Icons.threed_rotation_outlined, color: Colors.white70),
+            selectedIcon: Icon(Icons.threed_rotation, color: Colors.white),
+            label: 'Monitor',
           ),
           NavigationDestination(
-            icon: Icon(Icons.memory_outlined),
-            selectedIcon: Icon(Icons.memory),
+            icon: Icon(Icons.memory_outlined, color: Colors.white70),
+            selectedIcon: Icon(Icons.memory, color: Colors.white),
             label: 'Flasher',
           ),
         ],
@@ -179,6 +179,27 @@ class SerialService {
 }
 
 // ==========================================
+// ВСПОМОГАТЕЛЬНЫЕ ОКНА СООБЩЕНИЙ (POPUP)
+// ==========================================
+void showAppDialog(BuildContext context, String title, String message, {bool isError = false}) {
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      backgroundColor: const Color(0xFF1C1C1E),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Text(title, style: TextStyle(color: isError ? Colors.redAccent : Colors.amberAccent, fontSize: 16, fontWeight: FontWeight.bold)),
+      content: Text(message, style: const TextStyle(fontSize: 13, color: Colors.white70)),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("ОК", style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold)),
+        ),
+      ],
+    ),
+  );
+}
+
+// ==========================================
 // ШАПКА СТАТУСА
 // ==========================================
 class DroneStatusHeader extends StatefulWidget {
@@ -242,8 +263,8 @@ class _DroneStatusHeaderState extends State<DroneStatusHeader> {
                   Navigator.pop(context);
                   _connectUsb();
                 },
-                icon: const Icon(Icons.usb),
-                label: const Text("USB OTG Cable"),
+                icon: const Icon(Icons.usb, color: Colors.white),
+                label: const Text("USB OTG Cable", style: TextStyle(color: Colors.white)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.blueAccent, 
                   padding: const EdgeInsets.all(14),
@@ -256,10 +277,10 @@ class _DroneStatusHeaderState extends State<DroneStatusHeader> {
                   Navigator.pop(context);
                   _showBluetoothScanDialog();
                 },
-                icon: const Icon(Icons.bluetooth),
-                label: const Text("Bluetooth LE (Wireless)"),
+                icon: const Icon(Icons.bluetooth, color: Colors.white),
+                label: const Text("Bluetooth LE (Wireless)", style: TextStyle(color: Colors.white)),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.deepPurple, 
+                  backgroundColor: Colors.blueAccent, 
                   padding: const EdgeInsets.all(14),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
@@ -514,8 +535,8 @@ class _TerminalTabState extends State<TerminalTab> {
                 Expanded(
                   child: FilledButton.icon(
                     onPressed: () => SerialService.sendCommand("info"),
-                    icon: const Icon(Icons.info_outline, size: 16),
-                    label: const Text("Read Config Info"),
+                    icon: const Icon(Icons.info_outline, size: 16, color: Colors.white),
+                    label: const Text("Read Config Info", style: TextStyle(color: Colors.white)),
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -523,14 +544,17 @@ class _TerminalTabState extends State<TerminalTab> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                IconButton.filledTonal(
-                  onPressed: () {
-                    SerialService.terminalLog = "";
-                    SerialService.logController.add("");
-                  },
-                  icon: const Icon(Icons.cleaning_services, size: 18),
-                  tooltip: "Clear Log",
-                  style: IconButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                SizedBox(
+                  height: 44,
+                  child: IconButton.filledTonal(
+                    onPressed: () {
+                      SerialService.terminalLog = "";
+                      SerialService.logController.add("");
+                    },
+                    icon: const Icon(Icons.cleaning_services, size: 18),
+                    tooltip: "Clear Log",
+                    style: IconButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                  ),
                 ),
               ],
             ),
@@ -569,7 +593,7 @@ class _TerminalTabState extends State<TerminalTab> {
                 ),
                 const SizedBox(width: 8),
                 IconButton.filled(
-                  icon: const Icon(Icons.send_rounded, size: 18),
+                  icon: const Icon(Icons.send_rounded, size: 18, color: Colors.white),
                   onPressed: () {
                     if (_cmdController.text.isNotEmpty) {
                       SerialService.sendCommand(_cmdController.text);
@@ -650,13 +674,9 @@ class _PidCardWidgetState extends State<PidCardWidget> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(widget.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                Text(widget.commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace')),
-              ],
-            ),
+            Text(widget.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            const SizedBox(height: 2),
+            Text(widget.commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace')),
             const SizedBox(height: 8),
             Row(
               children: [
@@ -715,8 +735,8 @@ class SettingsTab extends StatefulWidget {
 }
 
 class _SettingsTabState extends State<SettingsTab> {
-  double _flightMode = 0;
-  double _filterMode = 1;
+  int _flightMode = 0; // 0: Angle, 1: Acro, 2: Horizon
+  int _filterMode = 1; // 0: Off, 1: LPF, 2: LPF+Notch, 3: LPF+DynNotch
   double _dynamicNotchEnabled = 1;
 
   double _fsRcEn = 1;
@@ -805,33 +825,40 @@ class _SettingsTabState extends State<SettingsTab> {
     );
   }
 
-  Widget _buildDropdownCard({
+  Widget _buildSegmentedChoiceCard({
     required String title,
     required String commandName,
-    required double value,
-    required List<DropdownMenuItem<double>> items,
-    required ValueChanged<double?> onChanged,
+    required List<String> options,
+    required int selectedIndex,
+    required ValueChanged<int> onSelected,
   }) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace')),
-              ],
-            ),
-            DropdownButton<double>(
-              value: value,
-              items: items,
-              onChanged: onChanged,
-              dropdownColor: const Color(0xFF1C1C1E),
-              style: const TextStyle(fontSize: 12, color: Colors.white),
-              underline: const SizedBox(),
+            Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+            Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace')),
+            const SizedBox(height: 10),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                return ToggleButtons(
+                  isSelected: List.generate(options.length, (i) => i == selectedIndex),
+                  onPressed: (index) {
+                    onSelected(index);
+                  },
+                  borderRadius: BorderRadius.circular(10),
+                  selectedColor: Colors.white,
+                  fillColor: Colors.blueAccent,
+                  color: Colors.white70,
+                  constraints: BoxConstraints(minHeight: 36, minWidth: (constraints.maxWidth - (options.length - 1)) / options.length),
+                  children: options.map((opt) => Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Text(opt, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                  )).toList(),
+                );
+              },
             ),
           ],
         ),
@@ -871,41 +898,28 @@ class _SettingsTabState extends State<SettingsTab> {
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
         _buildSectionHeader("ОСНОВНЫЕ РЕЖИМЫ", Icons.flight),
-        _buildDropdownCard(
+        _buildSegmentedChoiceCard(
           title: "Полетный режим",
           commandName: "flight_mode",
-          value: _flightMode,
-          items: const [
-            DropdownMenuItem(value: 0, child: Text("Angle")),
-            DropdownMenuItem(value: 1, child: Text("Rate-Acro")),
-            DropdownMenuItem(value: 2, child: Text("Horizon")),
-          ],
-          onChanged: (v) {
-            if (v != null) {
-              setState(() => _flightMode = v);
-              SerialService.sendCommand("flight_mode ${v.round()}");
-            }
+          options: const ["Angle", "Acro", "Horizon"],
+          selectedIndex: _flightMode,
+          onSelected: (val) {
+            setState(() => _flightMode = val);
+            SerialService.sendCommand("flight_mode $val");
           },
         ),
-        _buildDropdownCard(
+        _buildSegmentedChoiceCard(
           title: "Режим фильтрации",
           commandName: "filter_mode",
-          value: _filterMode,
-          items: const [
-            DropdownMenuItem(value: 0, child: Text("Выкл")),
-            DropdownMenuItem(value: 1, child: Text("Уровень 1")),
-            DropdownMenuItem(value: 2, child: Text("Уровень 2")),
-            DropdownMenuItem(value: 3, child: Text("Уровень 3")),
-          ],
-          onChanged: (v) {
-            if (v != null) {
-              setState(() => _filterMode = v);
-              SerialService.sendCommand("filter_mode ${v.round()}");
-            }
+          options: const ["Off", "LPF", "LPF+Notch", "LPF+DynNotch"],
+          selectedIndex: _filterMode,
+          onSelected: (val) {
+            setState(() => _filterMode = val);
+            SerialService.sendCommand("filter_mode $val");
           },
         ),
         _buildSwitchCard(
-          title: "Динамический Notch фильтр",
+          title: "Динамический notch\nфильтр",
           commandName: "dynamic_notch_enabled",
           value: _dynamicNotchEnabled == 1,
           onChanged: (val) {
@@ -933,23 +947,14 @@ class _SettingsTabState extends State<SettingsTab> {
             SerialService.sendCommand("fs_batt_en ${_fsBattEn.round()}");
           },
         ),
-        _buildDropdownCard(
+        _buildSegmentedChoiceCard(
           title: "Ячейки батареи",
           commandName: "battery_cells",
-          value: _batteryCells,
-          items: const [
-            DropdownMenuItem(value: 0, child: Text("Авто")),
-            DropdownMenuItem(value: 2, child: Text("2S")),
-            DropdownMenuItem(value: 3, child: Text("3S")),
-            DropdownMenuItem(value: 4, child: Text("4S")),
-            DropdownMenuItem(value: 5, child: Text("5S")),
-            DropdownMenuItem(value: 6, child: Text("6S")),
-          ],
-          onChanged: (v) {
-            if (v != null) {
-              setState(() => _batteryCells = v);
-              SerialService.sendCommand("battery_cells ${v.round()}");
-            }
+          options: const ["Авто", "2S", "3S", "4S", "5S", "6S"],
+          selectedIndex: _batteryCells.round(),
+          onSelected: (val) {
+            setState(() => _batteryCells = val.toDouble());
+            SerialService.sendCommand("battery_cells $val");
           },
         ),
         _buildSliderCard(title: "Порог разряда батареи", commandName: "fs_batt_v", value: _battFsV, min: 6.0, max: 25.0, divisions: 190, unit: "В", onChanged: (v) => setState(() => _battFsV = v), onChangeEnd: (v) => SerialService.sendCommand("fs_batt_v $v")),
@@ -1004,7 +1009,35 @@ class _SettingsTabState extends State<SettingsTab> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12.0),
           child: ElevatedButton.icon(
-            onPressed: () => SerialService.sendCommand("reset"),
+            onPressed: () {
+              if (SerialService.activeConnectionType == null) {
+                showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
+              } else {
+                SerialService.sendCommand("save_profile");
+                showAppDialog(context, "Успех", "Значения успешно применены и переданы профилем!");
+              }
+            },
+            icon: const Icon(Icons.save, color: Colors.white),
+            label: const Text("Применить значения и передать профилем", style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blueAccent,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12.0),
+          child: ElevatedButton.icon(
+            onPressed: () {
+              if (SerialService.activeConnectionType == null) {
+                showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
+              } else {
+                SerialService.sendCommand("reset");
+                showAppDialog(context, "Сброс", "Настройки сброшены в заводские!");
+              }
+            },
             icon: const Icon(Icons.restore, color: Colors.white),
             label: const Text("Сбросить в заводские настройки", style: TextStyle(color: Colors.white)),
             style: ElevatedButton.styleFrom(
@@ -1023,15 +1056,8 @@ class _SettingsTabState extends State<SettingsTab> {
 // ==========================================
 // ВКЛАДКА: ТЕСТЫ (TestsTab)
 // ==========================================
-class TestsTab extends StatefulWidget {
+class TestsTab extends StatelessWidget {
   const TestsTab({super.key});
-
-  @override
-  State<TestsTab> createState() => _TestsTabState();
-}
-
-class _TestsTabState extends State<TestsTab> {
-  bool _isMonitoring = false;
 
   Widget _buildSectionHeader(String title, IconData icon) {
     return Padding(
@@ -1047,6 +1073,7 @@ class _TestsTabState extends State<TestsTab> {
   }
 
   Widget _buildActionCard({
+    required BuildContext context,
     required String title,
     required String subtitleCommand,
     required IconData icon,
@@ -1090,86 +1117,98 @@ class _TestsTabState extends State<TestsTab> {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
-        _buildSectionHeader("ДИАГНОСТИКА СЕНСОРОВ", Icons.explore),
+        _buildSectionHeader("КАЛИБРОВКИ", Icons.explore),
         _buildActionCard(
+          context: context,
           title: "Калибровка гиро/акселя",
           subtitleCommand: "calib",
           icon: Icons.explore_outlined,
           color: Colors.blueAccent,
-          onTap: () => SerialService.sendCommand("calib"),
+          onTap: () {
+            if (SerialService.activeConnectionType == null) {
+              showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
+            } else {
+              SerialService.sendCommand("calib");
+              showAppDialog(context, "Успех", "Калибровка гиро/акселя успешно запущена!");
+            }
+          },
         ),
         _buildActionCard(
-          title: "Тест шумов сенсоров",
-          subtitleCommand: "test_sensors",
-          icon: Icons.graphic_eq,
-          color: Colors.cyanAccent,
-          onTap: () => SerialService.sendCommand("test_sensors"),
-        ),
-
-        _buildSectionHeader("СИЛОВАЯ УСТАНОВКА (MOTORS & ESC)", Icons.bolt),
-        _buildActionCard(
+          context: context,
           title: "Калибровка ESC",
           subtitleCommand: "test_esc",
           icon: Icons.settings_input_component,
           color: Colors.orangeAccent,
-          onTap: () => SerialService.sendCommand("test_esc"),
+          onTap: () {
+            if (SerialService.activeConnectionType == null) {
+              showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
+            } else {
+              SerialService.sendCommand("test_esc");
+              showAppDialog(context, "Успех", "Режим калибровки ESC активирован!");
+            }
+          },
+        ),
+
+        _buildSectionHeader("ТЕСТЫ", Icons.bolt),
+        _buildActionCard(
+          context: context,
+          title: "Тест шумов сенсоров",
+          subtitleCommand: "test_sensors",
+          icon: Icons.graphic_eq,
+          color: Colors.cyanAccent,
+          onTap: () {
+            if (SerialService.activeConnectionType == null) {
+              showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
+            } else {
+              SerialService.sendCommand("test_sensors");
+              showAppDialog(context, "Тест", "Диагностика шумов сенсоров выполнена.");
+            }
+          },
         ),
         _buildActionCard(
+          context: context,
           title: "Тест моторов 10%",
           subtitleCommand: "test_motor",
           icon: Icons.toys,
           color: Colors.amberAccent,
-          onTap: () => SerialService.sendCommand("test_motor"),
+          onTap: () {
+            if (SerialService.activeConnectionType == null) {
+              showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
+            } else {
+              SerialService.sendCommand("test_motor");
+              showAppDialog(context, "Тест", "Тест моторов (10%) отправлен на контроллер.");
+            }
+          },
         ),
         _buildActionCard(
+          context: context,
           title: "Тест стабилизации",
           subtitleCommand: "test_pid",
           icon: Icons.science_outlined,
           color: Colors.purpleAccent,
-          onTap: () => SerialService.sendCommand("test_pid"),
+          onTap: () {
+            if (SerialService.activeConnectionType == null) {
+              showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
+            } else {
+              SerialService.sendCommand("test_pid");
+              showAppDialog(context, "Тест", "Тест стабилизации запущен.");
+            }
+          },
         ),
-
-        _buildSectionHeader("АВТОМАТИКА И МОНИТОРИНГ", Icons.flight_takeoff),
         _buildActionCard(
+          context: context,
           title: "Автоматический полет / Тест",
           subtitleCommand: "auto",
           icon: Icons.flight_takeoff,
           color: Colors.greenAccent,
-          onTap: () => SerialService.sendCommand("auto"),
-        ),
-        
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
-                  child: const Icon(Icons.monitor_heart, color: Colors.redAccent, size: 22),
-                ),
-                const SizedBox(width: 16),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text("Мониторинг сенсоров", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                      SizedBox(height: 2),
-                      Text("mon / stop", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontFamily: 'monospace')),
-                    ],
-                  ),
-                ),
-                Switch(
-                  value: _isMonitoring,
-                  activeColor: Colors.redAccent,
-                  onChanged: (val) {
-                    setState(() => _isMonitoring = val);
-                    SerialService.sendCommand(val ? "mon" : "stop");
-                  },
-                ),
-              ],
-            ),
-          ),
+          onTap: () {
+            if (SerialService.activeConnectionType == null) {
+              showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
+            } else {
+              SerialService.sendCommand("auto");
+              showAppDialog(context, "Тест", "Автоматический режим запущен.");
+            }
+          },
         ),
       ],
     );
@@ -1180,8 +1219,8 @@ class _TestsTabState extends State<TestsTab> {
 // КАСТОМНЫЙ ВИДЖЕТ АВИАГОРИЗОНТА (Artificial Horizon Painter)
 // ==========================================
 class ArtificialHorizonPainter extends CustomPainter {
-  final double roll; // в радианах
-  final double pitch; // в радианах (положительный - тангаж вверх)
+  final double roll; 
+  final double pitch; 
 
   ArtificialHorizonPainter({required this.roll, required this.pitch});
 
@@ -1193,31 +1232,23 @@ class ArtificialHorizonPainter extends CustomPainter {
     canvas.save();
     canvas.translate(center.dx, center.dy);
 
-    // Обрезка по кругу прибора
     final path = Path()..addOval(Rect.fromCircle(center: Offset.zero, radius: radius));
     canvas.clipPath(path);
 
-    // Вращение по крену (Roll)
     canvas.rotate(-roll);
-
-    // Смещение по тангажу (Pitch): 1 радиан ~ 80 пикселей смещения линии горизонта
     final pitchOffset = pitch * 75.0;
 
-    // Отрисовка Неба
     final skyPaint = Paint()..color = const Color(0xFF1E6091);
     canvas.drawRect(Rect.fromLTWH(-radius * 2, -radius * 3 + pitchOffset, radius * 4, radius * 3), skyPaint);
 
-    // Отрисовка Земли
     final groundPaint = Paint()..color = const Color(0xFF8B5A2B);
     canvas.drawRect(Rect.fromLTWH(-radius * 2, pitchOffset, radius * 4, radius * 3), groundPaint);
 
-    // Линия горизонта
     final horizonPaint = Paint()
       ..color = Colors.white
       ..strokeWidth = 2.0;
     canvas.drawLine(Offset(-radius * 2, pitchOffset), Offset(radius * 2, pitchOffset), horizonPaint);
 
-    // Штрихи тангажа (шаг по 10 градусов)
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
     for (int p = -30; p <= 30; p += 10) {
       if (p == 0) continue;
@@ -1238,20 +1269,17 @@ class ArtificialHorizonPainter extends CustomPainter {
 
     canvas.restore();
 
-    // Отрисовка статической шкалы крена и центрального маркера самолета (не вращается)
     final fixedPaint = Paint()
       ..color = Colors.amberAccent
       ..strokeWidth = 2.5
       ..style = PaintingStyle.stroke;
 
-    // Стационарный авиационный маркер центра (желтые крылья и точка)
     canvas.drawLine(Offset(center.dx - 45, center.dy), Offset(center.dx - 15, center.dy), fixedPaint);
     canvas.drawLine(Offset(center.dx + 15, center.dy), Offset(center.dx + 45, center.dy), fixedPaint);
     canvas.drawLine(Offset(center.dx - 15, center.dy), Offset(center.dx - 15, center.dy + 10), fixedPaint);
     canvas.drawLine(Offset(center.dx + 15, center.dy), Offset(center.dx + 15, center.dy + 10), fixedPaint);
     canvas.drawCircle(center, 3, Paint()..color = Colors.amberAccent);
 
-    // Внешняя рамка прибора
     canvas.drawCircle(center, radius, Paint()
       ..color = Colors.white24
       ..strokeWidth = 3
@@ -1265,7 +1293,7 @@ class ArtificialHorizonPainter extends CustomPainter {
 }
 
 // ==========================================
-// ВКЛАДКА: ГОРИЗОНТ И ТЕЛЕМЕТРИЯ (ThreeDViewTab)
+// ВКЛАДКА: МОНИТОР (ThreeDViewTab)
 // ==========================================
 class ThreeDViewTab extends StatefulWidget {
   const ThreeDViewTab({super.key});
@@ -1283,11 +1311,15 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
     _telemetrySub = SerialService.telemetryController.stream.listen((_) {
       if (mounted) setState(() {});
     });
+    // Автоматически включаем мониторинг при входе в раздел
+    SerialService.sendCommand("mon");
   }
 
   @override
   void dispose() {
     _telemetrySub.cancel();
+    // Автоматически отключаем мониторинг при выходе из раздела
+    SerialService.sendCommand("stop");
     super.dispose();
   }
 
@@ -1332,25 +1364,11 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
-                    // Сам прибор авиагоризонта
                     CustomPaint(
                       size: const Size(200, 200),
                       painter: ArtificialHorizonPainter(
                         roll: SerialService.gyroRoll,
                         pitch: SerialService.gyroPitch,
-                      ),
-                    ),
-                    // Плашка с цифровыми углами сверху
-                    Positioned(
-                      top: 12,
-                      left: 12,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
-                        child: Text(
-                          "Roll: ${(SerialService.gyroRoll * 57.2958).toStringAsFixed(1)}°  |  Pitch: ${(SerialService.gyroPitch * 57.2958).toStringAsFixed(1)}°",
-                          style: const TextStyle(color: Colors.amberAccent, fontSize: 11, fontFamily: 'monospace', fontWeight: FontWeight.bold),
-                        ),
                       ),
                     ),
                   ],
@@ -1415,12 +1433,12 @@ class FlasherTab extends StatefulWidget {
 class _FlasherTabState extends State<FlasherTab> {
   bool _isFlashing = false;
   double _progress = 0.0;
-  String _statusText = "Ready. Ensure BOOT0 is HIGH and press RESET.";
+  String _statusText = "Ready to flash built-in firmware";
   String _mcuId = "Unknown";
 
   Future<void> _startProfessionalFlashing() async {
     if (SerialService.usbPort == null) {
-      setState(() => _statusText = "ERROR: USB OTG device not connected!");
+      showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
       return;
     }
 
@@ -1434,9 +1452,11 @@ class _FlasherTabState extends State<FlasherTab> {
       await SerialService.usbPort!.write(Uint8List.fromList([0x7F]));
       await Future.delayed(const Duration(milliseconds: 150));
 
-      setState(() => _statusText = "[2/5] Reading MCU Chip ID (Command 0x02)...");
+      setState(() {
+        _statusText = "[2/5] Reading MCU Chip ID (Command 0x02)...";
+        _mcuId = "STM32F1xx (PID: 0x0414)";
+      });
       await Future.delayed(const Duration(milliseconds: 300));
-      setState(() => _mcuId = "STM32F1xx (PID: 0x0414)");
 
       setState(() => _statusText = "[3/5] Erasing Flash Memory (Extended Erase)...");
       await Future.delayed(const Duration(milliseconds: 600));
@@ -1468,11 +1488,17 @@ class _FlasherTabState extends State<FlasherTab> {
         _isFlashing = false;
         _statusText = "SUCCESS: Firmware successfully flashed and verified!";
       });
+      if (mounted) {
+        showAppDialog(context, "Успех", "Прошивка успешно загружена и проверена!");
+      }
     } catch (e) {
       setState(() {
         _isFlashing = false;
         _statusText = "FLASH FAILED: $e";
       });
+      if (mounted) {
+        showAppDialog(context, "Ошибка", "Ошибка прошивки: $e", isError: true);
+      }
     }
   }
 
@@ -1488,12 +1514,6 @@ class _FlasherTabState extends State<FlasherTab> {
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.amberAccent),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 6),
-          const Text(
-            "Protocol: ST AN3155 | Target: Built-in firmware.hex",
-            style: TextStyle(fontSize: 11, color: Colors.white70),
-            textAlign: TextAlign.center,
-          ),
           const SizedBox(height: 20),
           Card(
             child: Padding(
@@ -1504,24 +1524,16 @@ class _FlasherTabState extends State<FlasherTab> {
                   const SizedBox(height: 12),
                   Text("Target MCU: $_mcuId", style: const TextStyle(fontSize: 12, color: Colors.cyanAccent, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 16),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(10)),
-                    child: Text(_statusText, style: const TextStyle(fontFamily: 'monospace', fontSize: 11, color: Colors.greenAccent), textAlign: TextAlign.center),
-                  ),
+                  Text(_statusText, style: const TextStyle(fontFamily: 'monospace', fontSize: 11, color: Colors.greenAccent), textAlign: TextAlign.center),
+                  const SizedBox(height: 12),
+                  LinearProgressIndicator(value: _progress, color: Colors.amberAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
                   const SizedBox(height: 20),
-                  if (_isFlashing) ...[
-                    LinearProgressIndicator(value: _progress, color: Colors.amberAccent, backgroundColor: Colors.white12),
-                    const SizedBox(height: 16),
-                  ],
                   ElevatedButton.icon(
                     onPressed: _isFlashing ? null : _startProfessionalFlashing,
-                    icon: const Icon(Icons.system_update),
-                    label: Text(_isFlashing ? "Flashing in Progress..." : "Start Firmware Update"),
+                    icon: const Icon(Icons.system_update, color: Colors.white),
+                    label: Text(_isFlashing ? "Flashing in Progress..." : "Start Firmware Update", style: const TextStyle(color: Colors.white)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.blueAccent,
-                      foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
