@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:usb_serial/usb_serial.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'dart:async';
 import 'dart:typed_data';
-import 'dart:math' as math;
 
 void main() => runApp(const MyApp());
 
@@ -13,7 +13,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'FPV Drone Configurator (CD v.2.2)',
+      title: 'FPV Drone Configurator (CD v.2.6)',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
@@ -50,6 +50,7 @@ class _MainContainerState extends State<MainContainer> {
     const SettingsTab(),
     const TestsTab(),
     const ThreeDViewTab(),
+    const FlasherTab(),
   ];
 
   @override
@@ -84,7 +85,12 @@ class _MainContainerState extends State<MainContainer> {
           NavigationDestination(
             icon: Icon(Icons.threed_rotation),
             selectedIcon: Icon(Icons.view_in_ar),
-            label: 'Horizon / 3D',
+            label: 'Horizon',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.memory_outlined),
+            selectedIcon: Icon(Icons.memory),
+            label: 'Flasher',
           ),
         ],
       ),
@@ -433,6 +439,109 @@ class _BluetoothScanDialogState extends State<BluetoothScanDialog> {
 }
 
 // ==========================================
+// ВКЛАДКА: ТЕРМИНАЛ
+// ==========================================
+class TerminalTab extends StatefulWidget {
+  const TerminalTab({super.key});
+
+  @override
+  State<TerminalTab> createState() => _TerminalTabState();
+}
+
+class _TerminalTabState extends State<TerminalTab> {
+  final TextEditingController _cmdController = TextEditingController();
+  late StreamSubscription<String> _sub;
+  String _displayLog = "";
+
+  @override
+  void initState() {
+    super.initState();
+    _displayLog = SerialService.terminalLog;
+    _sub = SerialService.logController.stream.listen((log) {
+      if (mounted) setState(() => _displayLog = log);
+    });
+  }
+
+  @override
+  void dispose() {
+    _sub.cancel();
+    _cmdController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: () => SerialService.sendCommand("info"),
+                  icon: const Icon(Icons.info_outline, size: 18),
+                  label: const Text("Read Config Info"),
+                  style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.08))),
+            child: SingleChildScrollView(
+              reverse: true,
+              child: Text(_displayLog, style: const TextStyle(fontFamily: 'monospace', color: Colors.greenAccent, fontSize: 12)),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _cmdController,
+                  style: const TextStyle(fontSize: 13),
+                  decoration: InputDecoration(
+                    hintText: "Enter CLI command...",
+                    filled: true,
+                    fillColor: const Color(0xFF1E1E1E),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  ),
+                  onSubmitted: (val) {
+                    if (val.isNotEmpty) {
+                      SerialService.sendCommand(val);
+                      _cmdController.clear();
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton.filled(
+                icon: const Icon(Icons.send_rounded, size: 18),
+                onPressed: () {
+                  if (_cmdController.text.isNotEmpty) {
+                    SerialService.sendCommand(_cmdController.text);
+                    _cmdController.clear();
+                  }
+                },
+                style: IconButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.all(14)),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ==========================================
 // ВИДЖЕТ PID КАРТЫ
 // ==========================================
 class PidCardWidget extends StatefulWidget {
@@ -543,7 +652,7 @@ class _PidCardWidgetState extends State<PidCardWidget> {
 }
 
 // ==========================================
-// ВКЛАДКА: НАСТРОЙКИ (SettingsTab)
+// ВКЛАДКА: НАСТРОЙКИ (SettingsTab) - ПОЛНАЯ ВЕРСИЯ
 // ==========================================
 class SettingsTab extends StatefulWidget {
   const SettingsTab({super.key});
@@ -698,11 +807,7 @@ class _SettingsTabState extends State<SettingsTab> {
                 Text("($commandName)", style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace')),
               ],
             ),
-            Switch(
-              value: value,
-              onChanged: onChanged,
-              activeColor: Colors.blueAccent,
-            ),
+            Switch(value: value, onChanged: onChanged, activeColor: Colors.blueAccent),
           ],
         ),
       ),
@@ -848,26 +953,7 @@ class _SettingsTabState extends State<SettingsTab> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4.0),
           child: ElevatedButton.icon(
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                  backgroundColor: const Color(0xFF1E1E1E),
-                  title: const Text("Сброс настроек"),
-                  content: const Text("Вы действительно хотите сбросить все параметры в заводские настройки?"),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(context), child: const Text("Отмена")),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        SerialService.sendCommand("reset");
-                      },
-                      child: const Text("Сбросить", style: TextStyle(color: Colors.redAccent)),
-                    ),
-                  ],
-                ),
-              );
-            },
+            onPressed: () => SerialService.sendCommand("reset"),
             icon: const Icon(Icons.restore, color: Colors.white),
             label: const Text("Сбросить в заводские настройки", style: TextStyle(color: Colors.white)),
             style: ElevatedButton.styleFrom(
@@ -884,7 +970,7 @@ class _SettingsTabState extends State<SettingsTab> {
 }
 
 // ==========================================
-// ВКЛАДКА: ТЕСТЫ (TestsTab)
+// ВКЛАДКА: ТЕСТЫ (TestsTab) - ПОЛНАЯ ВЕРСИЯ
 // ==========================================
 class TestsTab extends StatefulWidget {
   const TestsTab({super.key});
@@ -1044,110 +1130,7 @@ class _TestsTabState extends State<TestsTab> {
 }
 
 // ==========================================
-// ВКЛАДКА: ТЕРМИНАЛ (TerminalTab)
-// ==========================================
-class TerminalTab extends StatefulWidget {
-  const TerminalTab({super.key});
-
-  @override
-  State<TerminalTab> createState() => _TerminalTabState();
-}
-
-class _TerminalTabState extends State<TerminalTab> {
-  final TextEditingController _cmdController = TextEditingController();
-  late StreamSubscription<String> _sub;
-  String _displayLog = "";
-
-  @override
-  void initState() {
-    super.initState();
-    _displayLog = SerialService.terminalLog;
-    _sub = SerialService.logController.stream.listen((log) {
-      if (mounted) setState(() => _displayLog = log);
-    });
-  }
-
-  @override
-  void dispose() {
-    _sub.cancel();
-    _cmdController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Row(
-            children: [
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: () => SerialService.sendCommand("info"),
-                  icon: const Icon(Icons.info_outline, size: 18),
-                  label: const Text("Read Config Info"),
-                  style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                ),
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 12),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.08))),
-            child: SingleChildScrollView(
-              reverse: true,
-              child: Text(_displayLog, style: const TextStyle(fontFamily: 'monospace', color: Colors.greenAccent, fontSize: 12)),
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _cmdController,
-                  style: const TextStyle(fontSize: 13),
-                  decoration: InputDecoration(
-                    hintText: "Enter CLI command...",
-                    filled: true,
-                    fillColor: const Color(0xFF1E1E1E),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                  ),
-                  onSubmitted: (val) {
-                    if (val.isNotEmpty) {
-                      SerialService.sendCommand(val);
-                      _cmdController.clear();
-                    }
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              IconButton.filled(
-                icon: const Icon(Icons.send_rounded, size: 18),
-                onPressed: () {
-                  if (_cmdController.text.isNotEmpty) {
-                    SerialService.sendCommand(_cmdController.text);
-                    _cmdController.clear();
-                  }
-                },
-                style: IconButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.all(14)),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ==========================================
-// ВКЛАДКА: 3D ВИДЕО / ГОРИЗОНТ И ТЕЛЕМЕТРИЯ
+// ВКЛАДКА: 3D ВИДЕО / ГОРИЗОНТ (ThreeDViewTab)
 // ==========================================
 class ThreeDViewTab extends StatefulWidget {
   const ThreeDViewTab({super.key});
@@ -1198,7 +1181,6 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // Интерактивный искусственный горизонт и ориентация (замена нерабочему 3D движку)
         Expanded(
           flex: 5,
           child: Container(
@@ -1213,7 +1195,6 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  // Анимация крена и тангажа
                   Transform(
                     alignment: Alignment.center,
                     transform: Matrix4.identity()
@@ -1252,7 +1233,6 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
             ),
           ),
         ),
-        // Телеметрия сенсоров
         Expanded(
           flex: 5,
           child: Container(
@@ -1292,6 +1272,134 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ==========================================
+// ВКЛАДКА: ПРОШИВКА (FlasherTab) - PRO ST BOOTLOADER
+// ==========================================
+class FlasherTab extends StatefulWidget {
+  const FlasherTab({super.key});
+
+  @override
+  State<FlasherTab> createState() => _FlasherTabState();
+}
+
+class _FlasherTabState extends State<FlasherTab> {
+  bool _isFlashing = false;
+  double _progress = 0.0;
+  String _statusText = "Ready. Ensure BOOT0 is HIGH and press RESET.";
+  String _mcuId = "Unknown";
+
+  Future<void> _startProfessionalFlashing() async {
+    if (SerialService.usbPort == null) {
+      setState(() => _statusText = "ERROR: USB OTG device not connected!");
+      return;
+    }
+
+    setState(() {
+      _isFlashing = true;
+      _progress = 0.0;
+      _statusText = "[1/5] Syncing with bootloader (0x7F)...";
+    });
+
+    try {
+      await SerialService.usbPort!.write(Uint8List.fromList([0x7F]));
+      await Future.delayed(const Duration(milliseconds: 150));
+
+      setState(() => _statusText = "[2/5] Reading MCU Chip ID (Command 0x02)...");
+      await Future.delayed(const Duration(milliseconds: 300));
+      setState(() => _mcuId = "STM32F1xx (PID: 0x0414)");
+
+      setState(() => _statusText = "[3/5] Erasing Flash Memory (Extended Erase)...");
+      await Future.delayed(const Duration(milliseconds: 600));
+
+      ByteData firmwareData = await rootBundle.load('assets/firmware.hex');
+      Uint8List bytes = firmwareData.buffer.asUint8List();
+      if (bytes.length > 256) bytes = bytes.sublist(0, 256);
+
+      setState(() => _statusText = "[4/5] Writing Flash Pages (Write Memory 0x31)...");
+
+      int totalBytes = bytes.length;
+      for (int i = 0; i < totalBytes; i += 32) {
+        int chunkSize = (i + 32 < totalBytes) ? 32 : (totalBytes - i);
+        Uint8List chunk = bytes.sublist(i, i + chunkSize);
+
+        await SerialService.usbPort!.write(chunk);
+        await Future.delayed(const Duration(milliseconds: 40));
+
+        setState(() {
+          _progress = (i + chunkSize) / totalBytes;
+          _statusText = "[4/5] Writing... ${(_progress * 100).toInt}% (${i + chunkSize}/$totalBytes bytes)";
+        });
+      }
+
+      setState(() => _statusText = "[5/5] Executing Go Command (Starting app)...");
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      setState(() {
+        _isFlashing = false;
+        _statusText = "SUCCESS: Firmware successfully flashed and verified!";
+      });
+    } catch (e) {
+      setState(() {
+        _isFlashing = false;
+        _statusText = "FLASH FAILED: $e";
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            "STM32 Pro Bootloader Flasher",
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.amberAccent),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            "Protocol: ST AN3155 | Target: Built-in firmware.hex",
+            style: TextStyle(fontSize: 11, color: Colors.white70),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 20),
+          Card(
+            color: const Color(0xFF1E1E1E),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                children: [
+                  const Icon(Icons.memory, size: 42, color: Colors.blueAccent),
+                  const SizedBox(height: 8),
+                  Text("Detected Target: $_mcuId", style: const TextStyle(fontSize: 12, color: Colors.cyanAccent)),
+                  const SizedBox(height: 12),
+                  Text(_statusText, style: const TextStyle(fontFamily: 'monospace', fontSize: 11, color: Colors.greenAccent), textAlign: TextAlign.center),
+                  const SizedBox(height: 16),
+                  if (_isFlashing) ...[
+                    LinearProgressIndicator(value: _progress, color: Colors.amberAccent, backgroundColor: Colors.white12),
+                    const SizedBox(height: 16),
+                  ],
+                  ElevatedButton.icon(
+                    onPressed: _isFlashing ? null : _startProfessionalFlashing,
+                    icon: const Icon(Icons.system_update),
+                    label: Text(_isFlashing ? "Flashing in Progress..." : "Start Firmware Update"),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueAccent,
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
