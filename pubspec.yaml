@@ -1,24 +1,11 @@
-name: fpv_configurator
-description: "FPV Drone and Transmitter CLI Configurator via USB OTG"
-publish_to: 'none'
-version: 1.0.0+1
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.3'
+          channel: 'stable'
 
-environment:
-  sdk: '>=3.0.0 <4.0.0'
+      - name: Install dependencies
+        run: flutter pub get
 
-dependencies:
-  flutter:
-    sdk: flutter
-  usb_serial: ^0.5.2
-  cupertino_icons: ^1.0.2
-  flutter_cube: ^0.1.1
-
-dev_dependencies:
-  flutter_test:
-    sdk: flutter
-  flutter_lints: ^2.0.0
-
-flutter:
-  uses-material-design: true
-  assets:
-    - assets/drone.obj
+      - name: Build APK
+        run: flutter build apk --release
