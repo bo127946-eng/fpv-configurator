@@ -768,4 +768,449 @@ class _SettingsTabState extends State<SettingsTab> {
         _buildSliderCard(title: "Крен/Тангаж: Super Expo", commandName: "super_expo", value: _superExpo, min: 0.0, max: 0.9, divisions: 18, unit: "", onChanged: (v) => setState(() => _superExpo = v), onChangeEnd: (v) => SerialService.sendCommand("super_expo $v")),
         _buildSliderCard(title: "Крен/Тангаж: Stick Expo", commandName: "stick_expo", value: _stickExpo, min: 0.0, max: 1.0, divisions: 20, unit: "", onChanged: (v) => setState(() => _stickExpo = v), onChangeEnd: (v) => SerialService.sendCommand("stick_expo $v")),
         _buildSliderCard(title: "Рыскание (Yaw): Rate", commandName: "yaw_rc_rate", value: _yawRcRate, min: 0.1, max: 2.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _yawRcRate = v), onChangeEnd: (v) => SerialService.sendCommand("yaw_rc_rate $v")),
-        _buildSliderCard(title: "Рыскание (Yaw): Super Expo", commandName: "yaw_super_expo", value: _yawSuperExpo, min: 0.
+        _buildSliderCard(title: "Рыскание (Yaw): Super Expo", commandName: "yaw_super_expo", value: _yawSuperExpo, min: 0.0, max: 0.9, divisions: 18, unit: "", onChanged: (v) => setState(() => _yawSuperExpo = v), onChangeEnd: (v) => SerialService.sendCommand("yaw_super_expo $v")),
+        _buildSliderCard(title: "Рыскание (Yaw): Expo", commandName: "yaw_expo", value: _yawExpo, min: 0.0, max: 1.0, divisions: 20, unit: "", onChanged: (v) => setState(() => _yawExpo = v), onChangeEnd: (v) => SerialService.sendCommand("yaw_expo $v")),
+        _buildSliderCard(title: "Мертвая зона стиков", commandName: "deadband", value: _deadband, min: 0, max: 50, divisions: 50, unit: "", onChanged: (v) => setState(() => _deadband = v), onChangeEnd: (v) => SerialService.sendCommand("deadband ${v.round()}")),
+        _buildSliderCard(title: "Сглаживание RC", commandName: "rc_smoothing_alpha", value: _rcSmoothingAlpha, min: 0.05, max: 1.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcSmoothingAlpha = v), onChangeEnd: (v) => SerialService.sendCommand("rc_smoothing_alpha $v")),
+
+        _buildSectionHeader("ОГРАНИЧЕНИЯ ПОЛЕТА", Icons.speed),
+        _buildSliderCard(title: "Максимальный угол наклона", commandName: "max_angle_deg", value: _maxAngleDeg, min: 10, max: 80, divisions: 14, unit: "°", onChanged: (v) => setState(() => _maxAngleDeg = v), onChangeEnd: (v) => SerialService.sendCommand("max_angle_deg ${v.round()}")),
+        _buildSliderCard(title: "Максимальная вертикальная скорость", commandName: "max_vz", value: _maxVz, min: 0.5, max: 3.0, divisions: 25, unit: "м/с", onChanged: (v) => setState(() => _maxVz = v), onChangeEnd: (v) => SerialService.sendCommand("max_vz $v")),
+
+        _buildSectionHeader("PID РЕГУЛЯТОРЫ", Icons.tune),
+        _buildPidCard(title: "Roll PID", commandName: "pid_roll", p: _rollP, i: _rollI, d: _rollD, onUpdate: (p, i, d) {
+          setState(() { _rollP = p; _rollI = i; _rollD = d; });
+          SerialService.sendCommand("pid_roll $p $i $d");
+        }),
+        _buildPidCard(title: "Pitch PID", commandName: "pid_pitch", p: _pitchP, i: _pitchI, d: _pitchD, onUpdate: (p, i, d) {
+          setState(() { _pitchP = p; _pitchI = i; _pitchD = d; });
+          SerialService.sendCommand("pid_pitch $p $i $d");
+        }),
+        _buildPidCard(title: "Yaw PID", commandName: "pid_yaw", p: _yawP, i: _yawI, d: _yawD, onUpdate: (p, i, d) {
+          setState(() { _yawP = p; _yawI = i; _yawD = d; });
+          SerialService.sendCommand("pid_yaw $p $i $d");
+        }),
+        _buildPidCard(title: "Vertical VZ PID", commandName: "pid_vz", p: _vzP, i: _vzI, d: _vzD, onUpdate: (p, i, d) {
+          setState(() { _vzP = p; _vzI = i; _vzD = d; });
+          SerialService.sendCommand("pid_vz $p $i $d");
+        }),
+
+        const SizedBox(height: 20),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4.0),
+          child: ElevatedButton.icon(
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  backgroundColor: const Color(0xFF1E1E1E),
+                  title: const Text("Сброс настроек"),
+                  content: const Text("Вы действительно хотите сбросить все параметры в заводские настройки?"),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(context), child: const Text("Отмена")),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        SerialService.sendCommand("reset");
+                      },
+                      child: const Text("Сбросить", style: TextStyle(color: Colors.redAccent)),
+                    ),
+                  ],
+                ),
+              );
+            },
+            icon: const Icon(Icons.restore, color: Colors.white),
+            label: const Text("Сбросить в заводские настройки", style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade900,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ),
+        const SizedBox(height: 30),
+      ],
+    );
+  }
+}
+
+// ==========================================
+// ВКЛАДКА 2: ТЕСТЫ (TestsTab)
+// ==========================================
+class TestsTab extends StatefulWidget {
+  const TestsTab({super.key});
+
+  @override
+  State<TestsTab> createState() => _TestsTabState();
+}
+
+class _TestsTabState extends State<TestsTab> {
+  bool _isMonitoring = false;
+
+  Widget _buildSectionHeader(String title, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: Colors.amberAccent),
+          const SizedBox(width: 8),
+          Text(title, style: const TextStyle(color: Colors.amberAccent, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionCard({
+    required String title,
+    required String subtitleCommand,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Card(
+      color: const Color(0xFF1E1E1E),
+      margin: const EdgeInsets.only(bottom: 10),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
+                child: Icon(icon, color: color, size: 24),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    const SizedBox(height: 3),
+                    Text("Команда: $subtitleCommand", style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 11, fontFamily: 'monospace')),
+                  ],
+                ),
+              ),
+              const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.white54),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(12.0),
+      children: [
+        _buildSectionHeader("ДИАГНОСТИКА И КАЛИБРОВКА СЕНСОРОВ", Icons.explore),
+        _buildActionCard(
+          title: "Калибровка гиро/акселя",
+          subtitleCommand: "calib",
+          icon: Icons.explore_outlined,
+          color: Colors.blueAccent,
+          onTap: () => SerialService.sendCommand("calib"),
+        ),
+        _buildActionCard(
+          title: "Тест шумов сенсоров",
+          subtitleCommand: "test_sensors",
+          icon: Icons.graphic_eq,
+          color: Colors.cyanAccent,
+          onTap: () => SerialService.sendCommand("test_sensors"),
+        ),
+
+        _buildSectionHeader("ТЕСТЫ СИЛОВОЙ УСТАНОВКИ (MOTORS & ESC)", Icons.bolt),
+        _buildActionCard(
+          title: "Калибровка ESC",
+          subtitleCommand: "test_esc",
+          icon: Icons.settings_input_component,
+          color: Colors.orangeAccent,
+          onTap: () => SerialService.sendCommand("test_esc"),
+        ),
+        _buildActionCard(
+          title: "Тест моторов 10%",
+          subtitleCommand: "test_motor",
+          icon: Icons.toys,
+          color: Colors.amberAccent,
+          onTap: () => SerialService.sendCommand("test_motor"),
+        ),
+        _buildActionCard(
+          title: "Тест стабилизации на столе",
+          subtitleCommand: "test_pid",
+          icon: Icons.science_outlined,
+          color: Colors.purpleAccent,
+          onTap: () => SerialService.sendCommand("test_pid"),
+        ),
+
+        _buildSectionHeader("АВТОМАТИКА И МОНИТОРИНГ", Icons.flight_takeoff),
+        _buildActionCard(
+          title: "Автоматический полет / Тест",
+          subtitleCommand: "auto",
+          icon: Icons.flight_takeoff,
+          color: Colors.greenAccent,
+          onTap: () => SerialService.sendCommand("auto"),
+        ),
+        
+        Card(
+          color: const Color(0xFF1E1E1E),
+          margin: const EdgeInsets.only(bottom: 10),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
+                  child: const Icon(Icons.monitor_heart, color: Colors.redAccent, size: 24),
+                ),
+                const SizedBox(width: 16),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("Мониторинг сенсоров", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      SizedBox(height: 3),
+                      Text("Команда: mon / stop", style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontFamily: 'monospace')),
+                    ],
+                  ),
+                ),
+                Switch(
+                  value: _isMonitoring,
+                  activeColor: Colors.redAccent,
+                  onChanged: (val) {
+                    setState(() => _isMonitoring = val);
+                    SerialService.sendCommand(val ? "mon" : "stop");
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ==========================================
+// ВКЛАДКА ТЕРМИНАЛА (TerminalTab)
+// ==========================================
+class TerminalTab extends StatefulWidget {
+  const TerminalTab({super.key});
+
+  @override
+  State<TerminalTab> createState() => _TerminalTabState();
+}
+
+class _TerminalTabState extends State<TerminalTab> {
+  final TextEditingController _cmdController = TextEditingController();
+  late StreamSubscription<String> _sub;
+  String _displayLog = "";
+
+  @override
+  void initState() {
+    super.initState();
+    _displayLog = SerialService.terminalLog;
+    _sub = SerialService.logController.stream.listen((log) => setState(() => _displayLog = log));
+  }
+
+  @override
+  void dispose() {
+    _sub.cancel();
+    _cmdController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: () => SerialService.sendCommand("info"),
+                  icon: const Icon(Icons.info_outline, size: 18),
+                  label: const Text("Read Config Info"),
+                  style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.08))),
+            child: SingleChildScrollView(
+              reverse: true,
+              child: Text(_displayLog, style: const TextStyle(fontFamily: 'monospace', color: Colors.greenAccent, fontSize: 12)),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _cmdController,
+                  style: const TextStyle(fontSize: 13),
+                  decoration: InputDecoration(
+                    hintText: "Enter CLI command...",
+                    filled: true,
+                    fillColor: const Color(0xFF1E1E1E),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  ),
+                  onSubmitted: (val) {
+                    if (val.isNotEmpty) {
+                      SerialService.sendCommand(val);
+                      _cmdController.clear();
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton.filled(
+                icon: const Icon(Icons.send_rounded, size: 18),
+                onPressed: () {
+                  if (_cmdController.text.isNotEmpty) {
+                    SerialService.sendCommand(_cmdController.text);
+                    _cmdController.clear();
+                  }
+                },
+                style: IconButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.all(14)),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ==========================================
+// ВКЛАДКА 3D ВИДЕО / ТЕЛЕМЕТРИИ (ThreeDViewTab)
+// ==========================================
+class ThreeDViewTab extends StatefulWidget {
+  const ThreeDViewTab({super.key});
+
+  @override
+  State<ThreeDViewTab> createState() => _ThreeDViewTabState();
+}
+
+class _ThreeDViewTabState extends State<ThreeDViewTab> {
+  Object? droneModel;
+  late StreamSubscription<void> _telemetrySub;
+
+  @override
+  void initState() {
+    super.initState();
+    _telemetrySub = SerialService.telemetryController.stream.listen((_) {
+      if (droneModel != null) {
+        droneModel!.rotation.x = SerialService.gyroPitch;
+        droneModel!.rotation.y = SerialService.gyroYaw;
+        droneModel!.rotation.z = SerialService.gyroRoll;
+        droneModel!.updateTransform();
+        setState(() {});
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _telemetrySub.cancel();
+    super.dispose();
+  }
+
+  Widget _buildSensorBar(String label, double value, double min, double max, String unit, Color color) {
+    double percent = ((value - min) / (max - min)).clamp(0.0, 1.0);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(label, style: const TextStyle(fontSize: 11, color: Colors.white70)),
+              Text("${value.toStringAsFixed(2)} $unit", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color)),
+            ],
+          ),
+          const SizedBox(height: 3),
+          LinearProgressIndicator(value: percent, color: color, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Expanded(
+          flex: 5,
+          child: Container(
+            margin: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.08))),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Cube(onSceneCreated: (Scene scene) {
+                scene.world.add(Object(fileName: 'assets/drone.obj', lighting: true));
+                if (scene.world.children.isNotEmpty) {
+                  droneModel = scene.world.children.first;
+                  droneModel!.scale.setValues(1.5, 1.5, 1.5);
+                }
+                scene.camera.zoom = 5.0;
+              }),
+            ),
+          ),
+        ),
+        Expanded(
+          flex: 5,
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(16)),
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                const Text("GYROSCOPE", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+                const SizedBox(height: 4),
+                _buildSensorBar("Gyro Roll", SerialService.gyroRoll, -3.14, 3.14, "rad/s", Colors.blueAccent),
+                _buildSensorBar("Gyro Pitch", SerialService.gyroPitch, -3.14, 3.14, "rad/s", Colors.blueAccent),
+                _buildSensorBar("Gyro Yaw", SerialService.gyroYaw, -3.14, 3.14, "rad/s", Colors.blueAccent),
+                
+                const SizedBox(height: 8),
+                const Text("ACCELEROMETER", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+                const SizedBox(height: 4),
+                _buildSensorBar("Accel X", SerialService.accelX, -2.0, 2.0, "G", Colors.cyanAccent),
+                _buildSensorBar("Accel Y", SerialService.accelY, -2.0, 2.0, "G", Colors.cyanAccent),
+                _buildSensorBar("Accel Z", SerialService.accelZ, -2.0, 2.0, "G", Colors.cyanAccent),
+
+                const SizedBox(height: 8),
+                const Text("MOTORS OUTPUTS", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+                const SizedBox(height: 4),
+                _buildSensorBar("Motor 1 (Front-Left)", SerialService.motor1, 0, 100, "%", Colors.orangeAccent),
+                _buildSensorBar("Motor 2 (Front-Right)", SerialService.motor2, 0, 100, "%", Colors.orangeAccent),
+                _buildSensorBar("Motor 3 (Back-Right)", SerialService.motor3, 0, 100, "%", Colors.orangeAccent),
+                _buildSensorBar("Motor 4 (Back-Left)", SerialService.motor4, 0, 100, "%", Colors.orangeAccent),
+
+                const SizedBox(height: 8),
+                const Text("POWER SYSTEM", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+                const SizedBox(height: 4),
+                _buildSensorBar("Battery Voltage", SerialService.batteryVoltage, 10.0, 25.2, "V", Colors.greenAccent),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
