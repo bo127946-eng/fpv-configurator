@@ -4,6 +4,7 @@ import 'package:usb_serial/usb_serial.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'dart:async';
 import 'dart:typed_data';
+import 'dart:math' as math;
 
 void main() => runApp(const MyApp());
 
@@ -13,22 +14,30 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'FPV Drone Configurator (CD v.2.6)',
+      title: 'FPV Drone Configurator Pro',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
         colorScheme: ColorScheme.dark(
-          surface: const Color(0xFF121212),
+          surface: const Color(0xFF141414),
           primary: Colors.blueAccent,
           secondary: Colors.amberAccent,
           error: Colors.redAccent.shade700,
         ),
         scaffoldBackgroundColor: const Color(0xFF0A0A0A),
         cardTheme: CardTheme(
-          color: const Color(0xFF1E1E1E),
+          color: const Color(0xFF1C1C1E),
           elevation: 2,
+          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: const Color(0xFF242428),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          isDense: true,
         ),
       ),
       home: const MainContainer(),
@@ -65,17 +74,19 @@ class _MainContainerState extends State<MainContainer> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (index) => setState(() => _currentIndex = index),
+        backgroundColor: const Color(0xFF121214),
+        indicatorColor: Colors.blueAccent.withOpacity(0.3),
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.terminal_outlined),
             selectedIcon: Icon(Icons.terminal),
-            label: 'Terminal',
+            label: 'CLI',
           ),
           NavigationDestination(
             icon: Icon(Icons.tune_outlined),
             selectedIcon: Icon(Icons.tune),
-            label: 'Settings',
+            label: 'Tuning',
           ),
           NavigationDestination(
             icon: Icon(Icons.science_outlined),
@@ -113,7 +124,7 @@ class SerialService {
   static BluetoothCharacteristic? bleWriteCharacteristic;
   static StreamSubscription<List<int>>? _bleSubscription;
 
-  static String lastResponse = ">> Ready. Connect device.";
+  static String lastResponse = "Ready. Connect device.";
   static String terminalLog = "";
   static StreamController<String> logController = StreamController.broadcast();
   static StreamController<void> telemetryController = StreamController.broadcast();
@@ -162,7 +173,7 @@ class SerialService {
       bleWriteCharacteristic = null;
     }
     activeConnectionType = null;
-    lastResponse = ">> Disconnected";
+    lastResponse = "Disconnected";
     logController.add(terminalLog);
   }
 }
@@ -209,41 +220,49 @@ class _DroneStatusHeaderState extends State<DroneStatusHeader> {
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1E1E1E),
+      backgroundColor: const Color(0xFF1C1C1E),
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) {
         return Padding(
-          padding: const EdgeInsets.all(20.0),
+          padding: const EdgeInsets.all(24.0),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Text(
-                "Select Connection Type",
+                "Select Connection Mode",
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.amberAccent),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
               ElevatedButton.icon(
                 onPressed: () {
                   Navigator.pop(context);
                   _connectUsb();
                 },
                 icon: const Icon(Icons.usb),
-                label: const Text("Connect via USB OTG"),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, padding: const EdgeInsets.all(12)),
+                label: const Text("USB OTG Cable"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blueAccent, 
+                  padding: const EdgeInsets.all(14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               ElevatedButton.icon(
                 onPressed: () {
                   Navigator.pop(context);
                   _showBluetoothScanDialog();
                 },
                 icon: const Icon(Icons.bluetooth),
-                label: const Text("Connect via Bluetooth (BLE)"),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurpleAccent, padding: const EdgeInsets.all(12)),
+                label: const Text("Bluetooth LE (Wireless)"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.deepPurple, 
+                  padding: const EdgeInsets.all(14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
               ),
             ],
           ),
@@ -255,20 +274,20 @@ class _DroneStatusHeaderState extends State<DroneStatusHeader> {
   Future<void> _connectUsb() async {
     List<UsbDevice> devices = await UsbSerial.listDevices();
     if (devices.isEmpty) {
-      setState(() => SerialService.lastResponse = ">> No USB devices found");
+      setState(() => SerialService.lastResponse = "No USB devices found");
       return;
     }
     SerialService.usbPort = await devices[0].create();
     bool openResult = await SerialService.usbPort!.open();
     if (!openResult) {
-      setState(() => SerialService.lastResponse = ">> Failed to open USB port");
+      setState(() => SerialService.lastResponse = "Failed to open USB port");
       return;
     }
     await SerialService.usbPort!.setPortParameters(115200, UsbPort.DATABITS_8, UsbPort.STOPBITS_1, UsbPort.PARITY_NONE);
     SerialService.activeConnectionType = ConnectionType.usb;
     setState(() {
       _isConnected = true;
-      SerialService.lastResponse = ">> Connected via USB to ${devices[0].deviceName}";
+      SerialService.lastResponse = "USB Connected: ${devices[0].deviceName}";
     });
     SerialService._usbSubscription = SerialService.usbPort!.inputStream!.listen((data) {
       SerialService.handleIncomingData(data);
@@ -286,20 +305,30 @@ class _DroneStatusHeaderState extends State<DroneStatusHeader> {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(color: const Color(0xFF161616), border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.05)))),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF141416),
+        border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.06))),
+      ),
       child: SafeArea(
         bottom: false,
         child: Row(
           children: [
-            Icon(
-              SerialService.activeConnectionType == ConnectionType.bluetooth 
-                  ? Icons.bluetooth_connected 
-                  : Icons.sensors, 
-              color: _isConnected ? Colors.greenAccent : Colors.amberAccent, 
-              size: 16,
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: (_isConnected ? Colors.greenAccent : Colors.amberAccent).withOpacity(0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                SerialService.activeConnectionType == ConnectionType.bluetooth 
+                    ? Icons.bluetooth_connected 
+                    : Icons.usb, 
+                color: _isConnected ? Colors.greenAccent : Colors.amberAccent, 
+                size: 16,
+              ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 12),
             Expanded(
               child: Text(
                 _displayResponse, 
@@ -309,14 +338,16 @@ class _DroneStatusHeaderState extends State<DroneStatusHeader> {
             ),
             const SizedBox(width: 8),
             SizedBox(
-              height: 32,
+              height: 34,
               child: ElevatedButton.icon(
                 onPressed: _showConnectionDialog,
                 icon: Icon(_isConnected ? Icons.link_off : Icons.link, size: 14),
                 label: Text(_isConnected ? "Disconnect" : "Connect", style: const TextStyle(fontSize: 11)),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _isConnected ? Colors.red.shade900 : Colors.blueAccent, 
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  backgroundColor: _isConnected ? Colors.red.shade900 : Colors.blueAccent,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
               ),
             ),
@@ -356,7 +387,7 @@ class _BluetoothScanDialogState extends State<BluetoothScanDialog> {
       });
       await FlutterBluePlus.startScan(timeout: const Duration(seconds: 4));
     } catch (e) {
-      SerialService.appendLog(">> BLE Scan Error: $e\n");
+      SerialService.appendLog("BLE Scan Error: $e\n");
     } finally {
       if (mounted) setState(() => _isScanning = false);
     }
@@ -391,10 +422,10 @@ class _BluetoothScanDialogState extends State<BluetoothScanDialog> {
         }
       }
 
-      SerialService.lastResponse = ">> Connected to BLE: $name";
+      SerialService.lastResponse = "BLE Connected: $name";
       SerialService.logController.add(SerialService.terminalLog);
     } catch (e) {
-      SerialService.lastResponse = ">> BLE Error: $e";
+      SerialService.lastResponse = "BLE Error: $e";
       SerialService.logController.add(SerialService.terminalLog);
     }
   }
@@ -402,17 +433,18 @@ class _BluetoothScanDialogState extends State<BluetoothScanDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: const Color(0xFF1E1E1E),
+      backgroundColor: const Color(0xFF1C1C1E),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       title: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Text("Select BLE Device", style: TextStyle(fontSize: 16)),
+          const Text("BLE Devices", style: TextStyle(fontSize: 16)),
           if (_isScanning) const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
         ],
       ),
       content: SizedBox(
         width: 300,
-        height: 300,
+        height: 280,
         child: ListView.builder(
           itemCount: _scanResults.length,
           itemBuilder: (context, index) {
@@ -421,8 +453,8 @@ class _BluetoothScanDialogState extends State<BluetoothScanDialog> {
                 ? data.device.platformName 
                 : (data.advertisementData.advName.isNotEmpty ? data.advertisementData.advName : "Unknown Device");
             return ListTile(
-              title: Text(name, style: const TextStyle(fontSize: 14)),
-              subtitle: Text(data.device.remoteId.toString(), style: const TextStyle(fontSize: 11)),
+              title: Text(name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+              subtitle: Text(data.device.remoteId.toString(), style: const TextStyle(fontSize: 10, color: Colors.white60)),
               onTap: () => _connectToDevice(data.device, name),
             );
           },
@@ -439,7 +471,7 @@ class _BluetoothScanDialogState extends State<BluetoothScanDialog> {
 }
 
 // ==========================================
-// ВКЛАДКА: ТЕРМИНАЛ
+// ВКЛАДКА: ТЕРМИНАЛ (CLI)
 // ==========================================
 class TerminalTab extends StatefulWidget {
   const TerminalTab({super.key});
@@ -471,72 +503,89 @@ class _TerminalTabState extends State<TerminalTab> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Row(
-            children: [
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: () => SerialService.sendCommand("info"),
-                  icon: const Icon(Icons.info_outline, size: 18),
-                  label: const Text("Read Config Info"),
-                  style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () => SerialService.sendCommand("info"),
+                    icon: const Icon(Icons.info_outline, size: 16),
+                    label: const Text("Read Config Info"),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 12),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.08))),
-            child: SingleChildScrollView(
-              reverse: true,
-              child: Text(_displayLog, style: const TextStyle(fontFamily: 'monospace', color: Colors.greenAccent, fontSize: 12)),
+                const SizedBox(width: 8),
+                IconButton.filledTonal(
+                  onPressed: () {
+                    SerialService.terminalLog = "";
+                    SerialService.logController.add("");
+                  },
+                  icon: const Icon(Icons.cleaning_services, size: 18),
+                  tooltip: "Clear Log",
+                  style: IconButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                ),
+              ],
             ),
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _cmdController,
-                  style: const TextStyle(fontSize: 13),
-                  decoration: InputDecoration(
-                    hintText: "Enter CLI command...",
-                    filled: true,
-                    fillColor: const Color(0xFF1E1E1E),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+          Expanded(
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.black, 
+                borderRadius: BorderRadius.circular(16), 
+                border: Border.all(color: Colors.white.withOpacity(0.06)),
+              ),
+              child: SingleChildScrollView(
+                reverse: true,
+                child: Text(_displayLog, style: const TextStyle(fontFamily: 'monospace', color: Colors.greenAccent, fontSize: 11)),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _cmdController,
+                    style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
+                    decoration: const InputDecoration(hintText: "Enter CLI command..."),
+                    onSubmitted: (val) {
+                      if (val.isNotEmpty) {
+                        SerialService.sendCommand(val);
+                        _cmdController.clear();
+                      }
+                    },
                   ),
-                  onSubmitted: (val) {
-                    if (val.isNotEmpty) {
-                      SerialService.sendCommand(val);
+                ),
+                const SizedBox(width: 8),
+                IconButton.filled(
+                  icon: const Icon(Icons.send_rounded, size: 18),
+                  onPressed: () {
+                    if (_cmdController.text.isNotEmpty) {
+                      SerialService.sendCommand(_cmdController.text);
                       _cmdController.clear();
                     }
                   },
+                  style: IconButton.styleFrom(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), 
+                    padding: const EdgeInsets.all(14),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              IconButton.filled(
-                icon: const Icon(Icons.send_rounded, size: 18),
-                onPressed: () {
-                  if (_cmdController.text.isNotEmpty) {
-                    SerialService.sendCommand(_cmdController.text);
-                    _cmdController.clear();
-                  }
-                },
-                style: IconButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.all(14)),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -596,14 +645,18 @@ class _PidCardWidgetState extends State<PidCardWidget> {
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
         padding: const EdgeInsets.all(12.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(widget.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-            Text("(${widget.commandName})", style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace')),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(widget.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                Text(widget.commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace')),
+              ],
+            ),
             const SizedBox(height: 8),
             Row(
               children: [
@@ -652,7 +705,7 @@ class _PidCardWidgetState extends State<PidCardWidget> {
 }
 
 // ==========================================
-// ВКЛАДКА: НАСТРОЙКИ (SettingsTab) - ПОЛНАЯ ВЕРСИЯ
+// ВКЛАДКА: НАСТРОЙКИ (SettingsTab)
 // ==========================================
 class SettingsTab extends StatefulWidget {
   const SettingsTab({super.key});
@@ -698,12 +751,12 @@ class _SettingsTabState extends State<SettingsTab> {
 
   Widget _buildSectionHeader(String title, IconData icon) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: Colors.amberAccent),
+          Icon(icon, size: 16, color: Colors.amberAccent),
           const SizedBox(width: 8),
-          Text(title, style: const TextStyle(color: Colors.amberAccent, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+          Text(title, style: const TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
         ],
       ),
     );
@@ -721,7 +774,6 @@ class _SettingsTabState extends State<SettingsTab> {
     required ValueChanged<double> onChangeEnd,
   }) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
         padding: const EdgeInsets.all(12.0),
         child: Column(
@@ -735,14 +787,14 @@ class _SettingsTabState extends State<SettingsTab> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                      Text("($commandName)", style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace')),
+                      Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace')),
                     ],
                   ),
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
-                  child: Text("${value.toStringAsFixed(value.truncate() == value ? 0 : 2)} $unit", style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                  child: Text("${value.toStringAsFixed(value.truncate() == value ? 0 : 2)} $unit", style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 11)),
                 ),
               ],
             ),
@@ -761,9 +813,8 @@ class _SettingsTabState extends State<SettingsTab> {
     required ValueChanged<double?> onChanged,
   }) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
-        padding: const EdgeInsets.all(12.0),
+        padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -771,15 +822,16 @@ class _SettingsTabState extends State<SettingsTab> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                Text("($commandName)", style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace')),
+                Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace')),
               ],
             ),
             DropdownButton<double>(
               value: value,
               items: items,
               onChanged: onChanged,
-              dropdownColor: const Color(0xFF1E1E1E),
-              style: const TextStyle(fontSize: 13, color: Colors.white),
+              dropdownColor: const Color(0xFF1C1C1E),
+              style: const TextStyle(fontSize: 12, color: Colors.white),
+              underline: const SizedBox(),
             ),
           ],
         ),
@@ -794,9 +846,8 @@ class _SettingsTabState extends State<SettingsTab> {
     required ValueChanged<bool> onChanged,
   }) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
+        padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -804,7 +855,7 @@ class _SettingsTabState extends State<SettingsTab> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                Text("($commandName)", style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace')),
+                Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace')),
               ],
             ),
             Switch(value: value, onChanged: onChanged, activeColor: Colors.blueAccent),
@@ -817,7 +868,7 @@ class _SettingsTabState extends State<SettingsTab> {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.all(12.0),
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
         _buildSectionHeader("ОСНОВНЫЕ РЕЖИМЫ", Icons.flight),
         _buildDropdownCard(
@@ -825,9 +876,9 @@ class _SettingsTabState extends State<SettingsTab> {
           commandName: "flight_mode",
           value: _flightMode,
           items: const [
-            DropdownMenuItem(value: 0, child: Text("0: Angle")),
-            DropdownMenuItem(value: 1, child: Text("1: Rate-Acro")),
-            DropdownMenuItem(value: 2, child: Text("2: Horizon")),
+            DropdownMenuItem(value: 0, child: Text("Angle")),
+            DropdownMenuItem(value: 1, child: Text("Rate-Acro")),
+            DropdownMenuItem(value: 2, child: Text("Horizon")),
           ],
           onChanged: (v) {
             if (v != null) {
@@ -841,10 +892,10 @@ class _SettingsTabState extends State<SettingsTab> {
           commandName: "filter_mode",
           value: _filterMode,
           items: const [
-            DropdownMenuItem(value: 0, child: Text("0: Выкл")),
-            DropdownMenuItem(value: 1, child: Text("1: Уровень 1")),
-            DropdownMenuItem(value: 2, child: Text("2: Уровень 2")),
-            DropdownMenuItem(value: 3, child: Text("3: Уровень 3")),
+            DropdownMenuItem(value: 0, child: Text("Выкл")),
+            DropdownMenuItem(value: 1, child: Text("Уровень 1")),
+            DropdownMenuItem(value: 2, child: Text("Уровень 2")),
+            DropdownMenuItem(value: 3, child: Text("Уровень 3")),
           ],
           onChanged: (v) {
             if (v != null) {
@@ -883,7 +934,7 @@ class _SettingsTabState extends State<SettingsTab> {
           },
         ),
         _buildDropdownCard(
-          title: "Количество ячеек батареи",
+          title: "Ячейки батареи",
           commandName: "battery_cells",
           value: _batteryCells,
           items: const [
@@ -902,20 +953,20 @@ class _SettingsTabState extends State<SettingsTab> {
           },
         ),
         _buildSliderCard(title: "Порог разряда батареи", commandName: "fs_batt_v", value: _battFsV, min: 6.0, max: 25.0, divisions: 190, unit: "В", onChanged: (v) => setState(() => _battFsV = v), onChangeEnd: (v) => SerialService.sendCommand("fs_batt_v $v")),
-        _buildSliderCard(title: "Скорость снижения при Failsafe", commandName: "fs_speed", value: _fsSpeed, min: 0.2, max: 2.0, divisions: 18, unit: "м/с", onChanged: (v) => setState(() => _fsSpeed = v), onChangeEnd: (v) => SerialService.sendCommand("fs_speed $v")),
+        _buildSliderCard(title: "Скорость снижения Failsafe", commandName: "fs_speed", value: _fsSpeed, min: 0.2, max: 2.0, divisions: 18, unit: "м/с", onChanged: (v) => setState(() => _fsSpeed = v), onChangeEnd: (v) => SerialService.sendCommand("fs_speed $v")),
 
         _buildSectionHeader("ФИЛЬТРЫ СЕНСОРОВ", Icons.waves),
         _buildSliderCard(title: "Фильтр гироскопа LPF", commandName: "lpf_gyro", value: _lpfGyroAlpha, min: 0.05, max: 1.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _lpfGyroAlpha = v), onChangeEnd: (v) => SerialService.sendCommand("lpf_gyro $v")),
         _buildSliderCard(title: "Фильтр акселерометра LPF", commandName: "lpf_accel", value: _lpfAccelAlpha, min: 0.01, max: 1.0, divisions: 99, unit: "", onChanged: (v) => setState(() => _lpfAccelAlpha = v), onChangeEnd: (v) => SerialService.sendCommand("lpf_accel $v")),
         _buildSliderCard(title: "Notch: Центр", commandName: "notch_center_freq", value: _notchCenterFreq, min: 30, max: 150, divisions: 120, unit: "Гц", onChanged: (v) => setState(() => _notchCenterFreq = v), onChangeEnd: (v) => SerialService.sendCommand("notch_center_freq $v")),
-        _buildSliderCard(title: "Notch: Ширина полосы", commandName: "notch_bandwidth", value: _notchBandwidth, min: 5, max: 50, divisions: 45, unit: "Гц", onChanged: (v) => setState(() => _notchBandwidth = v), onChangeEnd: (v) => SerialService.sendCommand("notch_bandwidth $v")),
+        _buildSliderCard(title: "Notch: Ширина", commandName: "notch_bandwidth", value: _notchBandwidth, min: 5, max: 50, divisions: 45, unit: "Гц", onChanged: (v) => setState(() => _notchBandwidth = v), onChangeEnd: (v) => SerialService.sendCommand("notch_bandwidth $v")),
         _buildSliderCard(title: "Dyn Notch Мин", commandName: "dyn_notch_min_hz", value: _dynNotchMinHz, min: 20, max: 100, divisions: 16, unit: "Гц", onChanged: (v) => setState(() => _dynNotchMinHz = v), onChangeEnd: (v) => SerialService.sendCommand("dyn_notch_min_hz $v")),
         _buildSliderCard(title: "Dyn Notch Макс", commandName: "dyn_notch_max_hz", value: _dynNotchMaxHz, min: 80, max: 200, divisions: 24, unit: "Гц", onChanged: (v) => setState(() => _dynNotchMaxHz = v), onChangeEnd: (v) => SerialService.sendCommand("dyn_notch_max_hz $v")),
 
         _buildSectionHeader("РЕЖИМ HORIZON", Icons.threesixty),
         _buildSliderCard(title: "Порог перехода Horizon", commandName: "horizon_transition", value: _horizonTransition, min: 0.0, max: 1.0, divisions: 20, unit: "", onChanged: (v) => setState(() => _horizonTransition = v), onChangeEnd: (v) => SerialService.sendCommand("horizon_transition $v")),
-        _buildSliderCard(title: "Усиление Horizon Trainer", commandName: "horizon_trainer_gain", value: _horizonTrainerGain, min: 0.0, max: 1.0, divisions: 20, unit: "", onChanged: (v) => setState(() => _horizonTrainerGain = v), onChangeEnd: (v) => SerialService.sendCommand("horizon_trainer_gain $v")),
-        _buildSliderCard(title: "Мертвая зона Horizon", commandName: "horizon_trainer_dead", value: _horizonTrainerDead, min: 0.0, max: 0.5, divisions: 25, unit: "", onChanged: (v) => setState(() => _horizonTrainerDead = v), onChangeEnd: (v) => SerialService.sendCommand("horizon_trainer_dead $v")),
+        _buildSliderCard(title: "Усиление Trainer", commandName: "horizon_trainer_gain", value: _horizonTrainerGain, min: 0.0, max: 1.0, divisions: 20, unit: "", onChanged: (v) => setState(() => _horizonTrainerGain = v), onChangeEnd: (v) => SerialService.sendCommand("horizon_trainer_gain $v")),
+        _buildSliderCard(title: "Мертвая зона Trainer", commandName: "horizon_trainer_dead", value: _horizonTrainerDead, min: 0.0, max: 0.5, divisions: 25, unit: "", onChanged: (v) => setState(() => _horizonTrainerDead = v), onChangeEnd: (v) => SerialService.sendCommand("horizon_trainer_dead $v")),
 
         _buildSectionHeader("УПРАВЛЕНИЕ И ЭКСПОНЕНТЫ", Icons.gamepad),
         _buildSliderCard(title: "Крен/Тангаж: Rate", commandName: "rc_rate", value: _rcRate, min: 0.1, max: 2.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcRate = v), onChangeEnd: (v) => SerialService.sendCommand("rc_rate $v")),
@@ -949,9 +1000,9 @@ class _SettingsTabState extends State<SettingsTab> {
           SerialService.sendCommand("pid_vz $p $i $d");
         }),
 
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4.0),
+          padding: const EdgeInsets.symmetric(horizontal: 12.0),
           child: ElevatedButton.icon(
             onPressed: () => SerialService.sendCommand("reset"),
             icon: const Icon(Icons.restore, color: Colors.white),
@@ -963,14 +1014,14 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
           ),
         ),
-        const SizedBox(height: 30),
+        const SizedBox(height: 24),
       ],
     );
   }
 }
 
 // ==========================================
-// ВКЛАДКА: ТЕСТЫ (TestsTab) - ПОЛНАЯ ВЕРСИЯ
+// ВКЛАДКА: ТЕСТЫ (TestsTab)
 // ==========================================
 class TestsTab extends StatefulWidget {
   const TestsTab({super.key});
@@ -984,12 +1035,12 @@ class _TestsTabState extends State<TestsTab> {
 
   Widget _buildSectionHeader(String title, IconData icon) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: Colors.amberAccent),
+          Icon(icon, size: 16, color: Colors.amberAccent),
           const SizedBox(width: 8),
-          Text(title, style: const TextStyle(color: Colors.amberAccent, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+          Text(title, style: const TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
         ],
       ),
     );
@@ -1003,28 +1054,26 @@ class _TestsTabState extends State<TestsTab> {
     required VoidCallback onTap,
   }) {
     return Card(
-      color: const Color(0xFF1E1E1E),
-      margin: const EdgeInsets.only(bottom: 10),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(14.0),
           child: Row(
             children: [
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
-                child: Icon(icon, color: color, size: 24),
+                child: Icon(icon, color: color, size: 22),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                    const SizedBox(height: 3),
-                    Text("Команда: $subtitleCommand", style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 11, fontFamily: 'monospace')),
+                    Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    const SizedBox(height: 2),
+                    Text(subtitleCommand, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace')),
                   ],
                 ),
               ),
@@ -1039,9 +1088,9 @@ class _TestsTabState extends State<TestsTab> {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.all(12.0),
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
-        _buildSectionHeader("ДИАГНОСТИКА И КАЛИБРОВКА СЕНСОРОВ", Icons.explore),
+        _buildSectionHeader("ДИАГНОСТИКА СЕНСОРОВ", Icons.explore),
         _buildActionCard(
           title: "Калибровка гиро/акселя",
           subtitleCommand: "calib",
@@ -1057,7 +1106,7 @@ class _TestsTabState extends State<TestsTab> {
           onTap: () => SerialService.sendCommand("test_sensors"),
         ),
 
-        _buildSectionHeader("ТЕСТЫ СИЛОВОЙ УСТАНОВКИ (MOTORS & ESC)", Icons.bolt),
+        _buildSectionHeader("СИЛОВАЯ УСТАНОВКА (MOTORS & ESC)", Icons.bolt),
         _buildActionCard(
           title: "Калибровка ESC",
           subtitleCommand: "test_esc",
@@ -1073,7 +1122,7 @@ class _TestsTabState extends State<TestsTab> {
           onTap: () => SerialService.sendCommand("test_motor"),
         ),
         _buildActionCard(
-          title: "Тест стабилизации на столе",
+          title: "Тест стабилизации",
           subtitleCommand: "test_pid",
           icon: Icons.science_outlined,
           color: Colors.purpleAccent,
@@ -1090,8 +1139,6 @@ class _TestsTabState extends State<TestsTab> {
         ),
         
         Card(
-          color: const Color(0xFF1E1E1E),
-          margin: const EdgeInsets.only(bottom: 10),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: Row(
@@ -1099,16 +1146,16 @@ class _TestsTabState extends State<TestsTab> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
-                  child: const Icon(Icons.monitor_heart, color: Colors.redAccent, size: 24),
+                  child: const Icon(Icons.monitor_heart, color: Colors.redAccent, size: 22),
                 ),
                 const SizedBox(width: 16),
                 const Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text("Мониторинг сенсоров", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                      SizedBox(height: 3),
-                      Text("Команда: mon / stop", style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontFamily: 'monospace')),
+                      Text("Мониторинг сенсоров", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      SizedBox(height: 2),
+                      Text("mon / stop", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontFamily: 'monospace')),
                     ],
                   ),
                 ),
@@ -1130,7 +1177,95 @@ class _TestsTabState extends State<TestsTab> {
 }
 
 // ==========================================
-// ВКЛАДКА: 3D ВИДЕО / ГОРИЗОНТ (ThreeDViewTab)
+// КАСТОМНЫЙ ВИДЖЕТ АВИАГОРИЗОНТА (Artificial Horizon Painter)
+// ==========================================
+class ArtificialHorizonPainter extends CustomPainter {
+  final double roll; // в радианах
+  final double pitch; // в радианах (положительный - тангаж вверх)
+
+  ArtificialHorizonPainter({required this.roll, required this.pitch});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = math.min(size.width, size.height) / 2 - 10;
+
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+
+    // Обрезка по кругу прибора
+    final path = Path()..addOval(Rect.fromCircle(center: Offset.zero, radius: radius));
+    canvas.clipPath(path);
+
+    // Вращение по крену (Roll)
+    canvas.rotate(-roll);
+
+    // Смещение по тангажу (Pitch): 1 радиан ~ 80 пикселей смещения линии горизонта
+    final pitchOffset = pitch * 75.0;
+
+    // Отрисовка Неба
+    final skyPaint = Paint()..color = const Color(0xFF1E6091);
+    canvas.drawRect(Rect.fromLTWH(-radius * 2, -radius * 3 + pitchOffset, radius * 4, radius * 3), skyPaint);
+
+    // Отрисовка Земли
+    final groundPaint = Paint()..color = const Color(0xFF8B5A2B);
+    canvas.drawRect(Rect.fromLTWH(-radius * 2, pitchOffset, radius * 4, radius * 3), groundPaint);
+
+    // Линия горизонта
+    final horizonPaint = Paint()
+      ..color = Colors.white
+      ..strokeWidth = 2.0;
+    canvas.drawLine(Offset(-radius * 2, pitchOffset), Offset(radius * 2, pitchOffset), horizonPaint);
+
+    // Штрихи тангажа (шаг по 10 градусов)
+    final textPainter = TextPainter(textDirection: TextDirection.ltr);
+    for (int p = -30; p <= 30; p += 10) {
+      if (p == 0) continue;
+      double yPos = pitchOffset - (p * 1.3);
+      double lineWidth = (p.abs() % 20 == 0) ? 30.0 : 15.0;
+
+      canvas.drawLine(Offset(-lineWidth / 2, yPos), Offset(lineWidth / 2, yPos), horizonPaint);
+      
+      if (p.abs() % 20 == 0) {
+        textPainter.text = TextSpan(
+          text: "$p",
+          style: const TextStyle(color: Colors.white, fontSize: 9, fontFamily: 'monospace'),
+        );
+        textPainter.layout();
+        textPainter.paint(canvas, Offset(lineWidth / 2 + 4, yPos - 5));
+      }
+    }
+
+    canvas.restore();
+
+    // Отрисовка статической шкалы крена и центрального маркера самолета (не вращается)
+    final fixedPaint = Paint()
+      ..color = Colors.amberAccent
+      ..strokeWidth = 2.5
+      ..style = PaintingStyle.stroke;
+
+    // Стационарный авиационный маркер центра (желтые крылья и точка)
+    canvas.drawLine(Offset(center.dx - 45, center.dy), Offset(center.dx - 15, center.dy), fixedPaint);
+    canvas.drawLine(Offset(center.dx + 15, center.dy), Offset(center.dx + 45, center.dy), fixedPaint);
+    canvas.drawLine(Offset(center.dx - 15, center.dy), Offset(center.dx - 15, center.dy + 10), fixedPaint);
+    canvas.drawLine(Offset(center.dx + 15, center.dy), Offset(center.dx + 15, center.dy + 10), fixedPaint);
+    canvas.drawCircle(center, 3, Paint()..color = Colors.amberAccent);
+
+    // Внешняя рамка прибора
+    canvas.drawCircle(center, radius, Paint()
+      ..color = Colors.white24
+      ..strokeWidth = 3
+      ..style = PaintingStyle.stroke);
+  }
+
+  @override
+  bool shouldRepaint(covariant ArtificialHorizonPainter oldDelegate) {
+    return oldDelegate.roll != roll || oldDelegate.pitch != pitch;
+  }
+}
+
+// ==========================================
+// ВКЛАДКА: ГОРИЗОНТ И ТЕЛЕМЕТРИЯ (ThreeDViewTab)
 // ==========================================
 class ThreeDViewTab extends StatefulWidget {
   const ThreeDViewTab({super.key});
@@ -1159,7 +1294,7 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
   Widget _buildSensorBar(String label, double value, double min, double max, String unit, Color color) {
     double percent = ((value - min) / (max - min)).clamp(0.0, 1.0);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      padding: const EdgeInsets.symmetric(vertical: 3.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1170,8 +1305,8 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
               Text("${value.toStringAsFixed(2)} $unit", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color)),
             ],
           ),
-          const SizedBox(height: 3),
-          LinearProgressIndicator(value: percent, color: color, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
+          const SizedBox(height: 2),
+          LinearProgressIndicator(value: percent, color: color, backgroundColor: Colors.white12, minHeight: 5, borderRadius: BorderRadius.circular(3)),
         ],
       ),
     );
@@ -1179,105 +1314,96 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Expanded(
-          flex: 5,
-          child: Container(
-            margin: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.black, 
-              borderRadius: BorderRadius.circular(16), 
-              border: Border.all(color: Colors.white.withOpacity(0.08)),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Column(
+        children: [
+          Expanded(
+            flex: 5,
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black, 
+                borderRadius: BorderRadius.circular(16), 
+                border: Border.all(color: Colors.white.withOpacity(0.06)),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // Сам прибор авиагоризонта
+                    CustomPaint(
+                      size: const Size(200, 200),
+                      painter: ArtificialHorizonPainter(
+                        roll: SerialService.gyroRoll,
+                        pitch: SerialService.gyroPitch,
+                      ),
+                    ),
+                    // Плашка с цифровыми углами сверху
+                    Positioned(
+                      top: 12,
+                      left: 12,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
+                        child: Text(
+                          "Roll: ${(SerialService.gyroRoll * 57.2958).toStringAsFixed(1)}°  |  Pitch: ${(SerialService.gyroPitch * 57.2958).toStringAsFixed(1)}°",
+                          style: const TextStyle(color: Colors.amberAccent, fontSize: 11, fontFamily: 'monospace', fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Stack(
-                alignment: Alignment.center,
+          ),
+          Expanded(
+            flex: 5,
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: const Color(0xFF1C1C1E), borderRadius: BorderRadius.circular(16)),
+              child: ListView(
+                padding: EdgeInsets.zero,
                 children: [
-                  Transform(
-                    alignment: Alignment.center,
-                    transform: Matrix4.identity()
-                      ..setEntry(3, 2, 0.001)
-                      ..rotateX(SerialService.gyroPitch)
-                      ..rotateY(SerialService.gyroYaw)
-                      ..rotateZ(SerialService.gyroRoll),
-                    child: Container(
-                      width: 140,
-                      height: 140,
-                      decoration: BoxDecoration(
-                        color: Colors.blueAccent.withOpacity(0.2),
-                        border: Border.all(color: Colors.blueAccent, width: 2),
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      child: const Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.airplanemode_active, size: 48, color: Colors.amberAccent),
-                          SizedBox(height: 8),
-                          Text("FPV DRONE", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white70)),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    top: 12,
-                    left: 12,
-                    child: Text(
-                      "Roll: ${(SerialService.gyroRoll * 57.2958).toStringAsFixed(1)}° | Pitch: ${(SerialService.gyroPitch * 57.2958).toStringAsFixed(1)}°",
-                      style: const TextStyle(color: Colors.amberAccent, fontSize: 11, fontFamily: 'monospace'),
-                    ),
-                  ),
+                  const Text("GYROSCOPE", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+                  const SizedBox(height: 4),
+                  _buildSensorBar("Gyro Roll", SerialService.gyroRoll, -3.14, 3.14, "rad/s", Colors.blueAccent),
+                  _buildSensorBar("Gyro Pitch", SerialService.gyroPitch, -3.14, 3.14, "rad/s", Colors.blueAccent),
+                  _buildSensorBar("Gyro Yaw", SerialService.gyroYaw, -3.14, 3.14, "rad/s", Colors.blueAccent),
+                  
+                  const SizedBox(height: 6),
+                  const Text("ACCELEROMETER", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+                  const SizedBox(height: 4),
+                  _buildSensorBar("Accel X", SerialService.accelX, -2.0, 2.0, "G", Colors.cyanAccent),
+                  _buildSensorBar("Accel Y", SerialService.accelY, -2.0, 2.0, "G", Colors.cyanAccent),
+                  _buildSensorBar("Accel Z", SerialService.accelZ, -2.0, 2.0, "G", Colors.cyanAccent),
+
+                  const SizedBox(height: 6),
+                  const Text("MOTORS OUTPUTS", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+                  const SizedBox(height: 4),
+                  _buildSensorBar("Motor 1 (Front-Left)", SerialService.motor1, 0, 100, "%", Colors.orangeAccent),
+                  _buildSensorBar("Motor 2 (Front-Right)", SerialService.motor2, 0, 100, "%", Colors.orangeAccent),
+                  _buildSensorBar("Motor 3 (Back-Right)", SerialService.motor3, 0, 100, "%", Colors.orangeAccent),
+                  _buildSensorBar("Motor 4 (Back-Left)", SerialService.motor4, 0, 100, "%", Colors.orangeAccent),
+
+                  const SizedBox(height: 6),
+                  const Text("POWER SYSTEM", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+                  const SizedBox(height: 4),
+                  _buildSensorBar("Battery Voltage", SerialService.batteryVoltage, 10.0, 25.2, "V", Colors.greenAccent),
                 ],
               ),
             ),
           ),
-        ),
-        Expanded(
-          flex: 5,
-          child: Container(
-            margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(16)),
-            child: ListView(
-              padding: EdgeInsets.zero,
-              children: [
-                const Text("GYROSCOPE", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
-                const SizedBox(height: 4),
-                _buildSensorBar("Gyro Roll", SerialService.gyroRoll, -3.14, 3.14, "rad/s", Colors.blueAccent),
-                _buildSensorBar("Gyro Pitch", SerialService.gyroPitch, -3.14, 3.14, "rad/s", Colors.blueAccent),
-                _buildSensorBar("Gyro Yaw", SerialService.gyroYaw, -3.14, 3.14, "rad/s", Colors.blueAccent),
-                
-                const SizedBox(height: 8),
-                const Text("ACCELEROMETER", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
-                const SizedBox(height: 4),
-                _buildSensorBar("Accel X", SerialService.accelX, -2.0, 2.0, "G", Colors.cyanAccent),
-                _buildSensorBar("Accel Y", SerialService.accelY, -2.0, 2.0, "G", Colors.cyanAccent),
-                _buildSensorBar("Accel Z", SerialService.accelZ, -2.0, 2.0, "G", Colors.cyanAccent),
-
-                const SizedBox(height: 8),
-                const Text("MOTORS OUTPUTS", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
-                const SizedBox(height: 4),
-                _buildSensorBar("Motor 1 (Front-Left)", SerialService.motor1, 0, 100, "%", Colors.orangeAccent),
-                _buildSensorBar("Motor 2 (Front-Right)", SerialService.motor2, 0, 100, "%", Colors.orangeAccent),
-                _buildSensorBar("Motor 3 (Back-Right)", SerialService.motor3, 0, 100, "%", Colors.orangeAccent),
-                _buildSensorBar("Motor 4 (Back-Left)", SerialService.motor4, 0, 100, "%", Colors.orangeAccent),
-
-                const SizedBox(height: 8),
-                const Text("POWER SYSTEM", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
-                const SizedBox(height: 4),
-                _buildSensorBar("Battery Voltage", SerialService.batteryVoltage, 10.0, 25.2, "V", Colors.greenAccent),
-              ],
-            ),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
 
 // ==========================================
-// ВКЛАДКА: ПРОШИВКА (FlasherTab) - PRO ST BOOTLOADER
+// ВКЛАДКА: ПРОШИВКА (FlasherTab)
 // ==========================================
 class FlasherTab extends StatefulWidget {
   const FlasherTab({super.key});
@@ -1362,7 +1488,7 @@ class _FlasherTabState extends State<FlasherTab> {
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.amberAccent),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           const Text(
             "Protocol: ST AN3155 | Target: Built-in firmware.hex",
             style: TextStyle(fontSize: 11, color: Colors.white70),
@@ -1370,17 +1496,21 @@ class _FlasherTabState extends State<FlasherTab> {
           ),
           const SizedBox(height: 20),
           Card(
-            color: const Color(0xFF1E1E1E),
             child: Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.all(20.0),
               child: Column(
                 children: [
-                  const Icon(Icons.memory, size: 42, color: Colors.blueAccent),
-                  const SizedBox(height: 8),
-                  Text("Detected Target: $_mcuId", style: const TextStyle(fontSize: 12, color: Colors.cyanAccent)),
+                  const Icon(Icons.memory, size: 48, color: Colors.blueAccent),
                   const SizedBox(height: 12),
-                  Text(_statusText, style: const TextStyle(fontFamily: 'monospace', fontSize: 11, color: Colors.greenAccent), textAlign: TextAlign.center),
+                  Text("Target MCU: $_mcuId", style: const TextStyle(fontSize: 12, color: Colors.cyanAccent, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 16),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(10)),
+                    child: Text(_statusText, style: const TextStyle(fontFamily: 'monospace', fontSize: 11, color: Colors.greenAccent), textAlign: TextAlign.center),
+                  ),
+                  const SizedBox(height: 20),
                   if (_isFlashing) ...[
                     LinearProgressIndicator(value: _progress, color: Colors.amberAccent, backgroundColor: Colors.white12),
                     const SizedBox(height: 16),
@@ -1391,7 +1521,9 @@ class _FlasherTabState extends State<FlasherTab> {
                     label: Text(_isFlashing ? "Flashing in Progress..." : "Start Firmware Update"),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.blueAccent,
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
                 ],
