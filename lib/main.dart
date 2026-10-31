@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:usb_serial/usb_serial.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
-import 'package:flutter_cube/flutter_cube.dart';
 import 'dart:async';
 import 'dart:typed_data';
+import 'dart:math' as math;
 
 void main() => runApp(const MyApp());
 
@@ -13,7 +13,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'FPV Drone Configurator (CD v.2.0)',
+      title: 'FPV Drone Configurator (CD v.2.2)',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
@@ -84,7 +84,7 @@ class _MainContainerState extends State<MainContainer> {
           NavigationDestination(
             icon: Icon(Icons.threed_rotation),
             selectedIcon: Icon(Icons.view_in_ar),
-            label: '3D View',
+            label: 'Horizon / 3D',
           ),
         ],
       ),
@@ -93,7 +93,7 @@ class _MainContainerState extends State<MainContainer> {
 }
 
 // ==========================================
-// УНИВЕРСАЛЬНЫЙ СЕРВИС СВЯЗИ (SERIAL SERVICE)
+// СЕРВИС СВЯЗИ (SERIAL SERVICE)
 // ==========================================
 enum ConnectionType { usb, bluetooth }
 
@@ -116,6 +116,7 @@ class SerialService {
   static double accelX = 0.0, accelY = 0.0, accelZ = 1.0;
   static double motor1 = 0.0, motor2 = 0.0, motor3 = 0.0, motor4 = 0.0;
   static double batteryVoltage = 16.2;
+  static double azimuth = 0.0;
 
   static Future<void> sendCommand(String cmd) async {
     if (activeConnectionType == ConnectionType.usb && usbPort != null) {
@@ -161,7 +162,7 @@ class SerialService {
 }
 
 // ==========================================
-// ШАПКА СТАТУСА И УПРАВЛЕНИЯ ПОДКЛЮЧЕНИЕМ
+// ШАПКА СТАТУСА
 // ==========================================
 class DroneStatusHeader extends StatefulWidget {
   const DroneStatusHeader({super.key});
@@ -179,10 +180,12 @@ class _DroneStatusHeaderState extends State<DroneStatusHeader> {
   void initState() {
     super.initState();
     _sub = SerialService.logController.stream.listen((_) {
-      setState(() {
-        _displayResponse = SerialService.lastResponse;
-        _isConnected = SerialService.activeConnectionType != null;
-      });
+      if (mounted) {
+        setState(() {
+          _displayResponse = SerialService.lastResponse;
+          _isConnected = SerialService.activeConnectionType != null;
+        });
+      }
     });
   }
 
@@ -319,7 +322,7 @@ class _DroneStatusHeaderState extends State<DroneStatusHeader> {
 }
 
 // ==========================================
-// ДИАЛОГ СКАНИРОВАНИЯ BLUETOOTH УСТРОЙСТВ
+// ДИАЛОГ BLUETOOTH
 // ==========================================
 class BluetoothScanDialog extends StatefulWidget {
   const BluetoothScanDialog({super.key});
@@ -360,7 +363,7 @@ class _BluetoothScanDialogState extends State<BluetoothScanDialog> {
     super.dispose();
   }
 
-  Future<void> _connectToDevice(BluetoothDevice device) async {
+  Future<void> _connectToDevice(BluetoothDevice device, String name) async {
     Navigator.pop(context);
     try {
       await device.connect(timeout: const Duration(seconds: 5));
@@ -375,15 +378,14 @@ class _BluetoothScanDialogState extends State<BluetoothScanDialog> {
           }
           if (characteristic.properties.notify || characteristic.properties.indicate) {
             await characteristic.setNotifyValue(true);
-            SerialService._bleSubscription = characteristic.lastValueStream.listen((data) {
-              SerialService.handleIncomingData(Uint8List.fromList(data));
+            SerialService._bleSubscription = characteristic.lastValueStream.listen((d) {
+              SerialService.handleIncomingData(Uint8List.fromList(d));
             });
           }
         }
       }
 
-      String devName = device.platformName.isNotEmpty ? device.platformName : "Drone BLE";
-      SerialService.lastResponse = ">> Connected to BLE: $devName";
+      SerialService.lastResponse = ">> Connected to BLE: $name";
       SerialService.logController.add(SerialService.terminalLog);
     } catch (e) {
       SerialService.lastResponse = ">> BLE Error: $e";
@@ -415,7 +417,7 @@ class _BluetoothScanDialogState extends State<BluetoothScanDialog> {
             return ListTile(
               title: Text(name, style: const TextStyle(fontSize: 14)),
               subtitle: Text(data.device.remoteId.toString(), style: const TextStyle(fontSize: 11)),
-              onTap: () => _connectToDevice(data.device),
+              onTap: () => _connectToDevice(data.device, name),
             );
           },
         ),
@@ -431,7 +433,117 @@ class _BluetoothScanDialogState extends State<BluetoothScanDialog> {
 }
 
 // ==========================================
-// ВКЛАДКА 1: НАСТРОЙКИ (SettingsTab)
+// ВИДЖЕТ PID КАРТЫ
+// ==========================================
+class PidCardWidget extends StatefulWidget {
+  final String title;
+  final String commandName;
+  final double p, i, d;
+  final Function(double, double, double) onUpdate;
+
+  const PidCardWidget({
+    super.key,
+    required this.title,
+    required this.commandName,
+    required this.p,
+    required this.i,
+    required this.d,
+    required this.onUpdate,
+  });
+
+  @override
+  State<PidCardWidget> createState() => _PidCardWidgetState();
+}
+
+class _PidCardWidgetState extends State<PidCardWidget> {
+  late TextEditingController _pController;
+  late TextEditingController _iController;
+  late TextEditingController _dController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pController = TextEditingController(text: widget.p.toString());
+    _iController = TextEditingController(text: widget.i.toString());
+    _dController = TextEditingController(text: widget.d.toString());
+  }
+
+  @override
+  void didUpdateWidget(covariant PidCardWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.p != widget.p) _pController.text = widget.p.toString();
+    if (oldWidget.i != widget.i) _iController.text = widget.i.toString();
+    if (oldWidget.d != widget.d) _dController.text = widget.d.toString();
+  }
+
+  @override
+  void dispose() {
+    _pController.dispose();
+    _iController.dispose();
+    _dController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(widget.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            Text("(${widget.commandName})", style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace')),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _pController,
+                    decoration: const InputDecoration(labelText: 'P', isDense: true),
+                    keyboardType: TextInputType.number,
+                    onSubmitted: (val) {
+                      double? np = double.tryParse(val);
+                      if (np != null) widget.onUpdate(np, widget.i, widget.d);
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _iController,
+                    decoration: const InputDecoration(labelText: 'I', isDense: true),
+                    keyboardType: TextInputType.number,
+                    onSubmitted: (val) {
+                      double? ni = double.tryParse(val);
+                      if (ni != null) widget.onUpdate(widget.p, ni, widget.d);
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _dController,
+                    decoration: const InputDecoration(labelText: 'D', isDense: true),
+                    keyboardType: TextInputType.number,
+                    onSubmitted: (val) {
+                      double? nd = double.tryParse(val);
+                      if (nd != null) widget.onUpdate(widget.p, widget.i, nd);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ==========================================
+// ВКЛАДКА: НАСТРОЙКИ (SettingsTab)
 // ==========================================
 class SettingsTab extends StatefulWidget {
   const SettingsTab({super.key});
@@ -451,8 +563,8 @@ class _SettingsTabState extends State<SettingsTab> {
   double _battFsV = 14.0;
   double _fsSpeed = 0.8;
 
-  double _gyroLpfAlpha = 0.40;
-  double _accelLpfAlpha = 0.15;
+  double _lpfGyroAlpha = 0.40;
+  double _lpfAccelAlpha = 0.15;
   double _notchCenterFreq = 65.0;
   double _notchBandwidth = 18.0;
   double _dynNotchMinHz = 45.0;
@@ -597,69 +709,6 @@ class _SettingsTabState extends State<SettingsTab> {
     );
   }
 
-  Widget _buildPidCard({
-    required String title,
-    required String commandName,
-    required double p,
-    required double i,
-    required double d,
-    required Function(double, double, double) onUpdate,
-  }) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-            Text("($commandName)", style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace')),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: TextEditingController(text: p.toString()),
-                    decoration: const InputDecoration(labelText: 'P', isDense: true),
-                    keyboardType: TextInputType.number,
-                    onSubmitted: (val) {
-                      double? np = double.tryParse(val);
-                      if (np != null) onUpdate(np, i, d);
-                    },
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    controller: TextEditingController(text: i.toString()),
-                    decoration: const InputDecoration(labelText: 'I', isDense: true),
-                    keyboardType: TextInputType.number,
-                    onSubmitted: (val) {
-                      double? ni = double.tryParse(val);
-                      if (ni != null) onUpdate(p, ni, d);
-                    },
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    controller: TextEditingController(text: d.toString()),
-                    decoration: const InputDecoration(labelText: 'D', isDense: true),
-                    keyboardType: TextInputType.number,
-                    onSubmitted: (val) {
-                      double? nd = double.tryParse(val);
-                      if (nd != null) onUpdate(p, i, nd);
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return ListView(
@@ -747,12 +796,12 @@ class _SettingsTabState extends State<SettingsTab> {
             }
           },
         ),
-        _buildSliderCard(title: "Порог разряда батареи", commandName: "batt_fs_v", value: _battFsV, min: 6.0, max: 25.0, divisions: 190, unit: "В", onChanged: (v) => setState(() => _battFsV = v), onChangeEnd: (v) => SerialService.sendCommand("batt_fs_v $v")),
+        _buildSliderCard(title: "Порог разряда батареи", commandName: "fs_batt_v", value: _battFsV, min: 6.0, max: 25.0, divisions: 190, unit: "В", onChanged: (v) => setState(() => _battFsV = v), onChangeEnd: (v) => SerialService.sendCommand("fs_batt_v $v")),
         _buildSliderCard(title: "Скорость снижения при Failsafe", commandName: "fs_speed", value: _fsSpeed, min: 0.2, max: 2.0, divisions: 18, unit: "м/с", onChanged: (v) => setState(() => _fsSpeed = v), onChangeEnd: (v) => SerialService.sendCommand("fs_speed $v")),
 
         _buildSectionHeader("ФИЛЬТРЫ СЕНСОРОВ", Icons.waves),
-        _buildSliderCard(title: "Фильтр гироскопа LPF", commandName: "gyro_lpf_alpha", value: _gyroLpfAlpha, min: 0.05, max: 1.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _gyroLpfAlpha = v), onChangeEnd: (v) => SerialService.sendCommand("gyro_lpf_alpha $v")),
-        _buildSliderCard(title: "Фильтр акселерометра LPF", commandName: "accel_lpf_alpha", value: _accelLpfAlpha, min: 0.01, max: 1.0, divisions: 99, unit: "", onChanged: (v) => setState(() => _accelLpfAlpha = v), onChangeEnd: (v) => SerialService.sendCommand("accel_lpf_alpha $v")),
+        _buildSliderCard(title: "Фильтр гироскопа LPF", commandName: "lpf_gyro", value: _lpfGyroAlpha, min: 0.05, max: 1.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _lpfGyroAlpha = v), onChangeEnd: (v) => SerialService.sendCommand("lpf_gyro $v")),
+        _buildSliderCard(title: "Фильтр акселерометра LPF", commandName: "lpf_accel", value: _lpfAccelAlpha, min: 0.01, max: 1.0, divisions: 99, unit: "", onChanged: (v) => setState(() => _lpfAccelAlpha = v), onChangeEnd: (v) => SerialService.sendCommand("lpf_accel $v")),
         _buildSliderCard(title: "Notch: Центр", commandName: "notch_center_freq", value: _notchCenterFreq, min: 30, max: 150, divisions: 120, unit: "Гц", onChanged: (v) => setState(() => _notchCenterFreq = v), onChangeEnd: (v) => SerialService.sendCommand("notch_center_freq $v")),
         _buildSliderCard(title: "Notch: Ширина полосы", commandName: "notch_bandwidth", value: _notchBandwidth, min: 5, max: 50, divisions: 45, unit: "Гц", onChanged: (v) => setState(() => _notchBandwidth = v), onChangeEnd: (v) => SerialService.sendCommand("notch_bandwidth $v")),
         _buildSliderCard(title: "Dyn Notch Мин", commandName: "dyn_notch_min_hz", value: _dynNotchMinHz, min: 20, max: 100, divisions: 16, unit: "Гц", onChanged: (v) => setState(() => _dynNotchMinHz = v), onChangeEnd: (v) => SerialService.sendCommand("dyn_notch_min_hz $v")),
@@ -778,19 +827,19 @@ class _SettingsTabState extends State<SettingsTab> {
         _buildSliderCard(title: "Максимальная вертикальная скорость", commandName: "max_vz", value: _maxVz, min: 0.5, max: 3.0, divisions: 25, unit: "м/с", onChanged: (v) => setState(() => _maxVz = v), onChangeEnd: (v) => SerialService.sendCommand("max_vz $v")),
 
         _buildSectionHeader("PID РЕГУЛЯТОРЫ", Icons.tune),
-        _buildPidCard(title: "Roll PID", commandName: "pid_roll", p: _rollP, i: _rollI, d: _rollD, onUpdate: (p, i, d) {
+        PidCardWidget(title: "Roll PID", commandName: "pid_roll", p: _rollP, i: _rollI, d: _rollD, onUpdate: (p, i, d) {
           setState(() { _rollP = p; _rollI = i; _rollD = d; });
           SerialService.sendCommand("pid_roll $p $i $d");
         }),
-        _buildPidCard(title: "Pitch PID", commandName: "pid_pitch", p: _pitchP, i: _pitchI, d: _pitchD, onUpdate: (p, i, d) {
+        PidCardWidget(title: "Pitch PID", commandName: "pid_pitch", p: _pitchP, i: _pitchI, d: _pitchD, onUpdate: (p, i, d) {
           setState(() { _pitchP = p; _pitchI = i; _pitchD = d; });
           SerialService.sendCommand("pid_pitch $p $i $d");
         }),
-        _buildPidCard(title: "Yaw PID", commandName: "pid_yaw", p: _yawP, i: _yawI, d: _yawD, onUpdate: (p, i, d) {
+        PidCardWidget(title: "Yaw PID", commandName: "pid_yaw", p: _yawP, i: _yawI, d: _yawD, onUpdate: (p, i, d) {
           setState(() { _yawP = p; _yawI = i; _yawD = d; });
           SerialService.sendCommand("pid_yaw $p $i $d");
         }),
-        _buildPidCard(title: "Vertical VZ PID", commandName: "pid_vz", p: _vzP, i: _vzI, d: _vzD, onUpdate: (p, i, d) {
+        PidCardWidget(title: "Vertical VZ PID", commandName: "pid_vz", p: _vzP, i: _vzI, d: _vzD, onUpdate: (p, i, d) {
           setState(() { _vzP = p; _vzI = i; _vzD = d; });
           SerialService.sendCommand("pid_vz $p $i $d");
         }),
@@ -835,7 +884,7 @@ class _SettingsTabState extends State<SettingsTab> {
 }
 
 // ==========================================
-// ВКЛАДКА 2: ТЕСТЫ (TestsTab)
+// ВКЛАДКА: ТЕСТЫ (TestsTab)
 // ==========================================
 class TestsTab extends StatefulWidget {
   const TestsTab({super.key});
@@ -995,7 +1044,7 @@ class _TestsTabState extends State<TestsTab> {
 }
 
 // ==========================================
-// ВКЛАДКА ТЕРМИНАЛА (TerminalTab)
+// ВКЛАДКА: ТЕРМИНАЛ (TerminalTab)
 // ==========================================
 class TerminalTab extends StatefulWidget {
   const TerminalTab({super.key});
@@ -1013,7 +1062,9 @@ class _TerminalTabState extends State<TerminalTab> {
   void initState() {
     super.initState();
     _displayLog = SerialService.terminalLog;
-    _sub = SerialService.logController.stream.listen((log) => setState(() => _displayLog = log));
+    _sub = SerialService.logController.stream.listen((log) {
+      if (mounted) setState(() => _displayLog = log);
+    });
   }
 
   @override
@@ -1096,7 +1147,7 @@ class _TerminalTabState extends State<TerminalTab> {
 }
 
 // ==========================================
-// ВКЛАДКА 3D ВИДЕО / ТЕЛЕМЕТРИИ (ThreeDViewTab)
+// ВКЛАДКА: 3D ВИДЕО / ГОРИЗОНТ И ТЕЛЕМЕТРИЯ
 // ==========================================
 class ThreeDViewTab extends StatefulWidget {
   const ThreeDViewTab({super.key});
@@ -1106,20 +1157,13 @@ class ThreeDViewTab extends StatefulWidget {
 }
 
 class _ThreeDViewTabState extends State<ThreeDViewTab> {
-  Object? droneModel;
   late StreamSubscription<void> _telemetrySub;
 
   @override
   void initState() {
     super.initState();
     _telemetrySub = SerialService.telemetryController.stream.listen((_) {
-      if (droneModel != null) {
-        droneModel!.rotation.x = SerialService.gyroPitch;
-        droneModel!.rotation.y = SerialService.gyroYaw;
-        droneModel!.rotation.z = SerialService.gyroRoll;
-        droneModel!.updateTransform();
-        setState(() {});
-      }
+      if (mounted) setState(() {});
     });
   }
 
@@ -1154,24 +1198,61 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
   Widget build(BuildContext context) {
     return Column(
       children: [
+        // Интерактивный искусственный горизонт и ориентация (замена нерабочему 3D движку)
         Expanded(
           flex: 5,
           child: Container(
             margin: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.08))),
+            decoration: BoxDecoration(
+              color: Colors.black, 
+              borderRadius: BorderRadius.circular(16), 
+              border: Border.all(color: Colors.white.withOpacity(0.08)),
+            ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(16),
-              child: Cube(onSceneCreated: (Scene scene) {
-                scene.world.add(Object(fileName: 'assets/drone.obj', lighting: true));
-                if (scene.world.children.isNotEmpty) {
-                  droneModel = scene.world.children.first;
-                  droneModel!.scale.setValues(1.5, 1.5, 1.5);
-                }
-                scene.camera.zoom = 5.0;
-              }),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Анимация крена и тангажа
+                  Transform(
+                    alignment: Alignment.center,
+                    transform: Matrix4.identity()
+                      ..setEntry(3, 2, 0.001)
+                      ..rotateX(SerialService.gyroPitch)
+                      ..rotateY(SerialService.gyroYaw)
+                      ..rotateZ(SerialService.gyroRoll),
+                    child: Container(
+                      width: 140,
+                      height: 140,
+                      decoration: BoxDecoration(
+                        color: Colors.blueAccent.withOpacity(0.2),
+                        border: Border.all(color: Colors.blueAccent, width: 2),
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: const Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.airplanemode_active, size: 48, color: Colors.amberAccent),
+                          SizedBox(height: 8),
+                          Text("FPV DRONE", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white70)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 12,
+                    left: 12,
+                    child: Text(
+                      "Roll: ${(SerialService.gyroRoll * 57.2958).toStringAsFixed(1)}° | Pitch: ${(SerialService.gyroPitch * 57.2958).toStringAsFixed(1)}°",
+                      style: const TextStyle(color: Colors.amberAccent, fontSize: 11, fontFamily: 'monospace'),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
+        // Телеметрия сенсоров
         Expanded(
           flex: 5,
           child: Container(
