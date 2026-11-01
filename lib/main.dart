@@ -203,7 +203,7 @@ class _InfoTabState extends State<InfoTab> {
   String _title = "FPV Drone Configurator Pro";
   String _version = "v.2.6.2 (USB)";
   String _desc = "Загрузка информации о проекте...";
-  List> _sections = [];
+  <List> _sections = [];
   bool _isLoading = true;
 
   @override
@@ -223,7 +223,7 @@ class _InfoTabState extends State<InfoTab> {
       _desc = projectInfo.findElements('description').first.innerText;
 
       final sections = document.findAllElements('section');
-      List> loadedSections = [];
+      <List> loadedSections = [];
       for (var sec in sections) {
         String secTitle = sec.getAttribute('title') ?? '';
         String secContent = sec.findElements('content').first.innerText.trim();
