@@ -5,6 +5,7 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'dart:async';
 import 'dart:typed_data';
 import 'dart:math' as math;
+import 'package:xml/xml.dart' as xml;
 
 void main() => runApp(const MyApp());
 
@@ -54,7 +55,9 @@ class MainContainer extends StatefulWidget {
 
 class _MainContainerState extends State<MainContainer> {
   int _currentIndex = 0;
+  
   final List<Widget> _tabs = [
+    const InfoTab(),
     const TerminalTab(),
     const SettingsTab(),
     const TestsTab(),
@@ -78,6 +81,11 @@ class _MainContainerState extends State<MainContainer> {
         indicatorColor: Colors.blueAccent,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.info_outline, color: Colors.white70),
+            selectedIcon: Icon(Icons.info, color: Colors.white),
+            label: 'Info',
+          ),
           NavigationDestination(
             icon: Icon(Icons.terminal_outlined, color: Colors.white70),
             selectedIcon: Icon(Icons.terminal, color: Colors.white),
@@ -197,6 +205,117 @@ void showAppDialog(BuildContext context, String title, String message, {bool isE
       ],
     ),
   );
+}
+
+// ==========================================
+// ВКЛАДКА: ИНФОРМАЦИЯ И ИНСТРУКЦИЯ (InfoTab)
+// ==========================================
+class InfoTab extends StatefulWidget {
+  const InfoTab({super.key});
+
+  @override
+  State<InfoTab> createState() => _InfoTabState();
+}
+
+class _InfoTabState extends State<InfoTab> {
+  String _title = "FPV Drone Configurator Pro";
+  String _version = "v.2.6.1";
+  String _desc = "Загрузка информации о проекте...";
+  List> _sections = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDocumentation();
+  }
+
+  Future<void> _loadDocumentation() async {
+    try {
+      String xmlString = await rootBundle.loadString('assets/documentation.xml');
+      final document = xml.XmlDocument.parse(xmlString);
+
+      final projectInfo = document.findAllElements('project_info').first;
+      _title = projectInfo.findElements('title').first.innerText;
+      _version = projectInfo.findElements('version').first.innerText;
+      _desc = projectInfo.findElements('description').first.innerText;
+
+      final sections = document.findAllElements('section');
+      List> loadedSections = [];
+      for (var sec in sections) {
+        String secTitle = sec.getAttribute('title') ?? '';
+        String secContent = sec.findElements('content').first.innerText.trim();
+        loadedSections.add({'title': secTitle, 'content': secContent});
+      }
+
+      setState(() {
+        _sections = loadedSections;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _desc = "Ошибка загрузки документации из XML: $e";
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator(color: Colors.blueAccent));
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(12.0),
+      children: [
+        Card(
+          color: const Color(0xFF1E222B),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(_title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
+                      child: Text(_version, style: const TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(_desc, style: const TextStyle(fontSize: 12, color: Colors.white70, height: 1.4)),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+          child: Text("РУКОВОДСТВО ПОЛЬЗОВАТЕЛЯ", style: TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+        ),
+        ..._sections.map((sec) => Card(
+          margin: const EdgeInsets.only(bottom: 8),
+          child: ExpansionTile(
+            title: Text(sec['title']!, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+            iconColor: Colors.amberAccent,
+            collapsedIconColor: Colors.white54,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: Text(sec['content']!, style: const TextStyle(fontSize: 12, color: Colors.white70, height: 1.4, fontFamily: 'monospace')),
+              ),
+            ],
+          ),
+        )),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
 }
 
 // ==========================================
@@ -735,8 +854,8 @@ class SettingsTab extends StatefulWidget {
 }
 
 class _SettingsTabState extends State<SettingsTab> {
-  int _flightMode = 0; // 0: Angle, 1: Acro, 2: Horizon
-  int _filterMode = 1; // 0: Off, 1: LPF, 2: LPF+Notch, 3: LPF+DynNotch
+  int _flightMode = 0; 
+  int _filterMode = 1; 
   double _dynamicNotchEnabled = 1;
 
   double _fsRcEn = 1;
@@ -1311,14 +1430,12 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
     _telemetrySub = SerialService.telemetryController.stream.listen((_) {
       if (mounted) setState(() {});
     });
-    // Автоматически включаем мониторинг при входе в раздел
     SerialService.sendCommand("mon");
   }
 
   @override
   void dispose() {
     _telemetrySub.cancel();
-    // Автоматически отключаем мониторинг при выходе из раздела
     SerialService.sendCommand("stop");
     super.dispose();
   }
