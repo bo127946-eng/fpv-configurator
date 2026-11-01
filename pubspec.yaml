@@ -1,5 +1,5 @@
-name: fpv_drone_configurator
-description: "A professional cross-platform mobile configurator for STM32 FPV flight controllers."
+name: fpv_drone_configurator_pro
+description: "A professional cross-platform mobile FPV drone configurator for STM32 flight controllers."
 publish_to: 'none'
 version: 2.6.1+1
 
@@ -9,8 +9,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  usb_serial: ^0.5.2
-  flutter_blue_plus: 1.31.16
+  usb_serial: ^0.5.1
+  flutter_blue_plus: ^1.31.6
   xml: ^6.5.0
 
 dev_dependencies:
@@ -21,5 +21,5 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/firmware.hex
     - assets/documentation.xml
+    - assets/firmware.hex
