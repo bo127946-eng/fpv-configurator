@@ -4,7 +4,6 @@ import 'package:usb_serial/usb_serial.dart';
 import 'dart:async';
 import 'dart:typed_data';
 import 'dart:math' as math;
-import 'package:xml/xml.dart' as xml;
 
 void main() => runApp(const MyApp());
 
@@ -200,9 +199,6 @@ class InfoTab extends StatefulWidget {
 }
 
 class _InfoTabState extends State<InfoTab> {
-  String _title = "FPV Drone Configurator Pro";
-  String _version = "v.2.6.2 (USB)";
-  String _desc = "Загрузка информации о проекте...";
   List> _sections = [];
   bool _isLoading = true;
 
@@ -214,29 +210,39 @@ class _InfoTabState extends State<InfoTab> {
 
   Future<void> _loadDocumentation() async {
     try {
-      String xmlString = await rootBundle.loadString('assets/documentation.xml');
-      final document = xml.XmlDocument.parse(xmlString);
+      String fileContent = await rootBundle.loadString('assets/doc.txt');
+      List> parsedSections = [];
+      
+      RegExp regExp = RegExp(r'/([^/]+)/\s*\[([^\]]*)\]', multiLine: true, dotAll: true);
+      Iterable<RegExpMatch> matches = regExp.allMatches(fileContent);
+      
+      for (var match in matches) {
+        String title = match.group(1)?.trim() ?? '';
+        String content = match.group(2)?.trim() ?? '';
+        if (title.isNotEmpty) {
+          parsedSections.add({'title': title, 'content': content});
+        }
+      }
 
-      final projectInfo = document.findAllElements('project_info').first;
-      _title = projectInfo.findElements('title').first.innerText;
-      _version = projectInfo.findElements('version').first.innerText;
-      _desc = projectInfo.findElements('description').first.innerText;
-
-      final sections = document.findAllElements('section');
-      List> loadedSections = [];
-      for (var sec in sections) {
-        String secTitle = sec.getAttribute('title') ?? '';
-        String secContent = sec.findElements('content').first.innerText.trim();
-        loadedSections.add({'title': secTitle, 'content': secContent});
+      if (parsedSections.isEmpty) {
+        parsedSections.add({
+          'title': 'Руководство пользователя',
+          'content': fileContent
+        });
       }
 
       setState(() {
-        _sections = loadedSections;
+        _sections = parsedSections;
         _isLoading = false;
       });
     } catch (e) {
       setState(() {
-        _desc = "Ошибка загрузки документации из XML: $e";
+        _sections = [
+          {
+            'title': 'Ошибка загрузки doc.txt',
+            'content': 'Не удалось загрузить doc.txt из assets. Проверьте pubspec.yaml.\nОшибка: $e'
+          }
+        ];
         _isLoading = false;
       });
     }
@@ -261,16 +267,16 @@ class _InfoTabState extends State<InfoTab> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(_title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
+                    const Text('FPV Drone Configurator Pro', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
-                      child: Text(_version, style: const TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                      child: const Text('v.2.6.2 (USB)', style: TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
                 const SizedBox(height: 10),
-                Text(_desc, style: const TextStyle(fontSize: 12, color: Colors.white70, height: 1.4)),
+                const Text('Профессиональный кроссплатформенный мобильный конфигуратор для настройки, телеметрии, калибровки и прошивки FPV-дронов на базе STM32 (архитектура YMFC-32). Поддерживает проводное USB OTG подключение.', style: TextStyle(fontSize: 12, color: Colors.white70, height: 1.4)),
               ],
             ),
           ),
@@ -278,7 +284,7 @@ class _InfoTabState extends State<InfoTab> {
         const SizedBox(height: 8),
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-          child: Text("РУКОВОДСТВО ПОЛЬЗОВАТЕЛЯ", style: TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+          child: Text('РУКОВОДСТВО ПОЛЬЗОВАТЕЛЯ (doc.txt)', style: TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
         ),
         ..._sections.map((sec) => Card(
           margin: const EdgeInsets.only(bottom: 8),
@@ -380,9 +386,9 @@ class _DroneStatusHeaderState extends State<DroneStatusHeader> {
                 color: (_isConnected ? Colors.greenAccent : Colors.amberAccent).withOpacity(0.15),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(
+              child: const Icon(
                 Icons.usb, 
-                color: _isConnected ? Colors.greenAccent : Colors.amberAccent, 
+                color: Colors.greenAccent, 
                 size: 16,
               ),
             ),
