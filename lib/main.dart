@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:usb_serial/usb_serial.dart';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'dart:async';
 import 'dart:typed_data';
 import 'dart:math' as math;
@@ -118,21 +117,14 @@ class _MainContainerState extends State<MainContainer> {
 }
 
 // ==========================================
-// СЕРВИС СВЯЗИ (SERIAL SERVICE)
+// СЕРВИС СВЯЗИ (USB SERIAL SERVICE ONLY)
 // ==========================================
-enum ConnectionType { usb, bluetooth }
-
 class SerialService {
-  static ConnectionType? activeConnectionType;
-  
+  static bool isConnected = false;
   static UsbPort? usbPort;
   static StreamSubscription<Uint8List>? _usbSubscription;
 
-  static BluetoothDevice? bleDevice;
-  static BluetoothCharacteristic? bleWriteCharacteristic;
-  static StreamSubscription<List<int>>? _bleSubscription;
-
-  static String lastResponse = "Ready. Connect device.";
+  static String lastResponse = "Ready. Connect via USB OTG.";
   static String terminalLog = "";
   static StreamController<String> logController = StreamController.broadcast();
   static StreamController<void> telemetryController = StreamController.broadcast();
@@ -144,14 +136,11 @@ class SerialService {
   static double azimuth = 0.0;
 
   static Future<void> sendCommand(String cmd) async {
-    if (activeConnectionType == ConnectionType.usb && usbPort != null) {
+    if (isConnected && usbPort != null) {
       await usbPort!.write(Uint8List.fromList('$cmd\n'.codeUnits));
       appendLog(">> $cmd\n");
-    } else if (activeConnectionType == ConnectionType.bluetooth && bleWriteCharacteristic != null) {
-      await bleWriteCharacteristic!.write(Uint8List.fromList('$cmd\n'.codeUnits), withoutResponse: true);
-      appendLog(">> $cmd\n");
     } else {
-      appendLog(">> ERROR: Device not connected\n");
+      appendLog(">> ERROR: USB Device not connected\n");
     }
   }
 
@@ -170,18 +159,11 @@ class SerialService {
   }
 
   static Future<void> disconnect() async {
-    if (activeConnectionType == ConnectionType.usb) {
-      await _usbSubscription?.cancel();
-      await usbPort?.close();
-      usbPort = null;
-    } else if (activeConnectionType == ConnectionType.bluetooth) {
-      await _bleSubscription?.cancel();
-      await bleDevice?.disconnect();
-      bleDevice = null;
-      bleWriteCharacteristic = null;
-    }
-    activeConnectionType = null;
-    lastResponse = "Disconnected";
+    await _usbSubscription?.cancel();
+    await usbPort?.close();
+    usbPort = null;
+    isConnected = false;
+    lastResponse = "USB Disconnected";
     logController.add(terminalLog);
   }
 }
@@ -219,7 +201,7 @@ class InfoTab extends StatefulWidget {
 
 class _InfoTabState extends State<InfoTab> {
   String _title = "FPV Drone Configurator Pro";
-  String _version = "v.2.6.1";
+  String _version = "v.2.6.2 (USB)";
   String _desc = "Загрузка информации о проекте...";
   List> _sections = [];
   bool _isLoading = true;
@@ -319,7 +301,7 @@ class _InfoTabState extends State<InfoTab> {
 }
 
 // ==========================================
-// ШАПКА СТАТУСА
+// ШАПКА СТАТУСА (USB ONLY)
 // ==========================================
 class DroneStatusHeader extends StatefulWidget {
   const DroneStatusHeader({super.key});
@@ -330,7 +312,7 @@ class DroneStatusHeader extends StatefulWidget {
 
 class _DroneStatusHeaderState extends State<DroneStatusHeader> {
   String _displayResponse = SerialService.lastResponse;
-  bool _isConnected = false;
+  bool _isConnected = SerialService.isConnected;
   late StreamSubscription<String> _sub;
 
   @override
@@ -340,7 +322,7 @@ class _DroneStatusHeaderState extends State<DroneStatusHeader> {
       if (mounted) {
         setState(() {
           _displayResponse = SerialService.lastResponse;
-          _isConnected = SerialService.activeConnectionType != null;
+          _isConnected = SerialService.isConnected;
         });
       }
     });
@@ -352,93 +334,31 @@ class _DroneStatusHeaderState extends State<DroneStatusHeader> {
     super.dispose();
   }
 
-  void _showConnectionDialog() {
+  Future<void> _toggleConnection() async {
     if (_isConnected) {
-      SerialService.disconnect();
-      return;
+      await SerialService.disconnect();
+    } else {
+      List<UsbDevice> devices = await UsbSerial.listDevices();
+      if (devices.isEmpty) {
+        setState(() => SerialService.lastResponse = "No USB devices found");
+        return;
+      }
+      SerialService.usbPort = await devices[0].create();
+      bool openResult = await SerialService.usbPort!.open();
+      if (!openResult) {
+        setState(() => SerialService.lastResponse = "Failed to open USB port");
+        return;
+      }
+      await SerialService.usbPort!.setPortParameters(115200, UsbPort.DATABITS_8, UsbPort.STOPBITS_1, UsbPort.PARITY_NONE);
+      SerialService.isConnected = true;
+      setState(() {
+        _isConnected = true;
+        SerialService.lastResponse = "USB Connected: ${devices[0].deviceName}";
+      });
+      SerialService._usbSubscription = SerialService.usbPort!.inputStream!.listen((data) {
+        SerialService.handleIncomingData(data);
+      });
     }
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF1C1C1E),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                "Select Connection Mode",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.amberAccent),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _connectUsb();
-                },
-                icon: const Icon(Icons.usb, color: Colors.white),
-                label: const Text("USB OTG Cable", style: TextStyle(color: Colors.white)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blueAccent, 
-                  padding: const EdgeInsets.all(14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-              const SizedBox(height: 12),
-              ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _showBluetoothScanDialog();
-                },
-                icon: const Icon(Icons.bluetooth, color: Colors.white),
-                label: const Text("Bluetooth LE (Wireless)", style: TextStyle(color: Colors.white)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blueAccent, 
-                  padding: const EdgeInsets.all(14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _connectUsb() async {
-    List<UsbDevice> devices = await UsbSerial.listDevices();
-    if (devices.isEmpty) {
-      setState(() => SerialService.lastResponse = "No USB devices found");
-      return;
-    }
-    SerialService.usbPort = await devices[0].create();
-    bool openResult = await SerialService.usbPort!.open();
-    if (!openResult) {
-      setState(() => SerialService.lastResponse = "Failed to open USB port");
-      return;
-    }
-    await SerialService.usbPort!.setPortParameters(115200, UsbPort.DATABITS_8, UsbPort.STOPBITS_1, UsbPort.PARITY_NONE);
-    SerialService.activeConnectionType = ConnectionType.usb;
-    setState(() {
-      _isConnected = true;
-      SerialService.lastResponse = "USB Connected: ${devices[0].deviceName}";
-    });
-    SerialService._usbSubscription = SerialService.usbPort!.inputStream!.listen((data) {
-      SerialService.handleIncomingData(data);
-    });
-  }
-
-  void _showBluetoothScanDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => const BluetoothScanDialog(),
-    );
   }
 
   @override
@@ -461,9 +381,7 @@ class _DroneStatusHeaderState extends State<DroneStatusHeader> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(
-                SerialService.activeConnectionType == ConnectionType.bluetooth 
-                    ? Icons.bluetooth_connected 
-                    : Icons.usb, 
+                Icons.usb, 
                 color: _isConnected ? Colors.greenAccent : Colors.amberAccent, 
                 size: 16,
               ),
@@ -480,9 +398,9 @@ class _DroneStatusHeaderState extends State<DroneStatusHeader> {
             SizedBox(
               height: 34,
               child: ElevatedButton.icon(
-                onPressed: _showConnectionDialog,
+                onPressed: _toggleConnection,
                 icon: Icon(_isConnected ? Icons.link_off : Icons.link, size: 14),
-                label: Text(_isConnected ? "Disconnect" : "Connect", style: const TextStyle(fontSize: 11)),
+                label: Text(_isConnected ? "Disconnect" : "Connect USB", style: const TextStyle(fontSize: 11)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _isConnected ? Colors.red.shade900 : Colors.blueAccent,
                   foregroundColor: Colors.white,
@@ -494,118 +412,6 @@ class _DroneStatusHeaderState extends State<DroneStatusHeader> {
           ],
         ),
       ),
-    );
-  }
-}
-
-// ==========================================
-// ДИАЛОГ BLUETOOTH
-// ==========================================
-class BluetoothScanDialog extends StatefulWidget {
-  const BluetoothScanDialog({super.key});
-
-  @override
-  State<BluetoothScanDialog> createState() => _BluetoothScanDialogState();
-}
-
-class _BluetoothScanDialogState extends State<BluetoothScanDialog> {
-  List<ScanResult> _scanResults = [];
-  bool _isScanning = false;
-  StreamSubscription<List<ScanResult>>? _scanSub;
-
-  @override
-  void initState() {
-    super.initState();
-    _startScan();
-  }
-
-  Future<void> _startScan() async {
-    setState(() => _isScanning = true);
-    try {
-      _scanSub = FlutterBluePlus.scanResults.listen((results) {
-        if (mounted) setState(() => _scanResults = results);
-      });
-      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 4));
-    } catch (e) {
-      SerialService.appendLog("BLE Scan Error: $e\n");
-    } finally {
-      if (mounted) setState(() => _isScanning = false);
-    }
-  }
-
-  @override
-  void dispose() {
-    _scanSub?.cancel();
-    FlutterBluePlus.stopScan();
-    super.dispose();
-  }
-
-  Future<void> _connectToDevice(BluetoothDevice device, String name) async {
-    Navigator.pop(context);
-    try {
-      await device.connect(timeout: const Duration(seconds: 5));
-      SerialService.bleDevice = device;
-      SerialService.activeConnectionType = ConnectionType.bluetooth;
-
-      List<BluetoothService> services = await device.discoverServices();
-      for (var service in services) {
-        for (var characteristic in service.characteristics) {
-          if (characteristic.properties.write || characteristic.properties.writeWithoutResponse) {
-            SerialService.bleWriteCharacteristic = characteristic;
-          }
-          if (characteristic.properties.notify || characteristic.properties.indicate) {
-            await characteristic.setNotifyValue(true);
-            SerialService._bleSubscription = characteristic.lastValueStream.listen((d) {
-              SerialService.handleIncomingData(Uint8List.fromList(d));
-            });
-          }
-        }
-      }
-
-      SerialService.lastResponse = "BLE Connected: $name";
-      SerialService.logController.add(SerialService.terminalLog);
-    } catch (e) {
-      SerialService.lastResponse = "BLE Error: $e";
-      SerialService.logController.add(SerialService.terminalLog);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: const Color(0xFF1C1C1E),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          const Text("BLE Devices", style: TextStyle(fontSize: 16)),
-          if (_isScanning) const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-        ],
-      ),
-      content: SizedBox(
-        width: 300,
-        height: 280,
-        child: ListView.builder(
-          itemCount: _scanResults.length,
-          itemBuilder: (context, index) {
-            final data = _scanResults[index];
-            String name = data.device.name.isNotEmpty 
-                ? data.device.name 
-                : (data.advertisementData.advName.isNotEmpty ? data.advertisementData.advName : "Unknown Device");
-            return ListTile(
-              title: Text(name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-              subtitle: Text(data.device.id.toString(), style: const TextStyle(fontSize: 10, color: Colors.white60)),
-              onTap: () => _connectToDevice(data.device, name),
-            );
-          },
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text("Cancel"),
-        ),
-      ],
     );
   }
 }
@@ -1129,7 +935,7 @@ class _SettingsTabState extends State<SettingsTab> {
           padding: const EdgeInsets.symmetric(horizontal: 12.0),
           child: ElevatedButton.icon(
             onPressed: () {
-              if (SerialService.activeConnectionType == null) {
+              if (!SerialService.isConnected) {
                 showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
               } else {
                 SerialService.sendCommand("save_profile");
@@ -1150,7 +956,7 @@ class _SettingsTabState extends State<SettingsTab> {
           padding: const EdgeInsets.symmetric(horizontal: 12.0),
           child: ElevatedButton.icon(
             onPressed: () {
-              if (SerialService.activeConnectionType == null) {
+              if (!SerialService.isConnected) {
                 showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
               } else {
                 SerialService.sendCommand("reset");
@@ -1244,7 +1050,7 @@ class TestsTab extends StatelessWidget {
           icon: Icons.explore_outlined,
           color: Colors.blueAccent,
           onTap: () {
-            if (SerialService.activeConnectionType == null) {
+            if (!SerialService.isConnected) {
               showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
             } else {
               SerialService.sendCommand("calib");
@@ -1259,7 +1065,7 @@ class TestsTab extends StatelessWidget {
           icon: Icons.settings_input_component,
           color: Colors.orangeAccent,
           onTap: () {
-            if (SerialService.activeConnectionType == null) {
+            if (!SerialService.isConnected) {
               showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
             } else {
               SerialService.sendCommand("test_esc");
@@ -1276,7 +1082,7 @@ class TestsTab extends StatelessWidget {
           icon: Icons.graphic_eq,
           color: Colors.cyanAccent,
           onTap: () {
-            if (SerialService.activeConnectionType == null) {
+            if (!SerialService.isConnected) {
               showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
             } else {
               SerialService.sendCommand("test_sensors");
@@ -1291,7 +1097,7 @@ class TestsTab extends StatelessWidget {
           icon: Icons.toys,
           color: Colors.amberAccent,
           onTap: () {
-            if (SerialService.activeConnectionType == null) {
+            if (!SerialService.isConnected) {
               showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
             } else {
               SerialService.sendCommand("test_motor");
@@ -1306,7 +1112,7 @@ class TestsTab extends StatelessWidget {
           icon: Icons.science_outlined,
           color: Colors.purpleAccent,
           onTap: () {
-            if (SerialService.activeConnectionType == null) {
+            if (!SerialService.isConnected) {
               showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
             } else {
               SerialService.sendCommand("test_pid");
@@ -1321,7 +1127,7 @@ class TestsTab extends StatelessWidget {
           icon: Icons.flight_takeoff,
           color: Colors.greenAccent,
           onTap: () {
-            if (SerialService.activeConnectionType == null) {
+            if (!SerialService.isConnected) {
               showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
             } else {
               SerialService.sendCommand("auto");
@@ -1554,8 +1360,8 @@ class _FlasherTabState extends State<FlasherTab> {
   String _mcuId = "Unknown";
 
   Future<void> _startProfessionalFlashing() async {
-    if (SerialService.usbPort == null) {
-      showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
+    if (!SerialService.isConnected || SerialService.usbPort == null) {
+      showAppDialog(context, "Ошибка", "Устройство не подключено по USB!", isError: true);
       return;
     }
 
