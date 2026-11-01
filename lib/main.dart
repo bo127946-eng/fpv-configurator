@@ -189,6 +189,16 @@ void showAppDialog(BuildContext context, String title, String message, {bool isE
 }
 
 // ==========================================
+// МОДЕЛЬ ДАННЫХ ДОКУМЕНТАЦИИ (Без дурацких скобок)
+// ==========================================
+class DocSection {
+  final String title;
+  final String content;
+
+  DocSection({required this.title, required this.content});
+}
+
+// ==========================================
 // ВКЛАДКА: ИНФОРМАЦИЯ И ИНСТРУКЦИЯ (InfoTab)
 // ==========================================
 class InfoTab extends StatefulWidget {
@@ -199,7 +209,7 @@ class InfoTab extends StatefulWidget {
 }
 
 class _InfoTabState extends State<InfoTab> {
-  List> _sections = [];
+  List<DocSection> _sections = [];
   bool _isLoading = true;
 
   @override
@@ -211,7 +221,7 @@ class _InfoTabState extends State<InfoTab> {
   Future<void> _loadDocumentation() async {
     try {
       String fileContent = await rootBundle.loadString('assets/doc.txt');
-      List> parsedSections = [];
+      List<DocSection> parsedSections = [];
       
       RegExp regExp = RegExp(r'/([^/]+)/\s*\[([^\]]*)\]', multiLine: true, dotAll: true);
       Iterable<RegExpMatch> matches = regExp.allMatches(fileContent);
@@ -220,15 +230,14 @@ class _InfoTabState extends State<InfoTab> {
         String title = match.group(1)?.trim() ?? '';
         String content = match.group(2)?.trim() ?? '';
         if (title.isNotEmpty) {
-          parsedSections.add({'title': title, 'content': content});
+          parsedSections.add(DocSection(title: title, content: content));
         }
       }
 
       if (parsedSections.isEmpty) {
-        parsedSections.add({
-          'title': 'Руководство пользователя',
-          'content': fileContent
-        });
+        parsedSections.add(
+          DocSection(title: 'Руководство пользователя', content: fileContent)
+        );
       }
 
       setState(() {
@@ -238,10 +247,10 @@ class _InfoTabState extends State<InfoTab> {
     } catch (e) {
       setState(() {
         _sections = [
-          {
-            'title': 'Ошибка загрузки doc.txt',
-            'content': 'Не удалось загрузить doc.txt из assets. Проверьте pubspec.yaml.\nОшибка: $e'
-          }
+          DocSection(
+            title: 'Ошибка загрузки doc.txt',
+            content: 'Не удалось загрузить doc.txt из assets. Проверьте pubspec.yaml.\nОшибка: $e',
+          ),
         ];
         _isLoading = false;
       });
@@ -289,13 +298,13 @@ class _InfoTabState extends State<InfoTab> {
         ..._sections.map((sec) => Card(
           margin: const EdgeInsets.only(bottom: 8),
           child: ExpansionTile(
-            title: Text(sec['title']!, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+            title: Text(sec.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
             iconColor: Colors.amberAccent,
             collapsedIconColor: Colors.white54,
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                child: Text(sec['content']!, style: const TextStyle(fontSize: 12, color: Colors.white70, height: 1.4, fontFamily: 'monospace')),
+                child: Text(sec.content, style: const TextStyle(fontSize: 12, color: Colors.white70, height: 1.4, fontFamily: 'monospace')),
               ),
             ],
           ),
