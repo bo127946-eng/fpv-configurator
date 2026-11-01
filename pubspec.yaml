@@ -1,5 +1,5 @@
 name: fpv_drone_configurator_pro
-description: "A professional cross-platform mobile FPV drone configurator for STM32 flight controllers (USB-only version)."
+description: A professional cross-platform mobile configurator for FPV drones based on STM32 architecture (YMFC-32) with USB OTG support.
 publish_to: 'none'
 version: 2.6.2+1
 
@@ -9,8 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  usb_serial: ^0.5.1
-  xml: ^6.5.0
+  usb_serial: ^0.5.4
 
 dev_dependencies:
   flutter_test:
@@ -20,5 +19,5 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/documentation.xml
+    - assets/doc.txt
     - assets/firmware.hex
