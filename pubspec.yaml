@@ -10,7 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   usb_serial: ^0.5.2
-  flutter_blue_plus: ^1.31.6
+  flutter_blue_plus: ^1.32.12
   xml: ^6.5.0
 
 dev_dependencies:
