@@ -589,12 +589,12 @@ class _BluetoothScanDialogState extends State<BluetoothScanDialog> {
           itemCount: _scanResults.length,
           itemBuilder: (context, index) {
             final data = _scanResults[index];
-            String name = data.device.platformName.isNotEmpty 
-                ? data.device.platformName 
+            String name = data.device.name.isNotEmpty 
+                ? data.device.name 
                 : (data.advertisementData.advName.isNotEmpty ? data.advertisementData.advName : "Unknown Device");
             return ListTile(
               title: Text(name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-              subtitle: Text(data.device.remoteId.toString(), style: const TextStyle(fontSize: 10, color: Colors.white60)),
+              subtitle: Text(data.device.id.toString(), style: const TextStyle(fontSize: 10, color: Colors.white60)),
               onTap: () => _connectToDevice(data.device, name),
             );
           },
