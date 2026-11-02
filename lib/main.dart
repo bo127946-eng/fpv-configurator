@@ -1,4 +1,4 @@
-// Конфигуратор CFC v2.2
+// Конфигуратор CFC v2.3
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -215,7 +215,6 @@ class DocSection {
 
 // ==========================================
 // ВКЛАДКА: ИНФОРМАЦИЯ И ИНСТРУКЦИЯ (InfoTab)
-// С поддержкой парсинга изображений (img1 -> img1.jpg)
 // ==========================================
 class InfoTab extends StatefulWidget {
   const InfoTab({super.key});
@@ -273,39 +272,32 @@ class _InfoTabState extends State<InfoTab> {
     }
   }
 
-  // Парсер для разделения текста на блоки и подстановки изображений вместо imgN
+  // Исправленный и стабильный парсер текстовых блоков и изображений (img1 -> img1.jpg)
   List<Widget> _buildContentWidgets(String rawContent) {
     List<Widget> widgets = [];
-    
-    // Регулярное выражение ищет слова вида img1, img2, img3 и т.д.
     RegExp imgRegex = RegExp(r'\b(img\d+)\b', caseSensitive: false);
     
-    // Разобьем текст по паттерну изображений, сохраняя сами разделители
-    List<String> parts = rawContent.split(imgRegex);
-    Iterable<RegExpMatch> matches = imgRegex.allMatches(rawContent);
-    List<String> foundImages = matches.map((m) => m.group(1)!().toLowerCase()).toList();
+    int lastMatchEnd = 0;
+    for (Match match in imgRegex.allMatches(rawContent)) {
+      // Текст до ключевого слова изображения
+      if (match.start > lastMatchEnd) {
+        String subText = rawContent.substring(lastMatchEnd, match.start).trim();
+        if (subText.isNotEmpty) {
+          widgets.add(
+            Text(
+              subText,
+              style: const TextStyle(fontSize: 12, color: Colors.white70, height: 1.4, fontFamily: 'monospace'),
+            ),
+          );
+          widgets.add(const SizedBox(height: 10));
+        }
+      }
 
-    int textIndex = 0;
-    int imgIndex = 0;
+      // Название тега картинки (например, img1)
+      String imgTag = match.group(1)!.toLowerCase();
+      String assetImagePath = 'assets/$imgTag.jpg';
 
-    // Выводим первый текстовый кусок до картинки (если есть)
-    if (parts.isNotEmpty && parts[0].trim().isNotEmpty) {
-      widgets.add(
-        Text(
-          parts[0].trim(),
-          style: const TextStyle(fontSize: 12, color: Colors.white70, height: 1.4, fontFamily: 'monospace'),
-        ),
-      );
-      widgets.add(const SizedBox(height: 10));
-    }
-    textIndex++;
-
-    // Чередуем картинки и блоки текста
-    while (imgIndex < foundImages.length) {
-      String imgTag = foundImages[imgIndex]; // например, "img1"
-      String assetImagePath = 'assets/$imgTag.jpg'; // превращаем в "assets/img1.jpg"
-
-      // Виджет изображения с отступами и автоматическим определением высоты по пропорциям
+      // Рендер изображения по ширине с отступами и обработкой ошибок
       widgets.add(
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -335,19 +327,20 @@ class _InfoTabState extends State<InfoTab> {
       );
       widgets.add(const SizedBox(height: 10));
 
-      // Следующий текст под изображением
-      if (textIndex < parts.length && parts[textIndex].trim().isNotEmpty) {
+      lastMatchEnd = match.end;
+    }
+
+    // Оставшийся текст после последней картинки
+    if (lastMatchEnd < rawContent.length) {
+      String remainingText = rawContent.substring(lastMatchEnd).trim();
+      if (remainingText.isNotEmpty) {
         widgets.add(
           Text(
-            parts[textIndex].trim(),
+            remainingText,
             style: const TextStyle(fontSize: 12, color: Colors.white70, height: 1.4, fontFamily: 'monospace'),
           ),
         );
-        widgets.add(const SizedBox(height: 10));
       }
-
-      textIndex++;
-      imgIndex++;
     }
 
     return widgets;
@@ -376,7 +369,7 @@ class _InfoTabState extends State<InfoTab> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
-                      child: const Text('v.2.8.0 (USB)', style: TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                      child: const Text('v.2.9.0 (USB)', style: TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
