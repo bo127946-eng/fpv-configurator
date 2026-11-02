@@ -1,3 +1,5 @@
+// Конфигуратор CFC v2.2
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:usb_serial/usb_serial.dart';
@@ -72,44 +74,57 @@ class _MainContainerState extends State<MainContainer> {
           Expanded(child: _tabs[_currentIndex]),
         ],
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (index) => setState(() => _currentIndex = index),
-        backgroundColor: const Color(0xFF121214),
-        indicatorColor: Colors.blueAccent,
-        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.info_outline, color: Colors.white70),
-            selectedIcon: Icon(Icons.info, color: Colors.white),
-            label: 'Info',
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF121214),
+          border: Border(top: BorderSide(color: Colors.white.withOpacity(0.06))),
+        ),
+        child: SafeArea(
+          child: SizedBox(
+            height: 60,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildNavItem(0, Icons.info_outline, Icons.info, 'Info'),
+                _buildNavItem(1, Icons.terminal_outlined, Icons.terminal, 'CLI'),
+                _buildNavItem(2, Icons.tune_outlined, Icons.tune, 'Tuning'),
+                _buildNavItem(3, Icons.gavel_outlined, Icons.gavel, 'Tests'),
+                _buildNavItem(4, Icons.threed_rotation_outlined, Icons.threed_rotation, 'Monitor'),
+                _buildNavItem(5, Icons.memory_outlined, Icons.memory, 'Flasher'),
+              ],
+            ),
           ),
-          NavigationDestination(
-            icon: Icon(Icons.terminal_outlined, color: Colors.white70),
-            selectedIcon: Icon(Icons.terminal, color: Colors.white),
-            label: 'CLI',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.tune_outlined, color: Colors.white70),
-            selectedIcon: Icon(Icons.tune, color: Colors.white),
-            label: 'Tuning',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.gavel_outlined, color: Colors.white70),
-            selectedIcon: Icon(Icons.gavel, color: Colors.white),
-            label: 'Tests',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.threed_rotation_outlined, color: Colors.white70),
-            selectedIcon: Icon(Icons.threed_rotation, color: Colors.white),
-            label: 'Monitor',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.memory_outlined, color: Colors.white70),
-            selectedIcon: Icon(Icons.memory, color: Colors.white),
-            label: 'Flasher',
-          ),
-        ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavItem(int index, IconData icon, IconData selectedIcon, String label) {
+    bool isSelected = _currentIndex == index;
+    return Expanded(
+      child: InkWell(
+        onTap: () => setState(() => _currentIndex = index),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              isSelected ? selectedIcon : icon,
+              color: isSelected ? Colors.blueAccent : Colors.white70,
+              size: 20,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : Colors.white60,
+                fontSize: 10,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -189,7 +204,7 @@ void showAppDialog(BuildContext context, String title, String message, {bool isE
 }
 
 // ==========================================
-// МОДЕЛЬ ДАННЫХ ДОКУМЕНТАЦИИ (Без дурацких скобок)
+// МОДЕЛЬ ДАННЫХ ДОКУМЕНТАЦИИ
 // ==========================================
 class DocSection {
   final String title;
@@ -200,6 +215,7 @@ class DocSection {
 
 // ==========================================
 // ВКЛАДКА: ИНФОРМАЦИЯ И ИНСТРУКЦИЯ (InfoTab)
+// С поддержкой парсинга изображений (img1 -> img1.jpg)
 // ==========================================
 class InfoTab extends StatefulWidget {
   const InfoTab({super.key});
@@ -257,6 +273,86 @@ class _InfoTabState extends State<InfoTab> {
     }
   }
 
+  // Парсер для разделения текста на блоки и подстановки изображений вместо imgN
+  List<Widget> _buildContentWidgets(String rawContent) {
+    List<Widget> widgets = [];
+    
+    // Регулярное выражение ищет слова вида img1, img2, img3 и т.д.
+    RegExp imgRegex = RegExp(r'\b(img\d+)\b', caseSensitive: false);
+    
+    // Разобьем текст по паттерну изображений, сохраняя сами разделители
+    List<String> parts = rawContent.split(imgRegex);
+    Iterable<RegExpMatch> matches = imgRegex.allMatches(rawContent);
+    List<String> foundImages = matches.map((m) => m.group(1)!().toLowerCase()).toList();
+
+    int textIndex = 0;
+    int imgIndex = 0;
+
+    // Выводим первый текстовый кусок до картинки (если есть)
+    if (parts.isNotEmpty && parts[0].trim().isNotEmpty) {
+      widgets.add(
+        Text(
+          parts[0].trim(),
+          style: const TextStyle(fontSize: 12, color: Colors.white70, height: 1.4, fontFamily: 'monospace'),
+        ),
+      );
+      widgets.add(const SizedBox(height: 10));
+    }
+    textIndex++;
+
+    // Чередуем картинки и блоки текста
+    while (imgIndex < foundImages.length) {
+      String imgTag = foundImages[imgIndex]; // например, "img1"
+      String assetImagePath = 'assets/$imgTag.jpg'; // превращаем в "assets/img1.jpg"
+
+      // Виджет изображения с отступами и автоматическим определением высоты по пропорциям
+      widgets.add(
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8.0),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Image.asset(
+              assetImagePath,
+              width: double.infinity,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => Container(
+                height: 100,
+                width: double.infinity,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.black26,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white12),
+                ),
+                child: Text(
+                  "Изображение не найдено ($imgTag.jpg)",
+                  style: const TextStyle(fontSize: 11, color: Colors.amberAccent),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      widgets.add(const SizedBox(height: 10));
+
+      // Следующий текст под изображением
+      if (textIndex < parts.length && parts[textIndex].trim().isNotEmpty) {
+        widgets.add(
+          Text(
+            parts[textIndex].trim(),
+            style: const TextStyle(fontSize: 12, color: Colors.white70, height: 1.4, fontFamily: 'monospace'),
+          ),
+        );
+        widgets.add(const SizedBox(height: 10));
+      }
+
+      textIndex++;
+      imgIndex++;
+    }
+
+    return widgets;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -280,11 +376,11 @@ class _InfoTabState extends State<InfoTab> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
-                      child: const Text('v.2.6.2 (USB)', style: TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                      child: const Text('v.2.8.0 (USB)', style: TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 const Text('Профессиональный кроссплатформенный мобильный конфигуратор для настройки, телеметрии, калибровки и прошивки FPV-дронов на базе STM32 (архитектура YMFC-32). Поддерживает проводное USB OTG подключение.', style: TextStyle(fontSize: 12, color: Colors.white70, height: 1.4)),
               ],
             ),
@@ -304,7 +400,10 @@ class _InfoTabState extends State<InfoTab> {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                child: Text(sec.content, style: const TextStyle(fontSize: 12, color: Colors.white70, height: 1.4, fontFamily: 'monospace')),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: _buildContentWidgets(sec.content),
+                ),
               ),
             ],
           ),
@@ -859,7 +958,7 @@ class _SettingsTabState extends State<SettingsTab> {
           },
         ),
         _buildSwitchCard(
-          title: "Динамический notch\nфильтр",
+          title: "Динамический notch фильтр",
           commandName: "dynamic_notch_enabled",
           value: _dynamicNotchEnabled == 1,
           onChanged: (val) {
@@ -1473,7 +1572,7 @@ class _FlasherTabState extends State<FlasherTab> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.blueAccent,
                       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                   ),
                 ],
