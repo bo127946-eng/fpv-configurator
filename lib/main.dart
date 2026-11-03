@@ -1,4 +1,4 @@
-// Конфигуратор CFC v3.0 (Synced with CLI Reference)
+// Конфигуратор CFC v3.2
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -364,12 +364,12 @@ class _InfoTabState extends State<InfoTab> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
-                      child: const Text('v.3.0.0 (CLI)', style: TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                      child: const Text('v.3.2.0 (CLI)', style: TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
-                const Text('Мобильный конфигуратор для настройки полета по актуальному справочнику CLI команд STM32.', style: TextStyle(fontSize: 12, color: Colors.white70, height: 1.4)),
+                const Text('Мобильный конфигуратор для настройки полетного контроллера STM32.', style: TextStyle(fontSize: 12, color: Colors.white70, height: 1.4)),
               ],
             ),
           ),
@@ -642,7 +642,7 @@ class _TerminalTabState extends State<TerminalTab> {
 }
 
 // ==========================================
-// ВИДЖЕТ PID КАРТЫ (СИНХРОНИЗИРОВАН С CLI)
+// ВИДЖЕТ PID КАРТЫ
 // ==========================================
 class PidAxisCardWidget extends StatefulWidget {
   final String axisName;
@@ -764,13 +764,25 @@ class SettingsTab extends StatefulWidget {
 }
 
 class _SettingsTabState extends State<SettingsTab> {
+  // Полетные параметры и ограничения
+  double _flMode = 0;          // 0-acro, 1-angle, 2-horizon
+  double _flRollMax = 25.0;    
+  double _flPitchMax = 25.0;   
+  double _flVzSpeedMax = 1.5;  
+  double _flHeightMin = 0.5;   // min=0
+
+  // Аварийная посадка (Failsafe Actions)
+  double _fsBatEn = 1;
+  double _fsRtxEn = 1;
+  double _fsSpiEn = 1;
+  double _fsI2cEn = 1;
+
   // RTX параметры
   double _rtxEn = 1;
   double _rtxBand = 4;
   double _rtxChan = 0;
   double _rtxSf = 7;
   double _rtxBw = 7;
-  double _rtxCr = 1;
   double _rtxPower = 14;
 
   // RC параметры
@@ -778,33 +790,20 @@ class _SettingsTabState extends State<SettingsTab> {
   double _rcSuperExpo = 0.05;
   double _rcStickExpo = 0.50;
   double _rcYawRate = 0.35;
-  double _rcYawSuperExpo = 0.05;
-  double _rcYawExpo = 0.40;
   double _rcDeadband = 20.0;
-  double _rcHorizonTransition = 0.75;
   double _rcFilterSmoothing = 0.30;
 
-  // Безопасность и питание
-  double _rcFsEn = 1;
-  double _fsBatEn = 1;
+  // Питание и батарея
   double _batCells = 4;
   double _batFsV = 14.0;
   double _fsSpeed = 0.8;
 
-  // Лидар
+  // Лидар и фильтры
   double _lidarEn = 1;
-  double _lidarMinAlt = 0.2;
-
-  // Фильтры и ограничения
   double _gyroFilterAlpha = 0.40;
   double _accFilterAlpha = 0.15;
   double _filterDynNotchEn = 1;
   double _filterNotchFreq = 65.0;
-  double _filterNotchBw = 18.0;
-  double _filterDynMinHz = 45.0;
-  double _filterDynMaxHz = 120.0;
-  double _flightMaxAngle = 25.0;
-  double _flightMaxZSpeed = 1.5;
 
   // PID регуляторы
   double _rollKp = 0.50, _rollKi = 0.015, _rollKd = 0.02;
@@ -868,6 +867,47 @@ class _SettingsTabState extends State<SettingsTab> {
     );
   }
 
+  Widget _buildSegmentedChoiceCard({
+    required String title,
+    required String commandName,
+    required List<String> options,
+    required int selectedIndex,
+    required ValueChanged<int> onSelected,
+  }) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+            Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace')),
+            const SizedBox(height: 10),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                return ToggleButtons(
+                  isSelected: List.generate(options.length, (i) => i == selectedIndex),
+                  onPressed: (index) {
+                    onSelected(index);
+                  },
+                  borderRadius: BorderRadius.circular(10),
+                  selectedColor: Colors.white,
+                  fillColor: Colors.blueAccent,
+                  color: Colors.white70,
+                  constraints: BoxConstraints(minHeight: 36, minWidth: (constraints.maxWidth - (options.length - 1)) / options.length),
+                  children: options.map((opt) => Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Text(opt, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                  )).toList(),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildSwitchCard({
     required String title,
     required String commandName,
@@ -899,6 +939,102 @@ class _SettingsTabState extends State<SettingsTab> {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
+        _buildSectionHeader("ПОЛЕТНЫЕ РЕЖИМЫ И ОГРАНИЧЕНИЯ", Icons.flight),
+        _buildSegmentedChoiceCard(
+          title: "Режим полета",
+          commandName: "fl_mode",
+          options: const ["Acro", "Angle", "Horizon"],
+          selectedIndex: _flMode.round(),
+          onSelected: (val) {
+            setState(() => _flMode = val.toDouble());
+            SerialService.sendCommand("fl_mode $val");
+          },
+        ),
+        _buildSliderCard(
+          title: "Максимальный угол крена",
+          commandName: "fl_roll_max",
+          value: _flRollMax,
+          min: 10.0,
+          max: 80.0,
+          divisions: 14,
+          unit: "°",
+          onChanged: (v) => setState(() => _flRollMax = v),
+          onChangeEnd: (v) => SerialService.sendCommand("fl_roll_max $v"),
+        ),
+        _buildSliderCard(
+          title: "Максимальный угол тангажа",
+          commandName: "fl_pitch_max",
+          value: _flPitchMax,
+          min: 10.0,
+          max: 80.0,
+          divisions: 14,
+          unit: "°",
+          onChanged: (v) => setState(() => _flPitchMax = v),
+          onChangeEnd: (v) => SerialService.sendCommand("fl_pitch_max $v"),
+        ),
+        _buildSliderCard(
+          title: "Максимальная вертикальная скорость",
+          commandName: "fl_vz_speed_max",
+          value: _flVzSpeedMax,
+          min: 0.5,
+          max: 3.0,
+          divisions: 25,
+          unit: "м/с",
+          onChanged: (v) => setState(() => _flVzSpeedMax = v),
+          onChangeEnd: (v) => SerialService.sendCommand("fl_vz_speed_max $v"),
+        ),
+        _buildSliderCard(
+          title: "Минимальная высота полета",
+          commandName: "fl_height_min",
+          value: _flHeightMin,
+          min: 0.0,
+          max: 5.0,
+          divisions: 50,
+          unit: "м",
+          onChanged: (v) => setState(() => _flHeightMin = v),
+          onChangeEnd: (v) => SerialService.sendCommand("fl_height_min $v"),
+        ),
+
+        // --- НОВЫЙ БЛОК: АВАРИЙНАЯ ПОСАДКА ---
+        _buildSectionHeader("АВАРИЙНАЯ ПОСАДКА", Icons.warning_amber_rounded),
+        _buildSwitchCard(
+          title: "При разряде батареи",
+          commandName: "fs_bat_en",
+          value: _fsBatEn == 1,
+          onChanged: (v) {
+            setState(() => _fsBatEn = v ? 1 : 0);
+            SerialService.sendCommand("fs_bat_en ${_fsBatEn.round()}");
+          },
+        ),
+        _buildSwitchCard(
+          title: "При обрыве связи с пультом",
+          commandName: "fs_rtx_en",
+          value: _fsRtxEn == 1,
+          onChanged: (v) {
+            setState(() => _fsRtxEn = v ? 1 : 0);
+            SerialService.sendCommand("fs_rtx_en ${_fsRtxEn.round()}");
+          },
+        ),
+        _buildSwitchCard(
+          title: "При обрыве связи по шине SPI",
+          commandName: "fs_spi_en",
+          value: _fsSpiEn == 1,
+          onChanged: (v) {
+            setState(() => _fsSpiEn = v ? 1 : 0);
+            SerialService.sendCommand("fs_spi_en ${_fsSpiEn.round()}");
+          },
+        ),
+        _buildSwitchCard(
+          title: "При обрыве связи по шине I2C",
+          commandName: "fs_i2c_en",
+          value: _fsI2cEn == 1,
+          onChanged: (v) {
+            setState(() => _fsI2cEn = v ? 1 : 0);
+            SerialService.sendCommand("fs_i2c_en ${_fsI2cEn.round()}");
+          },
+        ),
+        // ------------------------------------
+
         _buildSectionHeader("РАДИОМОДУЛЬ RTX (SPI)", Icons.wifi),
         _buildSwitchCard(title: "Включить RTX модуль", commandName: "rtx_en", value: _rtxEn == 1, onChanged: (v) { setState(() => _rtxEn = v ? 1 : 0); SerialService.sendCommand("rtx_en ${_rtxEn.round()}"); }),
         _buildSliderCard(title: "Диапазон частот", commandName: "rtx_band", value: _rtxBand, min: 1, max: 9, divisions: 8, unit: "", onChanged: (v) => setState(() => _rtxBand = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_band ${v.round()}")),
@@ -915,9 +1051,7 @@ class _SettingsTabState extends State<SettingsTab> {
         _buildSliderCard(title: "Мертвая зона стиков", commandName: "rc_deadband", value: _rcDeadband, min: 0, max: 50, divisions: 50, unit: "PWM", onChanged: (v) => setState(() => _rcDeadband = v), onChangeEnd: (v) => SerialService.sendCommand("rc_deadband $v")),
         _buildSliderCard(title: "Сглаживание RC", commandName: "rc_filter_smoothing", value: _rcFilterSmoothing, min: 0.05, max: 1.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcFilterSmoothing = v), onChangeEnd: (v) => SerialService.sendCommand("rc_filter_smoothing $v")),
 
-        _buildSectionHeader("БЕЗОПАСНОСТЬ И ПИТАНИЕ", Icons.battery_charging_full),
-        _buildSwitchCard(title: "Failsafe по потере RC", commandName: "rc_fs_en", value: _rcFsEn == 1, onChanged: (v) { setState(() => _rcFsEn = v ? 1 : 0); SerialService.sendCommand("rc_fs_en ${_rcFsEn.round()}"); }),
-        _buildSwitchCard(title: "Failsafe по разряду батареи", commandName: "fs_bat_en", value: _fsBatEn == 1, onChanged: (v) { setState(() => _fsBatEn = v ? 1 : 0); SerialService.sendCommand("fs_bat_en ${_fsBatEn.round()}"); }),
+        _buildSectionHeader("ПИТАНИЕ И БАТАРЕЯ", Icons.battery_charging_full),
         _buildSliderCard(title: "Количество ячеек LiPo", commandName: "bat_cells", value: _batCells, min: 1, max: 6, divisions: 5, unit: "S", onChanged: (v) => setState(() => _batCells = v), onChangeEnd: (v) => SerialService.sendCommand("bat_cells ${v.round()}")),
         _buildSliderCard(title: "Порог Failsafe батареи", commandName: "bat_fs_v", value: _batFsV, min: 6.0, max: 25.0, divisions: 190, unit: "В", onChanged: (v) => setState(() => _batFsV = v), onChangeEnd: (v) => SerialService.sendCommand("bat_fs_v $v")),
         _buildSliderCard(title: "Скорость посадки Failsafe", commandName: "fs_speed", value: _fsSpeed, min: 0.2, max: 2.0, divisions: 18, unit: "м/с", onChanged: (v) => setState(() => _fsSpeed = v), onChangeEnd: (v) => SerialService.sendCommand("fs_speed $v")),
@@ -928,10 +1062,6 @@ class _SettingsTabState extends State<SettingsTab> {
         _buildSliderCard(title: "Фильтр акселерометра LPF", commandName: "acc_filter_alpha", value: _accFilterAlpha, min: 0.01, max: 1.0, divisions: 99, unit: "", onChanged: (v) => setState(() => _accFilterAlpha = v), onChangeEnd: (v) => SerialService.sendCommand("acc_filter_alpha $v")),
         _buildSwitchCard(title: "Динамический Notch фильтр", commandName: "filter_dyn_notch_en", value: _filterDynNotchEn == 1, onChanged: (v) { setState(() => _filterDynNotchEn = v ? 1 : 0); SerialService.sendCommand("filter_dyn_notch_en ${_filterDynNotchEn.round()}"); }),
         _buildSliderCard(title: "Центр Notch фильтра", commandName: "filter_notch_freq", value: _filterNotchFreq, min: 30, max: 150, divisions: 120, unit: "Гц", onChanged: (v) => setState(() => _filterNotchFreq = v), onChangeEnd: (v) => SerialService.sendCommand("filter_notch_freq $v")),
-
-        _buildSectionHeader("ПОЛЕТНЫЕ ОГРАНИЧЕНИЯ", Icons.speed),
-        _buildSliderCard(title: "Максимальный угол наклона", commandName: "flight_max_angle", value: _flightMaxAngle, min: 10, max: 80, divisions: 14, unit: "°", onChanged: (v) => setState(() => _flightMaxAngle = v), onChangeEnd: (v) => SerialService.sendCommand("flight_max_angle $v")),
-        _buildSliderCard(title: "Максимальная вертикальная скорость", commandName: "flight_max_z_speed", value: _flightMaxZSpeed, min: 0.5, max: 3.0, divisions: 25, unit: "м/с", onChanged: (v) => setState(() => _flightMaxZSpeed = v), onChangeEnd: (v) => SerialService.sendCommand("flight_max_z_speed $v")),
 
         _buildSectionHeader("ПИД-РЕГУЛЯТОРЫ (PID TUNINGS)", Icons.tune),
         PidAxisCardWidget(
