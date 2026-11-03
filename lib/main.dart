@@ -1,4 +1,4 @@
-// Конфигуратор CFC v2.3
+// Конфигуратор CFC v3.0 (Synced with CLI Reference)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -251,7 +251,7 @@ class _InfoTabState extends State<InfoTab> {
 
       if (parsedSections.isEmpty) {
         parsedSections.add(
-          DocSection(title: 'Руководство пользователя', content: fileContent)
+          DocSection(title: 'Справочник CLI команд', content: fileContent)
         );
       }
 
@@ -272,14 +272,12 @@ class _InfoTabState extends State<InfoTab> {
     }
   }
 
-  // Исправленный и стабильный парсер текстовых блоков и изображений (img1 -> img1.jpg)
   List<Widget> _buildContentWidgets(String rawContent) {
     List<Widget> widgets = [];
     RegExp imgRegex = RegExp(r'\b(img\d+)\b', caseSensitive: false);
     
     int lastMatchEnd = 0;
     for (Match match in imgRegex.allMatches(rawContent)) {
-      // Текст до ключевого слова изображения
       if (match.start > lastMatchEnd) {
         String subText = rawContent.substring(lastMatchEnd, match.start).trim();
         if (subText.isNotEmpty) {
@@ -293,11 +291,9 @@ class _InfoTabState extends State<InfoTab> {
         }
       }
 
-      // Название тега картинки (например, img1)
       String imgTag = match.group(1)!.toLowerCase();
       String assetImagePath = 'assets/$imgTag.jpg';
 
-      // Рендер изображения по ширине с отступами и обработкой ошибок
       widgets.add(
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -330,7 +326,6 @@ class _InfoTabState extends State<InfoTab> {
       lastMatchEnd = match.end;
     }
 
-    // Оставшийся текст после последней картинки
     if (lastMatchEnd < rawContent.length) {
       String remainingText = rawContent.substring(lastMatchEnd).trim();
       if (remainingText.isNotEmpty) {
@@ -369,12 +364,12 @@ class _InfoTabState extends State<InfoTab> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
-                      child: const Text('v.2.9.0 (USB)', style: TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                      child: const Text('v.3.0.0 (CLI)', style: TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
-                const Text('Профессиональный кроссплатформенный мобильный конфигуратор для настройки, телеметрии, калибровки и прошивки FPV-дронов на базе STM32 (архитектура YMFC-32). Поддерживает проводное USB OTG подключение.', style: TextStyle(fontSize: 12, color: Colors.white70, height: 1.4)),
+                const Text('Мобильный конфигуратор для настройки полета по актуальному справочнику CLI команд STM32.', style: TextStyle(fontSize: 12, color: Colors.white70, height: 1.4)),
               ],
             ),
           ),
@@ -382,7 +377,7 @@ class _InfoTabState extends State<InfoTab> {
         const SizedBox(height: 8),
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-          child: Text('РУКОВОДСТВО ПОЛЬЗОВАТЕЛЯ (doc.txt)', style: TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+          child: Text('СПРАВОЧНИК CLI КОМАНД (doc.txt)', style: TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
         ),
         ..._sections.map((sec) => Card(
           margin: const EdgeInsets.only(bottom: 8),
@@ -647,29 +642,31 @@ class _TerminalTabState extends State<TerminalTab> {
 }
 
 // ==========================================
-// ВИДЖЕТ PID КАРТЫ
+// ВИДЖЕТ PID КАРТЫ (СИНХРОНИЗИРОВАН С CLI)
 // ==========================================
-class PidCardWidget extends StatefulWidget {
-  final String title;
-  final String commandName;
-  final double p, i, d;
+class PidAxisCardWidget extends StatefulWidget {
+  final String axisName;
+  final String kpCmd, kiCmd, kdCmd;
+  final double kp, ki, kd;
   final Function(double, double, double) onUpdate;
 
-  const PidCardWidget({
+  const PidAxisCardWidget({
     super.key,
-    required this.title,
-    required this.commandName,
-    required this.p,
-    required this.i,
-    required this.d,
+    required this.axisName,
+    required this.kpCmd,
+    required this.kiCmd,
+    required this.kdCmd,
+    required this.kp,
+    required this.ki,
+    required this.kd,
     required this.onUpdate,
   });
 
   @override
-  State<PidCardWidget> createState() => _PidCardWidgetState();
+  State<PidAxisCardWidget> createState() => _PidAxisCardWidgetState();
 }
 
-class _PidCardWidgetState extends State<PidCardWidget> {
+class _PidAxisCardWidgetState extends State<PidAxisCardWidget> {
   late TextEditingController _pController;
   late TextEditingController _iController;
   late TextEditingController _dController;
@@ -677,17 +674,17 @@ class _PidCardWidgetState extends State<PidCardWidget> {
   @override
   void initState() {
     super.initState();
-    _pController = TextEditingController(text: widget.p.toString());
-    _iController = TextEditingController(text: widget.i.toString());
-    _dController = TextEditingController(text: widget.d.toString());
+    _pController = TextEditingController(text: widget.kp.toString());
+    _iController = TextEditingController(text: widget.ki.toString());
+    _dController = TextEditingController(text: widget.kd.toString());
   }
 
   @override
-  void didUpdateWidget(covariant PidCardWidget oldWidget) {
+  void didUpdateWidget(covariant PidAxisCardWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.p != widget.p) _pController.text = widget.p.toString();
-    if (oldWidget.i != widget.i) _iController.text = widget.i.toString();
-    if (oldWidget.d != widget.d) _dController.text = widget.d.toString();
+    if (oldWidget.kp != widget.kp) _pController.text = widget.kp.toString();
+    if (oldWidget.ki != widget.ki) _iController.text = widget.ki.toString();
+    if (oldWidget.kd != widget.kd) _dController.text = widget.kd.toString();
   }
 
   @override
@@ -706,20 +703,20 @@ class _PidCardWidgetState extends State<PidCardWidget> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(widget.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            Text(widget.axisName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
             const SizedBox(height: 2),
-            Text(widget.commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace')),
+            Text("${widget.kpCmd} / ${widget.kiCmd} / ${widget.kdCmd}", style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 9, fontFamily: 'monospace')),
             const SizedBox(height: 8),
             Row(
               children: [
                 Expanded(
                   child: TextField(
                     controller: _pController,
-                    decoration: const InputDecoration(labelText: 'P', isDense: true),
+                    decoration: const InputDecoration(labelText: 'Kp', isDense: true),
                     keyboardType: TextInputType.number,
                     onSubmitted: (val) {
                       double? np = double.tryParse(val);
-                      if (np != null) widget.onUpdate(np, widget.i, widget.d);
+                      if (np != null) widget.onUpdate(np, widget.ki, widget.kd);
                     },
                   ),
                 ),
@@ -727,11 +724,11 @@ class _PidCardWidgetState extends State<PidCardWidget> {
                 Expanded(
                   child: TextField(
                     controller: _iController,
-                    decoration: const InputDecoration(labelText: 'I', isDense: true),
+                    decoration: const InputDecoration(labelText: 'Ki', isDense: true),
                     keyboardType: TextInputType.number,
                     onSubmitted: (val) {
                       double? ni = double.tryParse(val);
-                      if (ni != null) widget.onUpdate(widget.p, ni, widget.d);
+                      if (ni != null) widget.onUpdate(widget.kp, ni, widget.kd);
                     },
                   ),
                 ),
@@ -739,11 +736,11 @@ class _PidCardWidgetState extends State<PidCardWidget> {
                 Expanded(
                   child: TextField(
                     controller: _dController,
-                    decoration: const InputDecoration(labelText: 'D', isDense: true),
+                    decoration: const InputDecoration(labelText: 'Kd', isDense: true),
                     keyboardType: TextInputType.number,
                     onSubmitted: (val) {
                       double? nd = double.tryParse(val);
-                      if (nd != null) widget.onUpdate(widget.p, widget.i, nd);
+                      if (nd != null) widget.onUpdate(widget.kp, widget.ki, nd);
                     },
                   ),
                 ),
@@ -767,39 +764,53 @@ class SettingsTab extends StatefulWidget {
 }
 
 class _SettingsTabState extends State<SettingsTab> {
-  int _flightMode = 0; 
-  int _filterMode = 1; 
-  double _dynamicNotchEnabled = 1;
+  // RTX параметры
+  double _rtxEn = 1;
+  double _rtxBand = 4;
+  double _rtxChan = 0;
+  double _rtxSf = 7;
+  double _rtxBw = 7;
+  double _rtxCr = 1;
+  double _rtxPower = 14;
 
-  double _fsRcEn = 1;
-  double _fsBattEn = 1;
-  double _batteryCells = 0;
-  double _battFsV = 14.0;
+  // RC параметры
+  double _rcRate = 0.40;
+  double _rcSuperExpo = 0.05;
+  double _rcStickExpo = 0.50;
+  double _rcYawRate = 0.35;
+  double _rcYawSuperExpo = 0.05;
+  double _rcYawExpo = 0.40;
+  double _rcDeadband = 20.0;
+  double _rcHorizonTransition = 0.75;
+  double _rcFilterSmoothing = 0.30;
+
+  // Безопасность и питание
+  double _rcFsEn = 1;
+  double _fsBatEn = 1;
+  double _batCells = 4;
+  double _batFsV = 14.0;
   double _fsSpeed = 0.8;
 
-  double _lpfGyroAlpha = 0.40;
-  double _lpfAccelAlpha = 0.15;
-  double _notchCenterFreq = 65.0;
-  double _notchBandwidth = 18.0;
-  double _dynNotchMinHz = 45.0;
-  double _dynNotchMaxHz = 120.0;
+  // Лидар
+  double _lidarEn = 1;
+  double _lidarMinAlt = 0.2;
 
-  double _horizonTransition = 0.75;
-  double _horizonTrainerGain = 0.15;
-  double _horizonTrainerDead = 0.05;
+  // Фильтры и ограничения
+  double _gyroFilterAlpha = 0.40;
+  double _accFilterAlpha = 0.15;
+  double _filterDynNotchEn = 1;
+  double _filterNotchFreq = 65.0;
+  double _filterNotchBw = 18.0;
+  double _filterDynMinHz = 45.0;
+  double _filterDynMaxHz = 120.0;
+  double _flightMaxAngle = 25.0;
+  double _flightMaxZSpeed = 1.5;
 
-  double _rcRate = 0.40, _superExpo = 0.05, _stickExpo = 0.50;
-  double _yawRcRate = 0.35, _yawSuperExpo = 0.05, _yawExpo = 0.40;
-  double _deadband = 10.0;
-  double _rcSmoothingAlpha = 0.30;
-
-  double _maxAngleDeg = 25.0;
-  double _maxVz = 1.5;
-
-  double _rollP = 0.50, _rollI = 0.015, _rollD = 0.02;
-  double _pitchP = 0.50, _pitchI = 0.015, _pitchD = 0.02;
-  double _yawP = 0.65, _yawI = 0.010, _yawD = 0.0;
-  double _vzP = 7.5, _vzI = 1.3, _vzD = 0.35;
+  // PID регуляторы
+  double _rollKp = 0.50, _rollKi = 0.015, _rollKd = 0.02;
+  double _pitchKp = 0.50, _pitchKi = 0.015, _pitchKd = 0.02;
+  double _yawKp = 0.65, _yawKi = 0.010, _yawKd = 0.0;
+  double _vzKp = 7.5, _vzKi = 1.3, _vzKd = 0.35;
 
   Widget _buildSectionHeader(String title, IconData icon) {
     return Padding(
@@ -857,47 +868,6 @@ class _SettingsTabState extends State<SettingsTab> {
     );
   }
 
-  Widget _buildSegmentedChoiceCard({
-    required String title,
-    required String commandName,
-    required List<String> options,
-    required int selectedIndex,
-    required ValueChanged<int> onSelected,
-  }) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-            Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace')),
-            const SizedBox(height: 10),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                return ToggleButtons(
-                  isSelected: List.generate(options.length, (i) => i == selectedIndex),
-                  onPressed: (index) {
-                    onSelected(index);
-                  },
-                  borderRadius: BorderRadius.circular(10),
-                  selectedColor: Colors.white,
-                  fillColor: Colors.blueAccent,
-                  color: Colors.white70,
-                  constraints: BoxConstraints(minHeight: 36, minWidth: (constraints.maxWidth - (options.length - 1)) / options.length),
-                  children: options.map((opt) => Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Text(opt, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                  )).toList(),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildSwitchCard({
     required String title,
     required String commandName,
@@ -929,156 +899,86 @@ class _SettingsTabState extends State<SettingsTab> {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
-        _buildSectionHeader("ОСНОВНЫЕ РЕЖИМЫ", Icons.flight),
-        _buildSegmentedChoiceCard(
-          title: "Полетный режим",
-          commandName: "flight_mode",
-          options: const ["Angle", "Acro", "Horizon"],
-          selectedIndex: _flightMode,
-          onSelected: (val) {
-            setState(() => _flightMode = val);
-            SerialService.sendCommand("flight_mode $val");
+        _buildSectionHeader("РАДИОМОДУЛЬ RTX (SPI)", Icons.wifi),
+        _buildSwitchCard(title: "Включить RTX модуль", commandName: "rtx_en", value: _rtxEn == 1, onChanged: (v) { setState(() => _rtxEn = v ? 1 : 0); SerialService.sendCommand("rtx_en ${_rtxEn.round()}"); }),
+        _buildSliderCard(title: "Диапазон частот", commandName: "rtx_band", value: _rtxBand, min: 1, max: 9, divisions: 8, unit: "", onChanged: (v) => setState(() => _rtxBand = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_band ${v.round()}")),
+        _buildSliderCard(title: "Канал связи", commandName: "rtx_chan", value: _rtxChan, min: 0, max: 99, divisions: 99, unit: "", onChanged: (v) => setState(() => _rtxChan = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_chan ${v.round()}")),
+        _buildSliderCard(title: "Spreading Factor (SF)", commandName: "rtx_sf", value: _rtxSf, min: 5, max: 12, divisions: 7, unit: "", onChanged: (v) => setState(() => _rtxSf = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_sf ${v.round()}")),
+        _buildSliderCard(title: "Полоса пропускания (BW)", commandName: "rtx_bw", value: _rtxBw, min: 0, max: 9, divisions: 9, unit: "", onChanged: (v) => setState(() => _rtxBw = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_bw ${v.round()}")),
+        _buildSliderCard(title: "Мощность передачи", commandName: "rtx_power", value: _rtxPower, min: -9, max: 22, divisions: 31, unit: "dBm", onChanged: (v) => setState(() => _rtxPower = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_power ${v.round()}")),
+
+        _buildSectionHeader("РАДИОУПРАВЛЕНИЕ И ЭКСПОНЕНТЫ", Icons.gamepad),
+        _buildSliderCard(title: "RC Rate (Roll/Pitch)", commandName: "rc_rate", value: _rcRate, min: 0.1, max: 2.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcRate = v), onChangeEnd: (v) => SerialService.sendCommand("rc_rate $v")),
+        _buildSliderCard(title: "RC Super Expo", commandName: "rc_super_expo", value: _rcSuperExpo, min: 0.0, max: 0.9, divisions: 18, unit: "", onChanged: (v) => setState(() => _rcSuperExpo = v), onChangeEnd: (v) => SerialService.sendCommand("rc_super_expo $v")),
+        _buildSliderCard(title: "RC Stick Expo", commandName: "rc_stick_expo", value: _rcStickExpo, min: 0.0, max: 1.0, divisions: 20, unit: "", onChanged: (v) => setState(() => _rcStickExpo = v), onChangeEnd: (v) => SerialService.sendCommand("rc_stick_expo $v")),
+        _buildSliderCard(title: "Yaw Rate", commandName: "rc_yaw_rate", value: _rcYawRate, min: 0.1, max: 2.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcYawRate = v), onChangeEnd: (v) => SerialService.sendCommand("rc_yaw_rate $v")),
+        _buildSliderCard(title: "Мертвая зона стиков", commandName: "rc_deadband", value: _rcDeadband, min: 0, max: 50, divisions: 50, unit: "PWM", onChanged: (v) => setState(() => _rcDeadband = v), onChangeEnd: (v) => SerialService.sendCommand("rc_deadband $v")),
+        _buildSliderCard(title: "Сглаживание RC", commandName: "rc_filter_smoothing", value: _rcFilterSmoothing, min: 0.05, max: 1.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcFilterSmoothing = v), onChangeEnd: (v) => SerialService.sendCommand("rc_filter_smoothing $v")),
+
+        _buildSectionHeader("БЕЗОПАСНОСТЬ И ПИТАНИЕ", Icons.battery_charging_full),
+        _buildSwitchCard(title: "Failsafe по потере RC", commandName: "rc_fs_en", value: _rcFsEn == 1, onChanged: (v) { setState(() => _rcFsEn = v ? 1 : 0); SerialService.sendCommand("rc_fs_en ${_rcFsEn.round()}"); }),
+        _buildSwitchCard(title: "Failsafe по разряду батареи", commandName: "fs_bat_en", value: _fsBatEn == 1, onChanged: (v) { setState(() => _fsBatEn = v ? 1 : 0); SerialService.sendCommand("fs_bat_en ${_fsBatEn.round()}"); }),
+        _buildSliderCard(title: "Количество ячеек LiPo", commandName: "bat_cells", value: _batCells, min: 1, max: 6, divisions: 5, unit: "S", onChanged: (v) => setState(() => _batCells = v), onChangeEnd: (v) => SerialService.sendCommand("bat_cells ${v.round()}")),
+        _buildSliderCard(title: "Порог Failsafe батареи", commandName: "bat_fs_v", value: _batFsV, min: 6.0, max: 25.0, divisions: 190, unit: "В", onChanged: (v) => setState(() => _batFsV = v), onChangeEnd: (v) => SerialService.sendCommand("bat_fs_v $v")),
+        _buildSliderCard(title: "Скорость посадки Failsafe", commandName: "fs_speed", value: _fsSpeed, min: 0.2, max: 2.0, divisions: 18, unit: "м/с", onChanged: (v) => setState(() => _fsSpeed = v), onChangeEnd: (v) => SerialService.sendCommand("fs_speed $v")),
+
+        _buildSectionHeader("ЛИДАР И ФИЛЬТРЫ СЕНСОРОВ", Icons.waves),
+        _buildSwitchCard(title: "Включить лидар VL53L1X", commandName: "lidar_en", value: _lidarEn == 1, onChanged: (v) { setState(() => _lidarEn = v ? 1 : 0); SerialService.sendCommand("lidar_en ${_lidarEn.round()}"); }),
+        _buildSliderCard(title: "Фильтр гироскопа LPF", commandName: "gyro_filter_alpha", value: _gyroFilterAlpha, min: 0.05, max: 1.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _gyroFilterAlpha = v), onChangeEnd: (v) => SerialService.sendCommand("gyro_filter_alpha $v")),
+        _buildSliderCard(title: "Фильтр акселерометра LPF", commandName: "acc_filter_alpha", value: _accFilterAlpha, min: 0.01, max: 1.0, divisions: 99, unit: "", onChanged: (v) => setState(() => _accFilterAlpha = v), onChangeEnd: (v) => SerialService.sendCommand("acc_filter_alpha $v")),
+        _buildSwitchCard(title: "Динамический Notch фильтр", commandName: "filter_dyn_notch_en", value: _filterDynNotchEn == 1, onChanged: (v) { setState(() => _filterDynNotchEn = v ? 1 : 0); SerialService.sendCommand("filter_dyn_notch_en ${_filterDynNotchEn.round()}"); }),
+        _buildSliderCard(title: "Центр Notch фильтра", commandName: "filter_notch_freq", value: _filterNotchFreq, min: 30, max: 150, divisions: 120, unit: "Гц", onChanged: (v) => setState(() => _filterNotchFreq = v), onChangeEnd: (v) => SerialService.sendCommand("filter_notch_freq $v")),
+
+        _buildSectionHeader("ПОЛЕТНЫЕ ОГРАНИЧЕНИЯ", Icons.speed),
+        _buildSliderCard(title: "Максимальный угол наклона", commandName: "flight_max_angle", value: _flightMaxAngle, min: 10, max: 80, divisions: 14, unit: "°", onChanged: (v) => setState(() => _flightMaxAngle = v), onChangeEnd: (v) => SerialService.sendCommand("flight_max_angle $v")),
+        _buildSliderCard(title: "Максимальная вертикальная скорость", commandName: "flight_max_z_speed", value: _flightMaxZSpeed, min: 0.5, max: 3.0, divisions: 25, unit: "м/с", onChanged: (v) => setState(() => _flightMaxZSpeed = v), onChangeEnd: (v) => SerialService.sendCommand("flight_max_z_speed $v")),
+
+        _buildSectionHeader("ПИД-РЕГУЛЯТОРЫ (PID TUNINGS)", Icons.tune),
+        PidAxisCardWidget(
+          axisName: "Roll Axis (Rate)",
+          kpCmd: "roll_kp", kiCmd: "roll_ki", kdCmd: "roll_kd",
+          kp: _rollKp, ki: _rollKi, kd: _rollKd,
+          onUpdate: (p, i, d) {
+            setState(() { _rollKp = p; _rollKi = i; _rollKd = d; });
+            SerialService.sendCommand("roll_kp $p");
+            SerialService.sendCommand("roll_ki $i");
+            SerialService.sendCommand("roll_kd $d");
           },
         ),
-        _buildSegmentedChoiceCard(
-          title: "Режим фильтрации",
-          commandName: "filter_mode",
-          options: const ["Off", "LPF", "LPF+Notch", "LPF+DynNotch"],
-          selectedIndex: _filterMode,
-          onSelected: (val) {
-            setState(() => _filterMode = val);
-            SerialService.sendCommand("filter_mode $val");
+        PidAxisCardWidget(
+          axisName: "Pitch Axis (Rate)",
+          kpCmd: "pitch_kp", kiCmd: "pitch_ki", kdCmd: "pitch_kd",
+          kp: _pitchKp, ki: _pitchKi, kd: _pitchKd,
+          onUpdate: (p, i, d) {
+            setState(() { _pitchKp = p; _pitchKi = i; _pitchKd = d; });
+            SerialService.sendCommand("pitch_kp $p");
+            SerialService.sendCommand("pitch_ki $i");
+            SerialService.sendCommand("pitch_kd $d");
           },
         ),
-        _buildSwitchCard(
-          title: "Динамический notch фильтр",
-          commandName: "dynamic_notch_enabled",
-          value: _dynamicNotchEnabled == 1,
-          onChanged: (val) {
-            setState(() => _dynamicNotchEnabled = val ? 1 : 0);
-            SerialService.sendCommand("dynamic_notch_enabled ${_dynamicNotchEnabled.round()}");
+        PidAxisCardWidget(
+          axisName: "Yaw Axis (Rate)",
+          kpCmd: "yaw_kp", kiCmd: "yaw_ki", kdCmd: "yaw_kd",
+          kp: _yawKp, ki: _yawKi, kd: _yawKd,
+          onUpdate: (p, i, d) {
+            setState(() { _yawKp = p; _yawKi = i; _yawKd = d; });
+            SerialService.sendCommand("yaw_kp $p");
+            SerialService.sendCommand("yaw_ki $i");
+            SerialService.sendCommand("yaw_kd $d");
+          },
+        ),
+        PidAxisCardWidget(
+          axisName: "Vertical Speed Axis (Vz)",
+          kpCmd: "vz_kp", kiCmd: "vz_ki", kdCmd: "vz_kd",
+          kp: _vzKp, ki: _vzKi, kd: _vzKd,
+          onUpdate: (p, i, d) {
+            setState(() { _vzKp = p; _vzKi = i; _vzKd = d; });
+            SerialService.sendCommand("vz_kp $p");
+            SerialService.sendCommand("vz_ki $i");
+            SerialService.sendCommand("vz_kd $d");
           },
         ),
 
-        _buildSectionHeader("БЕЗОПАСНОСТЬ И БАТАРЕЯ", Icons.battery_charging_full),
-        _buildSwitchCard(
-          title: "Failsafe по радиосвязи",
-          commandName: "fs_rc_en",
-          value: _fsRcEn == 1,
-          onChanged: (val) {
-            setState(() => _fsRcEn = val ? 1 : 0);
-            SerialService.sendCommand("fs_rc_en ${_fsRcEn.round()}");
-          },
-        ),
-        _buildSwitchCard(
-          title: "Failsafe по батарее",
-          commandName: "fs_batt_en",
-          value: _fsBattEn == 1,
-          onChanged: (val) {
-            setState(() => _fsBattEn = val ? 1 : 0);
-            SerialService.sendCommand("fs_batt_en ${_fsBattEn.round()}");
-          },
-        ),
-        _buildSegmentedChoiceCard(
-          title: "Ячейки батареи",
-          commandName: "battery_cells",
-          options: const ["Авто", "2S", "3S", "4S", "5S", "6S"],
-          selectedIndex: _batteryCells.round(),
-          onSelected: (val) {
-            setState(() => _batteryCells = val.toDouble());
-            SerialService.sendCommand("battery_cells $val");
-          },
-        ),
-        _buildSliderCard(title: "Порог разряда батареи", commandName: "fs_batt_v", value: _battFsV, min: 6.0, max: 25.0, divisions: 190, unit: "В", onChanged: (v) => setState(() => _battFsV = v), onChangeEnd: (v) => SerialService.sendCommand("fs_batt_v $v")),
-        _buildSliderCard(title: "Скорость снижения Failsafe", commandName: "fs_speed", value: _fsSpeed, min: 0.2, max: 2.0, divisions: 18, unit: "м/с", onChanged: (v) => setState(() => _fsSpeed = v), onChangeEnd: (v) => SerialService.sendCommand("fs_speed $v")),
-
-        _buildSectionHeader("ФИЛЬТРЫ СЕНСОРОВ", Icons.waves),
-        _buildSliderCard(title: "Фильтр гироскопа LPF", commandName: "lpf_gyro", value: _lpfGyroAlpha, min: 0.05, max: 1.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _lpfGyroAlpha = v), onChangeEnd: (v) => SerialService.sendCommand("lpf_gyro $v")),
-        _buildSliderCard(title: "Фильтр акселерометра LPF", commandName: "lpf_accel", value: _lpfAccelAlpha, min: 0.01, max: 1.0, divisions: 99, unit: "", onChanged: (v) => setState(() => _lpfAccelAlpha = v), onChangeEnd: (v) => SerialService.sendCommand("lpf_accel $v")),
-        _buildSliderCard(title: "Notch: Центр", commandName: "notch_center_freq", value: _notchCenterFreq, min: 30, max: 150, divisions: 120, unit: "Гц", onChanged: (v) => setState(() => _notchCenterFreq = v), onChangeEnd: (v) => SerialService.sendCommand("notch_center_freq $v")),
-        _buildSliderCard(title: "Notch: Ширина", commandName: "notch_bandwidth", value: _notchBandwidth, min: 5, max: 50, divisions: 45, unit: "Гц", onChanged: (v) => setState(() => _notchBandwidth = v), onChangeEnd: (v) => SerialService.sendCommand("notch_bandwidth $v")),
-        _buildSliderCard(title: "Dyn Notch Мин", commandName: "dyn_notch_min_hz", value: _dynNotchMinHz, min: 20, max: 100, divisions: 16, unit: "Гц", onChanged: (v) => setState(() => _dynNotchMinHz = v), onChangeEnd: (v) => SerialService.sendCommand("dyn_notch_min_hz $v")),
-        _buildSliderCard(title: "Dyn Notch Макс", commandName: "dyn_notch_max_hz", value: _dynNotchMaxHz, min: 80, max: 200, divisions: 24, unit: "Гц", onChanged: (v) => setState(() => _dynNotchMaxHz = v), onChangeEnd: (v) => SerialService.sendCommand("dyn_notch_max_hz $v")),
-
-        _buildSectionHeader("РЕЖИМ HORIZON", Icons.threesixty),
-        _buildSliderCard(title: "Порог перехода Horizon", commandName: "horizon_transition", value: _horizonTransition, min: 0.0, max: 1.0, divisions: 20, unit: "", onChanged: (v) => setState(() => _horizonTransition = v), onChangeEnd: (v) => SerialService.sendCommand("horizon_transition $v")),
-        _buildSliderCard(title: "Усиление Trainer", commandName: "horizon_trainer_gain", value: _horizonTrainerGain, min: 0.0, max: 1.0, divisions: 20, unit: "", onChanged: (v) => setState(() => _horizonTrainerGain = v), onChangeEnd: (v) => SerialService.sendCommand("horizon_trainer_gain $v")),
-        _buildSliderCard(title: "Мертвая зона Trainer", commandName: "horizon_trainer_dead", value: _horizonTrainerDead, min: 0.0, max: 0.5, divisions: 25, unit: "", onChanged: (v) => setState(() => _horizonTrainerDead = v), onChangeEnd: (v) => SerialService.sendCommand("horizon_trainer_dead $v")),
-
-        _buildSectionHeader("УПРАВЛЕНИЕ И ЭКСПОНЕНТЫ", Icons.gamepad),
-        _buildSliderCard(title: "Крен/Тангаж: Rate", commandName: "rc_rate", value: _rcRate, min: 0.1, max: 2.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcRate = v), onChangeEnd: (v) => SerialService.sendCommand("rc_rate $v")),
-        _buildSliderCard(title: "Крен/Тангаж: Super Expo", commandName: "super_expo", value: _superExpo, min: 0.0, max: 0.9, divisions: 18, unit: "", onChanged: (v) => setState(() => _superExpo = v), onChangeEnd: (v) => SerialService.sendCommand("super_expo $v")),
-        _buildSliderCard(title: "Крен/Тангаж: Stick Expo", commandName: "stick_expo", value: _stickExpo, min: 0.0, max: 1.0, divisions: 20, unit: "", onChanged: (v) => setState(() => _stickExpo = v), onChangeEnd: (v) => SerialService.sendCommand("stick_expo $v")),
-        _buildSliderCard(title: "Рыскание (Yaw): Rate", commandName: "yaw_rc_rate", value: _yawRcRate, min: 0.1, max: 2.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _yawRcRate = v), onChangeEnd: (v) => SerialService.sendCommand("yaw_rc_rate $v")),
-        _buildSliderCard(title: "Рыскание (Yaw): Super Expo", commandName: "yaw_super_expo", value: _yawSuperExpo, min: 0.0, max: 0.9, divisions: 18, unit: "", onChanged: (v) => setState(() => _yawSuperExpo = v), onChangeEnd: (v) => SerialService.sendCommand("yaw_super_expo $v")),
-        _buildSliderCard(title: "Рыскание (Yaw): Expo", commandName: "yaw_expo", value: _yawExpo, min: 0.0, max: 1.0, divisions: 20, unit: "", onChanged: (v) => setState(() => _yawExpo = v), onChangeEnd: (v) => SerialService.sendCommand("yaw_expo $v")),
-        _buildSliderCard(title: "Мертвая зона стиков", commandName: "deadband", value: _deadband, min: 0, max: 50, divisions: 50, unit: "", onChanged: (v) => setState(() => _deadband = v), onChangeEnd: (v) => SerialService.sendCommand("deadband ${v.round()}")),
-        _buildSliderCard(title: "Сглаживание RC", commandName: "rc_smoothing_alpha", value: _rcSmoothingAlpha, min: 0.05, max: 1.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcSmoothingAlpha = v), onChangeEnd: (v) => SerialService.sendCommand("rc_smoothing_alpha $v")),
-
-        _buildSectionHeader("ОГРАНИЧЕНИЯ ПОЛЕТА", Icons.speed),
-        _buildSliderCard(title: "Максимальный угол наклона", commandName: "max_angle_deg", value: _maxAngleDeg, min: 10, max: 80, divisions: 14, unit: "°", onChanged: (v) => setState(() => _maxAngleDeg = v), onChangeEnd: (v) => SerialService.sendCommand("max_angle_deg ${v.round()}")),
-        _buildSliderCard(title: "Максимальная вертикальная скорость", commandName: "max_vz", value: _maxVz, min: 0.5, max: 3.0, divisions: 25, unit: "м/с", onChanged: (v) => setState(() => _maxVz = v), onChangeEnd: (v) => SerialService.sendCommand("max_vz $v")),
-
-        _buildSectionHeader("PID РЕГУЛЯТОРЫ", Icons.tune),
-        PidCardWidget(title: "Roll PID", commandName: "pid_roll", p: _rollP, i: _rollI, d: _rollD, onUpdate: (p, i, d) {
-          setState(() { _rollP = p; _rollI = i; _rollD = d; });
-          SerialService.sendCommand("pid_roll $p $i $d");
-        }),
-        PidCardWidget(title: "Pitch PID", commandName: "pid_pitch", p: _pitchP, i: _pitchI, d: _pitchD, onUpdate: (p, i, d) {
-          setState(() { _pitchP = p; _pitchI = i; _pitchD = d; });
-          SerialService.sendCommand("pid_pitch $p $i $d");
-        }),
-        PidCardWidget(title: "Yaw PID", commandName: "pid_yaw", p: _yawP, i: _yawI, d: _yawD, onUpdate: (p, i, d) {
-          setState(() { _yawP = p; _yawI = i; _yawD = d; });
-          SerialService.sendCommand("pid_yaw $p $i $d");
-        }),
-        PidCardWidget(title: "Vertical VZ PID", commandName: "pid_vz", p: _vzP, i: _vzI, d: _vzD, onUpdate: (p, i, d) {
-          setState(() { _vzP = p; _vzI = i; _vzD = d; });
-          SerialService.sendCommand("pid_vz $p $i $d");
-        }),
-
-        const SizedBox(height: 16),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12.0),
-          child: ElevatedButton.icon(
-            onPressed: () {
-              if (!SerialService.isConnected) {
-                showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
-              } else {
-                SerialService.sendCommand("save_profile");
-                showAppDialog(context, "Успех", "Значения успешно применены и переданы профилем!");
-              }
-            },
-            icon: const Icon(Icons.save, color: Colors.white),
-            label: const Text("Применить значения и передать профилем", style: TextStyle(color: Colors.white)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blueAccent,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12.0),
-          child: ElevatedButton.icon(
-            onPressed: () {
-              if (!SerialService.isConnected) {
-                showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
-              } else {
-                SerialService.sendCommand("reset");
-                showAppDialog(context, "Сброс", "Настройки сброшены в заводские!");
-              }
-            },
-            icon: const Icon(Icons.restore, color: Colors.white),
-            label: const Text("Сбросить в заводские настройки", style: TextStyle(color: Colors.white)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade900,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          ),
-        ),
         const SizedBox(height: 24),
       ],
     );
@@ -1149,96 +1049,65 @@ class TestsTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
-        _buildSectionHeader("КАЛИБРОВКИ", Icons.explore),
+        _buildSectionHeader("КАЛИБРОВКИ ДАТЧИКОВ", Icons.explore),
         _buildActionCard(
           context: context,
-          title: "Калибровка гиро/акселя",
-          subtitleCommand: "calib",
+          title: "Калибровка гироскопа",
+          subtitleCommand: "cal_gyro",
           icon: Icons.explore_outlined,
           color: Colors.blueAccent,
           onTap: () {
             if (!SerialService.isConnected) {
               showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
             } else {
-              SerialService.sendCommand("calib");
-              showAppDialog(context, "Успех", "Калибровка гиро/акселя успешно запущена!");
+              SerialService.sendCommand("cal_gyro");
+              showAppDialog(context, "Успех", "Калибровка гироскопа запущена!");
             }
           },
         ),
         _buildActionCard(
           context: context,
-          title: "Калибровка ESC",
-          subtitleCommand: "test_esc",
-          icon: Icons.settings_input_component,
-          color: Colors.orangeAccent,
-          onTap: () {
-            if (!SerialService.isConnected) {
-              showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
-            } else {
-              SerialService.sendCommand("test_esc");
-              showAppDialog(context, "Успех", "Режим калибровки ESC активирован!");
-            }
-          },
-        ),
-
-        _buildSectionHeader("ТЕСТЫ", Icons.bolt),
-        _buildActionCard(
-          context: context,
-          title: "Тест шумов сенсоров",
-          subtitleCommand: "test_sensors",
-          icon: Icons.graphic_eq,
+          title: "Калибровка акселерометра",
+          subtitleCommand: "cal_acc",
+          icon: Icons.grid_view,
           color: Colors.cyanAccent,
           onTap: () {
             if (!SerialService.isConnected) {
               showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
             } else {
-              SerialService.sendCommand("test_sensors");
-              showAppDialog(context, "Тест", "Диагностика шумов сенсоров выполнена.");
+              SerialService.sendCommand("cal_acc");
+              showAppDialog(context, "Успех", "Калибровка акселерометра запущена!");
             }
           },
         ),
         _buildActionCard(
           context: context,
-          title: "Тест моторов 10%",
-          subtitleCommand: "test_motor",
-          icon: Icons.toys,
-          color: Colors.amberAccent,
+          title: "Калибровка лидара (Xtalk)",
+          subtitleCommand: "cal_lidar",
+          icon: Icons.radar,
+          color: Colors.orangeAccent,
           onTap: () {
             if (!SerialService.isConnected) {
               showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
             } else {
-              SerialService.sendCommand("test_motor");
-              showAppDialog(context, "Тест", "Тест моторов (10%) отправлен на контроллер.");
+              SerialService.sendCommand("cal_lidar");
+              showAppDialog(context, "Успех", "Калибровка лидара запущена!");
             }
           },
         ),
+        _buildSectionHeader("СИСТЕМНЫЕ КОМАНДЫ", Icons.settings),
         _buildActionCard(
           context: context,
-          title: "Тест стабилизации",
-          subtitleCommand: "test_pid",
-          icon: Icons.science_outlined,
-          color: Colors.purpleAccent,
-          onTap: () {
-            if (!SerialService.isConnected) {
-              showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
-            } else {
-              SerialService.sendCommand("test_pid");
-              showAppDialog(context, "Тест", "Тест стабилизации запущен.");
-            }
-          },
-        ),
-        _buildActionCard(
-          context: context,
-          title: "Автоматический полет / Тест",
-          subtitleCommand: "auto",
-          icon: Icons.flight_takeoff,
+          title: "Применить настройки RTX",
+          subtitleCommand: "rtx_write",
+          icon: Icons.save,
           color: Colors.greenAccent,
           onTap: () {
             if (!SerialService.isConnected) {
               showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
             } else {
-              SerialService.sendCommand("auto");
-              showAppDialog(context, "Тест", "Автоматический режим запущен.");
+              SerialService.sendCommand("rtx_write");
+              showAppDialog(context, "Успех", "Настройки радиомодуля применены!");
             }
           },
         ),
@@ -1427,14 +1296,6 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
                   _buildSensorBar("Accel X", SerialService.accelX, -2.0, 2.0, "G", Colors.cyanAccent),
                   _buildSensorBar("Accel Y", SerialService.accelY, -2.0, 2.0, "G", Colors.cyanAccent),
                   _buildSensorBar("Accel Z", SerialService.accelZ, -2.0, 2.0, "G", Colors.cyanAccent),
-
-                  const SizedBox(height: 6),
-                  const Text("MOTORS OUTPUTS", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
-                  const SizedBox(height: 4),
-                  _buildSensorBar("Motor 1 (Front-Left)", SerialService.motor1, 0, 100, "%", Colors.orangeAccent),
-                  _buildSensorBar("Motor 2 (Front-Right)", SerialService.motor2, 0, 100, "%", Colors.orangeAccent),
-                  _buildSensorBar("Motor 3 (Back-Right)", SerialService.motor3, 0, 100, "%", Colors.orangeAccent),
-                  _buildSensorBar("Motor 4 (Back-Left)", SerialService.motor4, 0, 100, "%", Colors.orangeAccent),
 
                   const SizedBox(height: 6),
                   const Text("POWER SYSTEM", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
