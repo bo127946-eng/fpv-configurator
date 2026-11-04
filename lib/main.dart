@@ -1,4 +1,4 @@
-// Конфигуратор CFC v3.2
+// Конфигуратор CFC v3.4
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -364,7 +364,7 @@ class _InfoTabState extends State<InfoTab> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
-                      child: const Text('v.3.2.0 (CLI)', style: TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                      child: const Text('v.3.4.0 (CLI)', style: TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
@@ -765,25 +765,30 @@ class SettingsTab extends StatefulWidget {
 
 class _SettingsTabState extends State<SettingsTab> {
   // Полетные параметры и ограничения
-  double _flMode = 0;          // 0-acro, 1-angle, 2-horizon
+  double _flMode = 0;          
   double _flRollMax = 25.0;    
   double _flPitchMax = 25.0;   
   double _flVzSpeedMax = 1.5;  
-  double _flHeightMin = 0.5;   // min=0
+  double _flHeightMin = 0.5;   
 
-  // Аварийная посадка (Failsafe Actions)
+  // Аварийная посадка
   double _fsBatEn = 1;
   double _fsRtxEn = 1;
   double _fsSpiEn = 1;
   double _fsI2cEn = 1;
 
-  // RTX параметры
+  // ПАРАМЕТРЫ РАДИОМОДУЛЯ RTX (SPI)
   double _rtxEn = 1;
   double _rtxBand = 4;
+  double _rtxAddr = 1234;
   double _rtxChan = 0;
   double _rtxSf = 7;
-  double _rtxBw = 7;
+  double _rtxBw = 7; // Индекс полосы (0-9)
+  double _rtxCr = 1;
   double _rtxPower = 14;
+  double _rtxLinkWarnThreshold = 20;
+  double _rtxAfcEn = 1;
+  double _rtxAutoEn = 1;
 
   // RC параметры
   double _rcRate = 0.40;
@@ -810,6 +815,25 @@ class _SettingsTabState extends State<SettingsTab> {
   double _pitchKp = 0.50, _pitchKi = 0.015, _pitchKd = 0.02;
   double _yawKp = 0.65, _yawKi = 0.010, _yawKd = 0.0;
   double _vzKp = 7.5, _vzKi = 1.3, _vzKd = 0.35;
+
+  // Метод расчета чувствительности приемника (LoRa Sensitivity)
+  double _calculateSensitivity() {
+    // Таблица соответствия индекса rtx_bw (0-9) в Герцы (стандартные полосы LoRa)
+    const bwTable = [7800.0, 10400.0, 15600.0, 20800.0, 31250.0, 41700.0, 62500.0, 125000.0, 250000.0, 500000.0];
+    int bwIdx = _rtxBw.round().clamp(0, bwTable.length - 1);
+    double bwHz = bwTable[bwIdx];
+
+    // Таблица SNR по SF (SF5 - SF12)
+    const snrTable = {5: -2.5, 6: -5.0, 7: -7.5, 8: -10.0, 9: -12.5, 10: -15.0, 11: -17.5, 12: -20.0};
+    int sfInt = _rtxSf.round().clamp(5, 12);
+    double snr = snrTable[sfInt] ?? -7.5;
+
+    double nf = 6.0; // Коэффициент шума приемника (dB)
+
+    // Формула: S = -174 + 10 * log10(BW) + NF + SNR
+    double sensitivity = -174.0 + (10.0 * (math.log(bwHz) / math.ln10)) + nf + snr;
+    return sensitivity;
+  }
 
   Widget _buildSectionHeader(String title, IconData icon) {
     return Padding(
@@ -936,6 +960,8 @@ class _SettingsTabState extends State<SettingsTab> {
 
   @override
   Widget build(BuildContext context) {
+    double calculatedSensitivity = _calculateSensitivity();
+
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
@@ -995,7 +1021,6 @@ class _SettingsTabState extends State<SettingsTab> {
           onChangeEnd: (v) => SerialService.sendCommand("fl_height_min $v"),
         ),
 
-        // --- НОВЫЙ БЛОК: АВАРИЙНАЯ ПОСАДКА ---
         _buildSectionHeader("АВАРИЙНАЯ ПОСАДКА", Icons.warning_amber_rounded),
         _buildSwitchCard(
           title: "При разряде батареи",
@@ -1033,15 +1058,153 @@ class _SettingsTabState extends State<SettingsTab> {
             SerialService.sendCommand("fs_i2c_en ${_fsI2cEn.round()}");
           },
         ),
-        // ------------------------------------
 
+        // --- БЛОК РАДИОМОДУЛЯ RTX (SPI) С ИНДИКАТОРОМ ЧУВСТВИТЕЛЬНОСТИ ---
         _buildSectionHeader("РАДИОМОДУЛЬ RTX (SPI)", Icons.wifi),
-        _buildSwitchCard(title: "Включить RTX модуль", commandName: "rtx_en", value: _rtxEn == 1, onChanged: (v) { setState(() => _rtxEn = v ? 1 : 0); SerialService.sendCommand("rtx_en ${_rtxEn.round()}"); }),
-        _buildSliderCard(title: "Диапазон частот", commandName: "rtx_band", value: _rtxBand, min: 1, max: 9, divisions: 8, unit: "", onChanged: (v) => setState(() => _rtxBand = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_band ${v.round()}")),
-        _buildSliderCard(title: "Канал связи", commandName: "rtx_chan", value: _rtxChan, min: 0, max: 99, divisions: 99, unit: "", onChanged: (v) => setState(() => _rtxChan = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_chan ${v.round()}")),
-        _buildSliderCard(title: "Spreading Factor (SF)", commandName: "rtx_sf", value: _rtxSf, min: 5, max: 12, divisions: 7, unit: "", onChanged: (v) => setState(() => _rtxSf = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_sf ${v.round()}")),
-        _buildSliderCard(title: "Полоса пропускания (BW)", commandName: "rtx_bw", value: _rtxBw, min: 0, max: 9, divisions: 9, unit: "", onChanged: (v) => setState(() => _rtxBw = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_bw ${v.round()}")),
-        _buildSliderCard(title: "Мощность передачи", commandName: "rtx_power", value: _rtxPower, min: -9, max: 22, divisions: 31, unit: "dBm", onChanged: (v) => setState(() => _rtxPower = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_power ${v.round()}")),
+        _buildSwitchCard(
+          title: "Включить RTX модуль",
+          commandName: "rtx_en",
+          value: _rtxEn == 1,
+          onChanged: (v) {
+            setState(() => _rtxEn = v ? 1 : 0);
+            SerialService.sendCommand("rtx_en ${_rtxEn.round()}");
+          },
+        ),
+        _buildSliderCard(
+          title: "Частотный диапазон (x100 МГц)",
+          commandName: "rtx_band",
+          value: _rtxBand,
+          min: 1,
+          max: 9,
+          divisions: 8,
+          unit: "",
+          onChanged: (v) => setState(() => _rtxBand = v),
+          onChangeEnd: (v) => SerialService.sendCommand("rtx_band ${v.round()}"),
+        ),
+        _buildSliderCard(
+          title: "Сетевой адрес устройства",
+          commandName: "rtx_addr",
+          value: _rtxAddr,
+          min: 0,
+          max: 65535,
+          divisions: 100,
+          unit: "",
+          onChanged: (v) => setState(() => _rtxAddr = v),
+          onChangeEnd: (v) => SerialService.sendCommand("rtx_addr ${v.round()}"),
+        ),
+        _buildSliderCard(
+          title: "Рабочий канал связи (1 МГц шаг)",
+          commandName: "rtx_chan",
+          value: _rtxChan,
+          min: 0,
+          max: 99,
+          divisions: 99,
+          unit: "",
+          onChanged: (v) => setState(() => _rtxChan = v),
+          onChangeEnd: (v) => SerialService.sendCommand("rtx_chan ${v.round()}"),
+        ),
+        _buildSliderCard(
+          title: "Spreading Factor (SF)",
+          commandName: "rtx_sf",
+          value: _rtxSf,
+          min: 5,
+          max: 12,
+          divisions: 7,
+          unit: "",
+          onChanged: (v) => setState(() => _rtxSf = v),
+          onChangeEnd: (v) => SerialService.sendCommand("rtx_sf ${v.round()}"),
+        ),
+        _buildSliderCard(
+          title: "Полоса пропускания (Bandwidth)",
+          commandName: "rtx_bw",
+          value: _rtxBw,
+          min: 0,
+          max: 9,
+          divisions: 9,
+          unit: "",
+          onChanged: (v) => setState(() => _rtxBw = v),
+          onChangeEnd: (v) => SerialService.sendCommand("rtx_bw ${v.round()}"),
+        ),
+
+        // ИНДИКАТОР РАСЧЕТНОЙ ЧУВСТВИТЕЛЬНОСТИ ПОД ПАРАМЕТРАМИ
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E222B),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.blueAccent.withOpacity(0.3)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.radar, color: Colors.amberAccent, size: 18),
+                  SizedBox(width: 8),
+                  Text("Расчетная чувствительность:", style: TextStyle(fontSize: 12, color: Colors.white70, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              Text(
+                "${calculatedSensitivity.toStringAsFixed(2)} dBm",
+                style: const TextStyle(fontSize: 14, color: Colors.greenAccent, fontFamily: 'monospace', fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+        ),
+
+        _buildSliderCard(
+          title: "Коэффициент кодирования (Coding Rate)",
+          commandName: "rtx_cr",
+          value: _rtxCr,
+          min: 1,
+          max: 4,
+          divisions: 3,
+          unit: "",
+          onChanged: (v) => setState(() => _rtxCr = v),
+          onChangeEnd: (v) => SerialService.sendCommand("rtx_cr ${v.round()}"),
+        ),
+        _buildSliderCard(
+          title: "Мощность передатчика",
+          commandName: "rtx_power",
+          value: _rtxPower,
+          min: -9,
+          max: 22,
+          divisions: 31,
+          unit: "dBm",
+          onChanged: (v) => setState(() => _rtxPower = v),
+          onChangeEnd: (v) => SerialService.sendCommand("rtx_power ${v.round()}"),
+        ),
+        _buildSliderCard(
+          title: "Порог падения качества связи",
+          commandName: "rtx_link_warn_threshold",
+          value: _rtxLinkWarnThreshold,
+          min: 5,
+          max: 90,
+          divisions: 85,
+          unit: "%",
+          onChanged: (v) => setState(() => _rtxLinkWarnThreshold = v),
+          onChangeEnd: (v) => SerialService.sendCommand("rtx_link_warn_threshold ${v.round()}"),
+        ),
+        _buildSwitchCard(
+          title: "Автоматическая подстройка частоты (AFC)",
+          commandName: "rtx_afc_en",
+          value: _rtxAfcEn == 1,
+          onChanged: (v) {
+            setState(() => _rtxAfcEn = v ? 1 : 0);
+            SerialService.sendCommand("rtx_afc_en ${_rtxAfcEn.round()}");
+          },
+        ),
+        _buildSwitchCard(
+          title: "Авто-инициатива с борта при ухудшении связи",
+          commandName: "rtx_auto_en",
+          value: _rtxAutoEn == 1,
+          onChanged: (v) {
+            setState(() => _rtxAutoEn = v ? 1 : 0);
+            SerialService.sendCommand("rtx_auto_en ${_rtxAutoEn.round()}");
+          },
+        ),
+        // -------------------------------------------------------------
 
         _buildSectionHeader("РАДИОУПРАВЛЕНИЕ И ЭКСПОНЕНТЫ", Icons.gamepad),
         _buildSliderCard(title: "RC Rate (Roll/Pitch)", commandName: "rc_rate", value: _rcRate, min: 0.1, max: 2.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcRate = v), onChangeEnd: (v) => SerialService.sendCommand("rc_rate $v")),
