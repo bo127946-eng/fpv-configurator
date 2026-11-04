@@ -1,4 +1,4 @@
-// Конфигуратор CFC v3.5
+// Конфигуратор CFC v3.5 (с интегрированным калькулятором линка)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -63,6 +63,7 @@ class _MainContainerState extends State<MainContainer> {
     const TestsTab(),
     const ThreeDViewTab(),
     const FlasherTab(),
+    const LinkCalculatorTab(), // Новая вкладка калькулятора линка
   ];
 
   @override
@@ -82,16 +83,20 @@ class _MainContainerState extends State<MainContainer> {
         child: SafeArea(
           child: SizedBox(
             height: 60,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildNavItem(0, Icons.info_outline, Icons.info, 'Info'),
-                _buildNavItem(1, Icons.terminal_outlined, Icons.terminal, 'CLI'),
-                _buildNavItem(2, Icons.tune_outlined, Icons.tune, 'Tuning'),
-                _buildNavItem(3, Icons.gavel_outlined, Icons.gavel, 'Tests'),
-                _buildNavItem(4, Icons.threed_rotation_outlined, Icons.threed_rotation, 'Monitor'),
-                _buildNavItem(5, Icons.memory_outlined, Icons.memory, 'Flasher'),
-              ],
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildNavItem(0, Icons.info_outline, Icons.info, 'Info'),
+                  _buildNavItem(1, Icons.terminal_outlined, Icons.terminal, 'CLI'),
+                  _buildNavItem(2, Icons.tune_outlined, Icons.tune, 'Tuning'),
+                  _buildNavItem(3, Icons.gavel_outlined, Icons.gavel, 'Tests'),
+                  _buildNavItem(4, Icons.threed_rotation_outlined, Icons.threed_rotation, 'Monitor'),
+                  _buildNavItem(5, Icons.memory_outlined, Icons.memory, 'Flasher'),
+                  _buildNavItem(6, Icons.wifi_find_outlined, Icons.wifi, 'Link'),
+                ],
+              ),
             ),
           ),
         ),
@@ -101,9 +106,11 @@ class _MainContainerState extends State<MainContainer> {
 
   Widget _buildNavItem(int index, IconData icon, IconData selectedIcon, String label) {
     bool isSelected = _currentIndex == index;
-    return Expanded(
-      child: InkWell(
-        onTap: () => setState(() => _currentIndex = index),
+    return InkWell(
+      onTap: () => setState(() => _currentIndex = index),
+      child: Container(
+        width: 60,
+        alignment: Alignment.center,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -764,33 +771,29 @@ class SettingsTab extends StatefulWidget {
 }
 
 class _SettingsTabState extends State<SettingsTab> {
-  // Полетные параметры и ограничения
   double _flMode = 0;          
   double _flRollMax = 25.0;    
   double _flPitchMax = 25.0;   
   double _flVzSpeedMax = 1.5;  
   double _flHeightMin = 0.5;   
 
-  // Аварийная посадка
   double _fsBatEn = 1;
   double _fsRtxEn = 1;
   double _fsSpiEn = 1;
   double _fsI2cEn = 1;
 
-  // ПАРАМЕТРЫ РАДИОМОДУЛЯ RTX (SPI)
   double _rtxEn = 1;
   double _rtxBand = 4;
   double _rtxAddr = 1234;
   double _rtxChan = 0;
   double _rtxSf = 7;
-  double _rtxBw = 7; // Индекс полосы (0-9)
+  double _rtxBw = 7; 
   double _rtxCr = 1;
   double _rtxPower = 14;
   double _rtxLinkWarnThreshold = 20;
   double _rtxAfcEn = 1;
   double _rtxAutoEn = 1;
 
-  // RC параметры
   double _rcRate = 0.40;
   double _rcSuperExpo = 0.05;
   double _rcStickExpo = 0.50;
@@ -798,25 +801,21 @@ class _SettingsTabState extends State<SettingsTab> {
   double _rcDeadband = 20.0;
   double _rcFilterSmoothing = 0.30;
 
-  // Питание и батарея
   double _batCells = 4;
   double _batFsV = 14.0;
   double _fsSpeed = 0.8;
 
-  // Лидар и фильтры
   double _lidarEn = 1;
   double _gyroFilterAlpha = 0.40;
   double _accFilterAlpha = 0.15;
   double _filterDynNotchEn = 1;
   double _filterNotchFreq = 65.0;
 
-  // PID регуляторы
   double _rollKp = 0.50, _rollKi = 0.015, _rollKd = 0.02;
   double _pitchKp = 0.50, _pitchKi = 0.015, _pitchKd = 0.02;
   double _yawKp = 0.65, _yawKi = 0.010, _yawKd = 0.0;
   double _vzKp = 7.5, _vzKi = 1.3, _vzKd = 0.35;
 
-  // Расчет чувствительности приемника (LoRa Sensitivity)
   double _calculateSensitivity() {
     const bwTable = [7800.0, 10400.0, 15600.0, 20800.0, 31250.0, 41700.0, 62500.0, 125000.0, 250000.0, 500000.0];
     int bwIdx = _rtxBw.round().clamp(0, bwTable.length - 1);
@@ -830,18 +829,15 @@ class _SettingsTabState extends State<SettingsTab> {
     return -174.0 + (10.0 * (math.log(bwHz) / math.ln10)) + nf + snr;
   }
 
-  // Расчет скорости передачи по воздуху (Air Data Rate в bps/kbps)
   double _calculateAirDataRate() {
     const bwTable = [7800.0, 10400.0, 15600.0, 20800.0, 31250.0, 41700.0, 62500.0, 125000.0, 250000.0, 500000.0];
     int bwIdx = _rtxBw.round().clamp(0, bwTable.length - 1);
     double bwHz = bwTable[bwIdx];
 
     int sfInt = _rtxSf.round().clamp(5, 12);
-    int crInt = _rtxCr.round().clamp(1, 4); // Coding Rate 1->4/5, 2->4/6, 3->4/7, 4->4/8
+    int crInt = _rtxCr.round().clamp(1, 4);
 
-    // Формула символьной скорости: Rs = BW / (2^SF)
     double symbolRate = bwHz / math.pow(2, sfInt);
-    // Битрейт: R = SF * (symbolRate) * (4 / (4 + crInt))
     double bitRate = sfInt * symbolRate * (4.0 / (4.0 + crInt));
     return bitRate;
   }
@@ -902,7 +898,6 @@ class _SettingsTabState extends State<SettingsTab> {
     );
   }
 
-  // Виджет прогресс-бара по стилю ползунка без ручки управления
   Widget _buildInfoProgressCard({
     required String title,
     required String subtitle,
@@ -1125,7 +1120,6 @@ class _SettingsTabState extends State<SettingsTab> {
           },
         ),
 
-        // --- БЛОК РАДИОМОДУЛЯ RTX (SPI) С ПРОГРЕСС-БАРАМИ РАСЧЕТОВ ---
         _buildSectionHeader("РАДИОМОДУЛЬ RTX (SPI)", Icons.wifi),
         _buildSwitchCard(
           title: "Включить RTX модуль",
@@ -1192,7 +1186,6 @@ class _SettingsTabState extends State<SettingsTab> {
           onChangeEnd: (v) => SerialService.sendCommand("rtx_bw ${v.round()}"),
         ),
 
-        // 1. Прогресс-бар расчетной чувствительности приемника
         _buildInfoProgressCard(
           title: "Расчетная чувствительность приемника",
           subtitle: "sensitivity_calc",
@@ -1202,7 +1195,6 @@ class _SettingsTabState extends State<SettingsTab> {
           displayValue: "${sensitivity.toStringAsFixed(2)} dBm",
         ),
 
-        // 2. Прогресс-бар расчетной скорости передачи по воздуху
         _buildInfoProgressCard(
           title: "Скорость передачи по воздуху (Air Rate)",
           subtitle: "air_bitrate_calc",
@@ -1263,7 +1255,6 @@ class _SettingsTabState extends State<SettingsTab> {
             SerialService.sendCommand("rtx_auto_en ${_rtxAutoEn.round()}");
           },
         ),
-        // -------------------------------------------------------------
 
         _buildSectionHeader("РАДИОУПРАВЛЕНИЕ И ЭКСПОНЕНТЫ", Icons.gamepad),
         _buildSliderCard(title: "RC Rate (Roll/Pitch)", commandName: "rc_rate", value: _rcRate, min: 0.1, max: 2.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcRate = v), onChangeEnd: (v) => SerialService.sendCommand("rc_rate $v")),
@@ -1332,6 +1323,265 @@ class _SettingsTabState extends State<SettingsTab> {
         ),
 
         const SizedBox(height: 24),
+      ],
+    );
+  }
+}
+
+// ==========================================
+// ВКЛАДКА: КАЛЬКУЛЯТОР ЛИНКА (LinkCalculatorTab)
+// ==========================================
+class LinkCalculatorTab extends StatefulWidget {
+  const LinkCalculatorTab({super.key});
+
+  @override
+  State<LinkCalculatorTab> createState() => _LinkCalculatorTabState();
+}
+
+class _LinkCalculatorTabState extends State<LinkCalculatorTab> {
+  double _freqMhz = 868.0;     
+  double _txPowerDbm = 14.0;   
+  double _sf = 7.0;            
+  double _bwIndex = 7.0;       
+  
+  final double _gTxKharchenko = 5.5; 
+  final double _gRxDipole = 2.15;    
+  
+  double _cableLoss = 1.0;     
+  double _environmentLoss = 15.0; 
+
+  final List<double> _bwTable = [
+    7800.0, 10400.0, 15600.0, 20800.0, 31250.0, 
+    41700.0, 62500.0, 125000.0, 250000.0, 500000.0
+  ];
+
+  final Map<int, double> _snrTable = {
+    5: -2.5, 6: -5.0, 7: -7.5, 8: -10.0, 
+    9: -12.5, 10: -15.0, 11: -17.5, 12: -20.0
+  };
+
+  double _calculateSensitivity() {
+    int bwIdx = _bwIndex.round().clamp(0, _bwTable.length - 1);
+    double bwHz = _bwTable[bwIdx];
+    int sfInt = _sf.round().clamp(5, 12);
+    double snr = _snrTable[sfInt] ?? -7.5;
+    double noiseFigure = 6.0; 
+    
+    return -174.0 + (10.0 * (math.log(bwHz) / math.ln10)) + noiseFigure + snr;
+  }
+
+  Map<String, dynamic> _calculateLinkBudget() {
+    double sensitivity = _calculateSensitivity();
+    double eirp = _txPowerDbm + _gTxKharchenko - _cableLoss;
+    double maxPathLoss = eirp + _gRxDipole - sensitivity - _environmentLoss;
+    if (maxPathLoss < 0) maxPathLoss = 0;
+
+    double freqLog = 20 * (math.log(_freqMhz) / math.ln10);
+    double exponent = (maxPathLoss - 32.44 - freqLog) / 20.0;
+    double distanceKm = math.pow(10.0, exponent).toDouble();
+
+    int sfInt = _sf.round().clamp(5, 12);
+    int bwIdx = _bwIndex.round().clamp(0, _bwTable.length - 1);
+    double bwHz = _bwTable[bwIdx];
+    double symbolRate = bwHz / math.pow(2, sfInt);
+    double bitRate = sfInt * symbolRate * (4.0 / 5.0);
+
+    return {
+      'sensitivity': sensitivity,
+      'eirp': eirp,
+      'maxPathLoss': maxPathLoss,
+      'distanceKm': distanceKm,
+      'bitRate': bitRate,
+    };
+  }
+
+  Widget _buildSectionHeader(String title, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: Colors.amberAccent),
+          const SizedBox(width: 8),
+          Text(title, style: const TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildParamCard({
+    required String title,
+    required String subtitle,
+    required double value,
+    required double min,
+    required double max,
+    required int divisions,
+    required String unit,
+    required ValueChanged<double> onChanged,
+  }) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                      Text(subtitle, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace')),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+                  child: Text("${value.toStringAsFixed(value.truncate() == value ? 0 : 2)} $unit", style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 11)),
+                ),
+              ],
+            ),
+            Slider(value: value, min: min, max: max, divisions: divisions, onChanged: onChanged),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    var results = _calculateLinkBudget();
+    double distKm = results['distanceKm'];
+    String distFormatted = distKm >= 1.0 
+        ? "${distKm.toStringAsFixed(2)} км" 
+        : "${(distKm * 1000).toStringAsFixed(0)} м";
+
+    double bitRate = results['bitRate'];
+    String bitRateStr = bitRate >= 1000 ? "${(bitRate / 1000).toStringAsFixed(1)} kbps" : "${bitRate.toStringAsFixed(0)} bps";
+
+    return ListView(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      children: [
+        _buildSectionHeader("РЕЗУЛЬТАТЫ РАСЧЕТА ЛИНКА", Icons.analytics),
+        
+        Card(
+          color: const Color(0xFF1E222B),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              children: [
+                const Text("ПРОГНОЗИРУЕМАЯ ДАЛЬНОСТЬ СВЯЗИ", style: TextStyle(fontSize: 10, color: Colors.amberAccent, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+                const SizedBox(height: 8),
+                Text(distFormatted, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
+                const SizedBox(height: 12),
+                const Divider(color: Colors.white12),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _resultColumn("Чувствительность", "${(results['sensitivity'] as double).toStringAsFixed(1)} dBm"),
+                    _resultColumn("EIRP Пульта", "${(results['eirp'] as double).toStringAsFixed(1)} dBm"),
+                    _resultColumn("Скорость (Air)", bitRateStr),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        _buildSectionHeader("КОНФИГУРАЦИЯ АНТЕНН И СИСТЕМЫ", Icons.settings_input_antenna),
+        
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Антенная конфигурация", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text("Пульт (Антена Харченко):", style: TextStyle(fontSize: 11, color: Colors.white70)),
+                    Text("+${_gTxKharchenko} dBi (направленная)", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text("Дрон (Штыревой диполь):", style: TextStyle(fontSize: 11, color: Colors.white70)),
+                    Text("+${_gRxDipole} dBi (всенаправленная)", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        _buildParamCard(
+          title: "Рабочая частота",
+          subtitle: "frequency_mhz",
+          value: _freqMhz,
+          min: 100.0,
+          max: 928.0,
+          divisions: 165,
+          unit: "МГц",
+          onChanged: (v) => setState(() => _freqMhz = v),
+        ),
+        _buildParamCard(
+          title: "Мощность передатчика (TX Power)",
+          subtitle: "tx_power_dbm",
+          value: _txPowerDbm,
+          min: 0.0,
+          max: 30.0,
+          divisions: 30,
+          unit: "dBm",
+          onChanged: (v) => setState(() => _txPowerDbm = v),
+        ),
+        _buildParamCard(
+          title: "Spreading Factor (SF)",
+          subtitle: "lora_sf",
+          value: _sf,
+          min: 5.0,
+          max: 12.0,
+          divisions: 7,
+          unit: "",
+          onChanged: (v) => setState(() => _sf = v),
+        ),
+        _buildParamCard(
+          title: "Полоса пропускания (Bandwidth Index)",
+          subtitle: "lora_bw_idx",
+          value: _bwIndex,
+          min: 0.0,
+          max: 9.0,
+          divisions: 9,
+          unit: "(0:7.8кГц - 9:500кГц)",
+          onChanged: (v) => setState(() => _bwIndex = v),
+        ),
+        _buildParamCard(
+          title: "Запас на условия (Margin / Fresnel)",
+          subtitle: "environment_loss",
+          value: _environmentLoss,
+          min: 5.0,
+          max: 30.0,
+          divisions: 25,
+          unit: "dB",
+          onChanged: (v) => setState(() => _environmentLoss = v),
+        ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  Widget _resultColumn(String label, String value) {
+    return Column(
+      children: [
+        Text(label, style: const TextStyle(fontSize: 10, color: Colors.white60)),
+        const SizedBox(height: 2),
+        Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
       ],
     );
   }
