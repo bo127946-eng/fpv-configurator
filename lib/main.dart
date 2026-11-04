@@ -1,4 +1,4 @@
-// Конфигуратор CFC v3.4
+// Конфигуратор CFC v3.5
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -364,7 +364,7 @@ class _InfoTabState extends State<InfoTab> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
-                      child: const Text('v.3.4.0 (CLI)', style: TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                      child: const Text('v.3.5.0 (CLI)', style: TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
@@ -816,23 +816,34 @@ class _SettingsTabState extends State<SettingsTab> {
   double _yawKp = 0.65, _yawKi = 0.010, _yawKd = 0.0;
   double _vzKp = 7.5, _vzKi = 1.3, _vzKd = 0.35;
 
-  // Метод расчета чувствительности приемника (LoRa Sensitivity)
+  // Расчет чувствительности приемника (LoRa Sensitivity)
   double _calculateSensitivity() {
-    // Таблица соответствия индекса rtx_bw (0-9) в Герцы (стандартные полосы LoRa)
     const bwTable = [7800.0, 10400.0, 15600.0, 20800.0, 31250.0, 41700.0, 62500.0, 125000.0, 250000.0, 500000.0];
     int bwIdx = _rtxBw.round().clamp(0, bwTable.length - 1);
     double bwHz = bwTable[bwIdx];
 
-    // Таблица SNR по SF (SF5 - SF12)
     const snrTable = {5: -2.5, 6: -5.0, 7: -7.5, 8: -10.0, 9: -12.5, 10: -15.0, 11: -17.5, 12: -20.0};
     int sfInt = _rtxSf.round().clamp(5, 12);
     double snr = snrTable[sfInt] ?? -7.5;
 
-    double nf = 6.0; // Коэффициент шума приемника (dB)
+    double nf = 6.0;
+    return -174.0 + (10.0 * (math.log(bwHz) / math.ln10)) + nf + snr;
+  }
 
-    // Формула: S = -174 + 10 * log10(BW) + NF + SNR
-    double sensitivity = -174.0 + (10.0 * (math.log(bwHz) / math.ln10)) + nf + snr;
-    return sensitivity;
+  // Расчет скорости передачи по воздуху (Air Data Rate в bps/kbps)
+  double _calculateAirDataRate() {
+    const bwTable = [7800.0, 10400.0, 15600.0, 20800.0, 31250.0, 41700.0, 62500.0, 125000.0, 250000.0, 500000.0];
+    int bwIdx = _rtxBw.round().clamp(0, bwTable.length - 1);
+    double bwHz = bwTable[bwIdx];
+
+    int sfInt = _rtxSf.round().clamp(5, 12);
+    int crInt = _rtxCr.round().clamp(1, 4); // Coding Rate 1->4/5, 2->4/6, 3->4/7, 4->4/8
+
+    // Формула символьной скорости: Rs = BW / (2^SF)
+    double symbolRate = bwHz / math.pow(2, sfInt);
+    // Битрейт: R = SF * (symbolRate) * (4 / (4 + crInt))
+    double bitRate = sfInt * symbolRate * (4.0 / (4.0 + crInt));
+    return bitRate;
   }
 
   Widget _buildSectionHeader(String title, IconData icon) {
@@ -885,6 +896,57 @@ class _SettingsTabState extends State<SettingsTab> {
               ],
             ),
             Slider(value: value, min: min, max: max, divisions: divisions, onChanged: onChanged, onChangeEnd: onChangeEnd),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Виджет прогресс-бара по стилю ползунка без ручки управления
+  Widget _buildInfoProgressCard({
+    required String title,
+    required String subtitle,
+    required double value,
+    required double min,
+    required double max,
+    required String displayValue,
+  }) {
+    double percent = ((value - min) / (max - min)).clamp(0.0, 1.0);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                      Text(subtitle, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace')),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(color: Colors.greenAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+                  child: Text(displayValue, style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 11)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: percent,
+                minHeight: 4,
+                backgroundColor: Colors.white12,
+                color: Colors.blueAccent,
+              ),
+            ),
           ],
         ),
       ),
@@ -960,7 +1022,11 @@ class _SettingsTabState extends State<SettingsTab> {
 
   @override
   Widget build(BuildContext context) {
-    double calculatedSensitivity = _calculateSensitivity();
+    double sensitivity = _calculateSensitivity();
+    double airDataRate = _calculateAirDataRate();
+    String airDataRateStr = airDataRate >= 1000 
+        ? "${(airDataRate / 1000).toStringAsFixed(2)} kbps" 
+        : "${airDataRate.toStringAsFixed(1)} bps";
 
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -1059,7 +1125,7 @@ class _SettingsTabState extends State<SettingsTab> {
           },
         ),
 
-        // --- БЛОК РАДИОМОДУЛЯ RTX (SPI) С ИНДИКАТОРОМ ЧУВСТВИТЕЛЬНОСТИ ---
+        // --- БЛОК РАДИОМОДУЛЯ RTX (SPI) С ПРОГРЕСС-БАРАМИ РАСЧЕТОВ ---
         _buildSectionHeader("РАДИОМОДУЛЬ RTX (SPI)", Icons.wifi),
         _buildSwitchCard(
           title: "Включить RTX модуль",
@@ -1126,31 +1192,24 @@ class _SettingsTabState extends State<SettingsTab> {
           onChangeEnd: (v) => SerialService.sendCommand("rtx_bw ${v.round()}"),
         ),
 
-        // ИНДИКАТОР РАСЧЕТНОЙ ЧУВСТВИТЕЛЬНОСТИ ПОД ПАРАМЕТРАМИ
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1E222B),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.blueAccent.withOpacity(0.3)),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Row(
-                children: [
-                  Icon(Icons.radar, color: Colors.amberAccent, size: 18),
-                  SizedBox(width: 8),
-                  Text("Расчетная чувствительность:", style: TextStyle(fontSize: 12, color: Colors.white70, fontWeight: FontWeight.bold)),
-                ],
-              ),
-              Text(
-                "${calculatedSensitivity.toStringAsFixed(2)} dBm",
-                style: const TextStyle(fontSize: 14, color: Colors.greenAccent, fontFamily: 'monospace', fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
+        // 1. Прогресс-бар расчетной чувствительности приемника
+        _buildInfoProgressCard(
+          title: "Расчетная чувствительность приемника",
+          subtitle: "sensitivity_calc",
+          value: sensitivity,
+          min: -145.0,
+          max: -110.0,
+          displayValue: "${sensitivity.toStringAsFixed(2)} dBm",
+        ),
+
+        // 2. Прогресс-бар расчетной скорости передачи по воздуху
+        _buildInfoProgressCard(
+          title: "Скорость передачи по воздуху (Air Rate)",
+          subtitle: "air_bitrate_calc",
+          value: airDataRate,
+          min: 100.0,
+          max: 37500.0,
+          displayValue: airDataRateStr,
         ),
 
         _buildSliderCard(
