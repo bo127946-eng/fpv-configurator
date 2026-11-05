@@ -1,4 +1,4 @@
-// XFire Ecosystem (Конфигуратор с киберпанк/милитари заставкой)
+// XFire Ecosystem (Простая и лаконичная заставка)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -47,7 +47,7 @@ class MyApp extends StatelessWidget {
 }
 
 // ==========================================
-// КИБЕРПАНК / МИЛИТАРИ ЭКРАН ЗАГРУЗКИ (Splash)
+// ПРОСТАЯ И ЛАКОНИЧНАЯ ЗАСТАВКА (Splash)
 // ==========================================
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -59,41 +59,35 @@ class SplashScreen extends StatefulWidget {
 class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _animation;
-  int _bootStep = 0;
-
-  final List<String> _bootLogs = [
-    "[SYS] Initializing XFire Core v3.5...",
-    "[MCU] Detecting STM32F1xx / F4xx target...",
-    "[RADIO] Calibrating Semtech SX1262 SPI bus...",
-    "[SENSOR] MPU6050 & VL53L1X matrix check...",
-    "[LINK] Secure telemetry channels ready.",
-    "[STATUS] System armed and operational."
-  ];
 
   @override
   void initState() {
     super.initState();
+    // Общая длительность 3 секунды: 1 сек появление -> 1 сек пауза -> 1 сек исчезновение
     _controller = AnimationController(
-      duration: const Duration(seconds: 2),
+      duration: const Duration(seconds: 3),
       vsync: this,
-    )..repeat(reverse: true);
-    _animation = Tween<double>(begin: 0.4, end: 1.0).animate(_controller);
+    );
 
-    _startBootSequence();
-  }
+    // Настраиваем тайминги (Curve) для Fade In (0.0 -> 0.33), паузы (0.33 -> 0.66) и Fade Out (0.66 -> 1.0)
+    _animation = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0), weight: 33.3), // Появление (1 сек)
+      TweenSequenceItem(tween: ConstantTween(1.0), weight: 33.3),          // Показ (1 сек)
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.0), weight: 33.4), // Исчезновение (1 сек)
+    ]).animate(_controller);
 
-  void _startBootSequence() async {
-    for (int i = 0; i < _bootLogs.length; i++) {
-      await Future.delayed(const Duration(milliseconds: 350));
-      if (mounted) setState(() => _bootStep = i);
-    }
-    await Future.delayed(const Duration(milliseconds: 400));
-    if (mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const MainContainer()),
-      );
-    }
+    _controller.forward();
+
+    _controller.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const MainContainer()),
+          );
+        }
+      }
+    });
   }
 
   @override
@@ -105,66 +99,18 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF08080A),
+      backgroundColor: const Color(0xFF0A0A0A),
       body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Киберпанк иконка / логотип
-              FadeTransition(
-                opacity: _animation,
-                child: Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.amberAccent.withOpacity(0.1),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.amberAccent, width: 2),
-                    boxShadow: [
-                      BoxShadow(color: Colors.amberAccent.withOpacity(0.3), blurRadius: 20, spreadRadius: 5)
-                    ],
-                  ),
-                  child: const Icon(Icons.local_fire_department, size: 64, color: Colors.amberAccent),
-                ),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                "XFIRE ECOSYSTEM",
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: 3.0, color: Colors.white),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                "ADVANCED FPV FLIGHT & RADIO SUITE",
-                style: TextStyle(fontSize: 10, letterSpacing: 1.5, color: Colors.amberAccent),
-              ),
-              const SizedBox(height: 48),
-
-              // Терминал инициализации
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.black,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white12),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: List.generate(_bootStep + 1, (index) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 3.0),
-                      child: Text(
-                        _bootLogs[index],
-                        style: const TextStyle(fontFamily: 'monospace', fontSize: 11, color: Colors.greenAccent),
-                      ),
-                    );
-                  }),
-                ),
-              ),
-              const SizedBox(height: 32),
-              const LinearProgressIndicator(color: Colors.amberAccent, backgroundColor: Colors.white12, minHeight: 4),
-            ],
+        child: FadeTransition(
+          opacity: _animation,
+          child: const Text(
+            "XFire",
+            style: TextStyle(
+              fontSize: 42,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 4.0,
+              color: Colors.white,
+            ),
           ),
         ),
       ),
