@@ -1,4 +1,4 @@
-// XFire Ecosystem (Полная версия с двумя загрузчиками, шкалами монитора и настройкой пульта)
+// XFire Ecosystem (Финальная отлаженная версия)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -30,14 +30,14 @@ class MyApp extends StatelessWidget {
         cardTheme: CardTheme(
           color: const Color(0xFF1C1C1E),
           elevation: 2,
-          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: const Color(0xFF242428),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           isDense: true,
         ),
       ),
@@ -68,7 +68,6 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       vsync: this,
     );
 
-    // Задержка 0.5 сек (начало анимации с 0.15 по шкале времени), затем появление, показ и исчезновение
     _animation = TweenSequence<double>([
       TweenSequenceItem(tween: ConstantTween(0.0), weight: 15.0),          // Задержка 0.5 сек
       TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0), weight: 28.3), // Появление (1 сек)
@@ -129,25 +128,25 @@ class _MainContainerState extends State<MainContainer> {
   int _currentIndex = 0;
   
   final List<Widget> _tabs = [
-    const InfoConnectionTab(),  // 0: Инфо + Подключение USB
-    const TerminalTab(),        // 1: CLI
-    const SettingsTab(),        // 2: Настройка полетного контроллера
-    const RadioTab(),           // 3: Радиомодуль RTX + Калькулятор
-    const TestsTab(),           // 4: Тесты и калибровки
-    const RemoteControlTab(),   // 5: Новая вкладка: Настройка и тест пульта
-    const ThreeDViewTab(),      // 6: Монитор со шкалами
-    const FlasherTab(),         // 7: Прошивка (Два загрузчика)
+    const InfoConnectionTab(),  // 0: Инфо
+    const SettingsTab(),        // 1: Полетный контроллер FC
+    const RemoteControlTab(),   // 2: Пульт RC
+    const RadioTab(),           // 3: Радиомодуль RTX
+    const TestsTab(),           // 4: Калибровка и тесты
+    const ThreeDViewTab(),      // 5: Телеметрия
+    const TerminalTab(),        // 6: Терминал CLI
+    const FlasherTab(),         // 7: Прошивка FC и RC
   ];
 
   final List<String> _tabNames = [
-    "Инфо и подключение",
-    "Терминал (CLI)",
-    "Настройка полетного контроллера",
+    "Инфо",
+    "Полетный контроллер FC",
+    "Пульт RC",
     "Радиомодуль RTX",
-    "Тесты и калибровки",
-    "Настройка и тест пульта",
-    "Монитор телеметрии",
-    "Прошивка (Загрузчики)",
+    "Калибровка и тесты",
+    "Телеметрия",
+    "Терминал CLI",
+    "Прошивка FC и RC",
   ];
 
   @override
@@ -161,34 +160,48 @@ class _MainContainerState extends State<MainContainer> {
             const Icon(Icons.local_fire_department, color: Colors.amberAccent, size: 20),
             const SizedBox(width: 8),
             Expanded(
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<int>(
-                  value: _currentIndex,
-                  dropdownColor: const Color(0xFF1C1C1E),
-                  icon: const Icon(Icons.arrow_drop_down, color: Colors.amberAccent),
-                  items: List.generate(_tabs.length, (index) {
-                    return DropdownMenuItem<int>(
-                      value: index,
-                      child: Text(
-                        _tabNames[index],
-                        style: TextStyle(
-                          color: index == 0 ? Colors.greenAccent : Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1C1C1E),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white12),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<int>(
+                    value: _currentIndex,
+                    dropdownColor: const Color(0xFF1C1C1E),
+                    isExpanded: true,
+                    icon: const Icon(Icons.arrow_drop_down, color: Colors.amberAccent),
+                    items: List.generate(_tabs.length, (index) {
+                      return DropdownMenuItem<int>(
+                        value: index,
+                        child: Text(
+                          _tabNames[index],
+                          style: TextStyle(
+                            color: index == 0 ? Colors.greenAccent : Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                      ),
-                    );
-                  }),
-                  onChanged: (val) {
-                    if (val != null) setState(() => _currentIndex = val);
-                  },
+                      );
+                    }),
+                    onChanged: (val) {
+                      if (val != null) setState(() => _currentIndex = val);
+                    },
+                  ),
                 ),
               ),
             ),
           ],
         ),
       ),
-      body: _tabs[_currentIndex],
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: _tabs[_currentIndex],
+        ),
+      ),
     );
   }
 }
@@ -217,9 +230,6 @@ class SerialService {
 
   static double gyroRoll = 0.0, gyroPitch = 0.0, gyroYaw = 0.0;
   static double accelX = 0.0, accelY = 0.0, accelZ = 1.0;
-  static double motor1 = 0.0, motor2 = 0.0, motor3 = 0.0, motor4 = 0.0;
-  static double batteryVoltage = 16.2;
-  static double azimuth = 0.0;
 
   static Future<void> sendCommand(String cmd) async {
     if (isConnected && usbPort != null) {
@@ -285,7 +295,7 @@ class DocSection {
 }
 
 // ==========================================
-// ВКЛАДКА 0: ИНФО И ПОДКЛЮЧЕНИЕ (InfoConnectionTab)
+// ВКЛАДКА 0: ИНФО (InfoConnectionTab)
 // ==========================================
 class InfoConnectionTab extends StatefulWidget {
   const InfoConnectionTab({super.key});
@@ -404,10 +414,9 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.all(12.0),
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
         Card(
-          color: const Color(0xFF1E222B),
           child: Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
@@ -445,9 +454,7 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
             ),
           ),
         ),
-        const SizedBox(height: 8),
         Card(
-          color: const Color(0xFF1C1C1E),
           child: Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
@@ -470,16 +477,14 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
             ),
           ),
         ),
-        const SizedBox(height: 8),
         const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Text('СПРАВОЧНИК CLI КОМАНД (doc.txt)', style: TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
         ),
         if (_isLoading)
           const Center(child: Padding(padding: EdgeInsets.all(20.0), child: CircularProgressIndicator(color: Colors.blueAccent)))
         else
           ..._sections.map((sec) => Card(
-            margin: const EdgeInsets.only(bottom: 8),
             child: ExpansionTile(
               title: Text(sec.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
               iconColor: Colors.amberAccent,
@@ -494,172 +499,7 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
 }
 
 // ==========================================
-// ВКЛАДКА: ТЕРМИНАЛ (CLI)
-// ==========================================
-class TerminalTab extends StatefulWidget {
-  const TerminalTab({super.key});
-
-  @override
-  State<TerminalTab> createState() => _TerminalTabState();
-}
-
-class _TerminalTabState extends State<TerminalTab> {
-  final TextEditingController _cmdController = TextEditingController();
-  late StreamSubscription<String> _sub;
-  String _displayLog = "";
-
-  @override
-  void initState() {
-    super.initState();
-    _displayLog = SerialService.terminalLog;
-    _sub = SerialService.logController.stream.listen((log) {
-      if (mounted) setState(() => _displayLog = log);
-    });
-  }
-
-  @override
-  void dispose() {
-    _sub.cancel();
-    _cmdController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: () => SerialService.sendCommand("info"),
-                    icon: const Icon(Icons.info_outline, size: 16, color: Colors.white),
-                    label: const Text("Read Config Info", style: TextStyle(color: Colors.white)),
-                    style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  height: 44,
-                  child: IconButton.filledTonal(
-                    onPressed: () { SerialService.terminalLog = ""; SerialService.logController.add(""); },
-                    icon: const Icon(Icons.cleaning_services, size: 18),
-                    tooltip: "Clear Log",
-                    style: IconButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.06))),
-              child: SingleChildScrollView(reverse: true, child: Text(_displayLog, style: const TextStyle(fontFamily: 'monospace', color: Colors.greenAccent, fontSize: 11))),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _cmdController,
-                    style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
-                    decoration: const InputDecoration(hintText: "Enter CLI command..."),
-                    onSubmitted: (val) { if (val.isNotEmpty) { SerialService.sendCommand(val); _cmdController.clear(); } },
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton.filled(
-                  icon: const Icon(Icons.send_rounded, size: 18, color: Colors.white),
-                  onPressed: () { if (_cmdController.text.isNotEmpty) { SerialService.sendCommand(_cmdController.text); _cmdController.clear(); } },
-                  style: IconButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.all(14)),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ==========================================
-// ВИДЖЕТ PID КАРТЫ
-// ==========================================
-class PidAxisCardWidget extends StatefulWidget {
-  final String axisName;
-  final String kpCmd, kiCmd, kdCmd;
-  final double kp, ki, kd;
-  final Function(double, double, double) onUpdate;
-
-  const PidAxisCardWidget({super.key, required this.axisName, required this.kpCmd, required this.kiCmd, required this.kdCmd, required this.kp, required this.ki, required this.kd, required this.onUpdate});
-
-  @override
-  State<PidAxisCardWidget> createState() => _PidAxisCardWidgetState();
-}
-
-class _PidAxisCardWidgetState extends State<PidAxisCardWidget> {
-  late TextEditingController _pController, _iController, _dController;
-
-  @override
-  void initState() {
-    super.initState();
-    _pController = TextEditingController(text: widget.kp.toString());
-    _iController = TextEditingController(text: widget.ki.toString());
-    _dController = TextEditingController(text: widget.kd.toString());
-  }
-
-  @override
-  void didUpdateWidget(covariant PidAxisCardWidget oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.kp != widget.kp) _pController.text = widget.kp.toString();
-    if (oldWidget.ki != widget.ki) _iController.text = widget.ki.toString();
-    if (oldWidget.kd != widget.kd) _dController.text = widget.kd.toString();
-  }
-
-  @override
-  void dispose() {
-    _pController.dispose(); _iController.dispose(); _dController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(widget.axisName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-            const SizedBox(height: 2),
-            Text("${widget.kpCmd} / ${widget.kiCmd} / ${widget.kdCmd}", style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 9, fontFamily: 'monospace')),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(child: TextField(controller: _pController, decoration: const InputDecoration(labelText: 'Kp', isDense: true), keyboardType: TextInputType.number, onSubmitted: (val) { double? np = double.tryParse(val); if (np != null) widget.onUpdate(np, widget.ki, widget.kd); })),
-                const SizedBox(width: 8),
-                Expanded(child: TextField(controller: _iController, decoration: const InputDecoration(labelText: 'Ki', isDense: true), keyboardType: TextInputType.number, onSubmitted: (val) { double? ni = double.tryParse(val); if (ni != null) widget.onUpdate(widget.kp, ni, widget.kd); })),
-                const SizedBox(width: 8),
-                Expanded(child: TextField(controller: _dController, decoration: const InputDecoration(labelText: 'Kd', isDense: true), keyboardType: TextInputType.number, onSubmitted: (val) { double? nd = double.tryParse(val); if (nd != null) widget.onUpdate(widget.kp, widget.ki, nd); })),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ==========================================
-// ВКЛАДКА 2: НАСТРОЙКА ПОЛЕТНОГО КОНТРОЛЛЕРА (SettingsTab)
+// ВКЛАДКА: ПОЛЕТНЫЙ КОНТРОЛЛЕР FC (SettingsTab)
 // ==========================================
 class SettingsTab extends StatefulWidget {
   const SettingsTab({super.key});
@@ -842,6 +682,251 @@ class _SettingsTabState extends State<SettingsTab> {
   }
 }
 
+class PidAxisCardWidget extends StatefulWidget {
+  final String axisName;
+  final String kpCmd, kiCmd, kdCmd;
+  final double kp, ki, kd;
+  final Function(double, double, double) onUpdate;
+
+  const PidAxisCardWidget({super.key, required this.axisName, required this.kpCmd, required this.kiCmd, required this.kdCmd, required this.kp, required this.ki, required this.kd, required this.onUpdate});
+
+  @override
+  State<PidAxisCardWidget> createState() => _PidAxisCardWidgetState();
+}
+
+class _PidAxisCardWidgetState extends State<PidAxisCardWidget> {
+  late TextEditingController _pController, _iController, _dController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pController = TextEditingController(text: widget.kp.toString());
+    _iController = TextEditingController(text: widget.ki.toString());
+    _dController = TextEditingController(text: widget.kd.toString());
+  }
+
+  @override
+  void didUpdateWidget(covariant PidAxisCardWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.kp != widget.kp) _pController.text = widget.kp.toString();
+    if (oldWidget.ki != widget.ki) _iController.text = widget.ki.toString();
+    if (oldWidget.kd != widget.kd) _dController.text = widget.kd.toString();
+  }
+
+  @override
+  void dispose() {
+    _pController.dispose(); _iController.dispose(); _dController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(widget.axisName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            const SizedBox(height: 2),
+            Text("${widget.kpCmd} / ${widget.kiCmd} / ${widget.kdCmd}", style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 9, fontFamily: 'monospace')),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(child: TextField(controller: _pController, decoration: const InputDecoration(labelText: 'Kp', isDense: true), keyboardType: TextInputType.number, onSubmitted: (val) { double? np = double.tryParse(val); if (np != null) widget.onUpdate(np, widget.ki, widget.kd); })),
+                const SizedBox(width: 8),
+                Expanded(child: TextField(controller: _iController, decoration: const InputDecoration(labelText: 'Ki', isDense: true), keyboardType: TextInputType.number, onSubmitted: (val) { double? ni = double.tryParse(val); if (ni != null) widget.onUpdate(widget.kp, ni, widget.kd); })),
+                const SizedBox(width: 8),
+                Expanded(child: TextField(controller: _dController, decoration: const InputDecoration(labelText: 'Kd', isDense: true), keyboardType: TextInputType.number, onSubmitted: (val) { double? nd = double.tryParse(val); if (nd != null) widget.onUpdate(widget.kp, widget.ki, nd); })),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ==========================================
+// ВКЛАДКА: ПУЛЬТ RC (RemoteControlTab)
+// ==========================================
+class RemoteControlTab extends StatefulWidget {
+  const RemoteControlTab({super.key});
+
+  @override
+  State<RemoteControlTab> createState() => _RemoteControlTabState();
+}
+
+class _RemoteControlTabState extends State<RemoteControlTab> {
+  double _stickDeadband = 10.0;
+  double _rcProtocol = 1.0; 
+  double _txPowerW = 100.0;
+
+  Widget _buildSectionHeader(String title, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: Colors.amberAccent),
+          const SizedBox(width: 8),
+          Text(title, style: const TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSliderCard({required String title, required String commandName, required double value, required double min, required double max, required int divisions, required String unit, required ValueChanged<double> onChanged, required ValueChanged<double> onChangeEnd}) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)), Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace'))])),
+                Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: Text("${value.toStringAsFixed(value.truncate() == value ? 0 : 1)} $unit", style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 11))),
+              ],
+            ),
+            Slider(value: value, min: min, max: max, divisions: divisions, onChanged: onChanged, onChangeEnd: onChangeEnd),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSegmentedChoiceCard({required String title, required String commandName, required List<String> options, required int selectedIndex, required ValueChanged<int> onSelected}) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+            Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace')),
+            const SizedBox(height: 10),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                return ToggleButtons(
+                  isSelected: List.generate(options.length, (i) => i == selectedIndex),
+                  onPressed: (index) => onSelected(index),
+                  borderRadius: BorderRadius.circular(10),
+                  selectedColor: Colors.white, fillColor: Colors.blueAccent, color: Colors.white70,
+                  constraints: BoxConstraints(minHeight: 36, minWidth: (constraints.maxWidth - (options.length - 1)) / options.length),
+                  children: options.map((opt) => Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Text(opt, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)))).toList(),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      children: [
+        _buildSectionHeader("КАЛИБРОВКА СТИКОВ ПУЛЬТА", Icons.gamepad),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Калибровка нейтрали стиков", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                const Text("rc_cal_sticks", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontFamily: 'monospace')),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  height: 38,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      if (!SerialService.isConnected) {
+                        showAppDialog(context, "Ошибка", "Устройство пульта не подключено!", isError: true);
+                      } else {
+                        SerialService.sendCommand("rc_cal_sticks");
+                        showAppDialog(context, "Калибровка", "Команда калибровки нейтрали отправлена в пульт.");
+                      }
+                    },
+                    icon: const Icon(Icons.tune, size: 16),
+                    label: const Text("Запустить калибровку стиков", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        _buildSliderCard(
+          title: "Мертвая зона стиков (Deadband)", commandName: "rc_tx_deadband", value: _stickDeadband,
+          min: 0, max: 50, divisions: 50, unit: "PWM",
+          onChanged: (v) => setState(() => _stickDeadband = v),
+          onChangeEnd: (v) => SerialService.sendCommand("rc_tx_deadband ${v.round()}"),
+        ),
+
+        _buildSectionHeader("ПРОТОКОЛ И РАДИОПЕРЕДАТЧИК ПУЛЬТА", Icons.wifi),
+        _buildSegmentedChoiceCard(
+          title: "Протокол связи с модулем", commandName: "rc_proto",
+          options: const ["CRSF", "XFire RTX", "SBUS"],
+          selectedIndex: _rcProtocol.round(),
+          onSelected: (val) { setState(() => _rcProtocol = val.toDouble()); SerialService.sendCommand("rc_proto $val"); },
+        ),
+
+        _buildSliderCard(
+          title: "Выходная мощность передатчика пульта", commandName: "tx_power_mw", value: _txPowerW,
+          min: 10, max: 1000, divisions: 99, unit: "мВт",
+          onChanged: (v) => setState(() => _txPowerW = v),
+          onChangeEnd: (v) => SerialService.sendCommand("tx_power_mw ${v.round()}"),
+        ),
+
+        _buildSectionHeader("ТЕСТ КАНАЛОВ ПУЛЬТА (CH1 - CH4)", Icons.bar_chart),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Монитор каналов управления в реальном времени", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                const SizedBox(height: 12),
+                _buildChannelBar("Channel 1 (Roll)", 1500, Colors.blueAccent),
+                _buildChannelBar("Channel 2 (Pitch)", 1500, Colors.cyanAccent),
+                _buildChannelBar("Channel 3 (Throttle)", 1000, Colors.greenAccent),
+                _buildChannelBar("Channel 4 (Yaw)", 1500, Colors.amberAccent),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  Widget _buildChannelBar(String label, int pwmValue, Color color) {
+    double percent = ((pwmValue - 1000) / 1000.0).clamp(0.0, 1.0);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(label, style: const TextStyle(fontSize: 11, color: Colors.white70)),
+              Text("$pwmValue PWM", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color)),
+            ],
+          ),
+          const SizedBox(height: 2),
+          LinearProgressIndicator(value: percent, color: color, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
+        ],
+      ),
+    );
+  }
+}
+
 // ==========================================
 // ГРАФИЧЕСКИЕ СХЕМЫ АНТЕНН (Custom Painters)
 // ==========================================
@@ -915,7 +1000,7 @@ class KharchenkoSchematicPainter extends CustomPainter {
 }
 
 // ==========================================
-// ВКЛАДКА: РАДИОМОДУЛЬ RTX + КАЛЬКУЛЯТОР (RadioTab)
+// ВКЛАДКА: РАДИОМОДУЛЬ RTX (RadioTab)
 // ==========================================
 class RadioTab extends StatefulWidget {
   const RadioTab({super.key});
@@ -1333,7 +1418,7 @@ class _RadioTabState extends State<RadioTab> {
 }
 
 // ==========================================
-// ВКЛАДКА: ТЕСТЫ И КАЛИБРОВКИ (TestsTab)
+// ВКЛАДКА: КАЛИБРОВКА И ТЕСТЫ (TestsTab)
 // ==========================================
 class TestsTab extends StatefulWidget {
   const TestsTab({super.key});
@@ -1459,179 +1544,96 @@ class _TestsTabState extends State<TestsTab> {
 }
 
 // ==========================================
-// НОВАЯ ВКЛАДКА: НАСТРОЙКА И ТЕСТ ПУЛЬТА (RemoteControlTab)
+// ВИДЖЕТ ТЕРМИНАЛА CLI (TerminalTab)
 // ==========================================
-class RemoteControlTab extends StatefulWidget {
-  const RemoteControlTab({super.key});
+class TerminalTab extends StatefulWidget {
+  const TerminalTab({super.key});
 
   @override
-  State<RemoteControlTab> createState() => _RemoteControlTabState();
+  State<TerminalTab> createState() => _TerminalTabState();
 }
 
-class _RemoteControlTabState extends State<RemoteControlTab> {
-  double _stickDeadband = 10.0;
-  double _rcProtocol = 1.0; // 0: CRSF, 1: XFire RTX, 2: SBUS
-  double _txPowerW = 100.0;
+class _TerminalTabState extends State<TerminalTab> {
+  final TextEditingController _cmdController = TextEditingController();
+  late StreamSubscription<String> _sub;
+  String _displayLog = "";
 
-  Widget _buildSectionHeader(String title, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
-      child: Row(
-        children: [
-          Icon(icon, size: 16, color: Colors.amberAccent),
-          const SizedBox(width: 8),
-          Text(title, style: const TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
-        ],
-      ),
-    );
+  @override
+  void initState() {
+    super.initState();
+    _displayLog = SerialService.terminalLog;
+    _sub = SerialService.logController.stream.listen((log) {
+      if (mounted) setState(() => _displayLog = log);
+    });
   }
 
-  Widget _buildSliderCard({required String title, required String commandName, required double value, required double min, required double max, required int divisions, required String unit, required ValueChanged<double> onChanged, required ValueChanged<double> onChangeEnd}) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)), Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace'))])),
-                Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: Text("${value.toStringAsFixed(value.truncate() == value ? 0 : 1)} $unit", style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 11))),
-              ],
-            ),
-            Slider(value: value, min: min, max: max, divisions: divisions, onChanged: onChanged, onChangeEnd: onChangeEnd),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSegmentedChoiceCard({required String title, required String commandName, required List<String> options, required int selectedIndex, required ValueChanged<int> onSelected}) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-            Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace')),
-            const SizedBox(height: 10),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                return ToggleButtons(
-                  isSelected: List.generate(options.length, (i) => i == selectedIndex),
-                  onPressed: (index) => onSelected(index),
-                  borderRadius: BorderRadius.circular(10),
-                  selectedColor: Colors.white, fillColor: Colors.blueAccent, color: Colors.white70,
-                  constraints: BoxConstraints(minHeight: 36, minWidth: (constraints.maxWidth - (options.length - 1)) / options.length),
-                  children: options.map((opt) => Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Text(opt, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)))).toList(),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
+  @override
+  void dispose() {
+    _sub.cancel();
+    _cmdController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
+    return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
-      children: [
-        _buildSectionHeader("КАЛИБРОВКА СТИКОВ ПУЛЬТА", Icons.gamepad),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+            child: Row(
               children: [
-                const Text("Калибровка нейтрали стиков", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                const Text("rc_cal_sticks", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontFamily: 'monospace')),
-                const SizedBox(height: 10),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () => SerialService.sendCommand("info"),
+                    icon: const Icon(Icons.info_outline, size: 16, color: Colors.white),
+                    label: const Text("Read Config Info", style: TextStyle(color: Colors.white)),
+                    style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                  ),
+                ),
+                const SizedBox(width: 8),
                 SizedBox(
-                  width: double.infinity,
-                  height: 38,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      if (!SerialService.isConnected) {
-                        showAppDialog(context, "Ошибка", "Устройство пульта не подключено!", isError: true);
-                      } else {
-                        SerialService.sendCommand("rc_cal_sticks");
-                        showAppDialog(context, "Калибровка", "Команда калибровки нейтрали отправлена в пульт.");
-                      }
-                    },
-                    icon: const Icon(Icons.tune, size: 16),
-                    label: const Text("Запустить калибровку стиков", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                  height: 44,
+                  child: IconButton.filledTonal(
+                    onPressed: () { SerialService.terminalLog = ""; SerialService.logController.add(""); },
+                    icon: const Icon(Icons.cleaning_services, size: 18),
+                    tooltip: "Clear Log",
+                    style: IconButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                   ),
                 ),
               ],
             ),
           ),
-        ),
-
-        _buildSliderCard(
-          title: "Мертвая зона стиков (Deadband)", commandName: "rc_tx_deadband", value: _stickDeadband,
-          min: 0, max: 50, divisions: 50, unit: "PWM",
-          onChanged: (v) => setState(() => _stickDeadband = v),
-          onChangeEnd: (v) => SerialService.sendCommand("rc_tx_deadband ${v.round()}"),
-        ),
-
-        _buildSectionHeader("ПРОТОКОЛ И РАДИОПЕРЕДАТЧИК ПУЛЬТА", Icons.wifi),
-        _buildSegmentedChoiceCard(
-          title: "Протокол связи с модулем", commandName: "rc_proto",
-          options: const ["CRSF", "XFire RTX", "SBUS"],
-          selectedIndex: _rcProtocol.round(),
-          onSelected: (val) { setState(() => _rcProtocol = val.toDouble()); SerialService.sendCommand("rc_proto $val"); },
-        ),
-
-        _buildSliderCard(
-          title: "Выходная мощность передатчика пульта", commandName: "tx_power_mw", value: _txPowerW,
-          min: 10, max: 1000, divisions: 99, unit: "мВт",
-          onChanged: (v) => setState(() => _txPowerW = v),
-          onChangeEnd: (v) => SerialService.sendCommand("tx_power_mw ${v.round()}"),
-        ),
-
-        _buildSectionHeader("ТЕСТ КАНАЛОВ ПУЛЬТА (CH1 - CH4)", Icons.bar_chart),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          Expanded(
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.06))),
+              child: SingleChildScrollView(reverse: true, child: Text(_displayLog, style: const TextStyle(fontFamily: 'monospace', color: Colors.greenAccent, fontSize: 11))),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            child: Row(
               children: [
-                const Text("Монитор каналов управления в реальном времени", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                const SizedBox(height: 12),
-                _buildChannelBar("Channel 1 (Roll)", 1500, Colors.blueAccent),
-                _buildChannelBar("Channel 2 (Pitch)", 1500, Colors.cyanAccent),
-                _buildChannelBar("Channel 3 (Throttle)", 1000, Colors.greenAccent),
-                _buildChannelBar("Channel 4 (Yaw)", 1500, Colors.amberAccent),
+                Expanded(
+                  child: TextField(
+                    controller: _cmdController,
+                    style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
+                    decoration: const InputDecoration(hintText: "Enter CLI command..."),
+                    onSubmitted: (val) { if (val.isNotEmpty) { SerialService.sendCommand(val); _cmdController.clear(); } },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton.filled(
+                  icon: const Icon(Icons.send_rounded, size: 18, color: Colors.white),
+                  onPressed: () { if (_cmdController.text.isNotEmpty) { SerialService.sendCommand(_cmdController.text); _cmdController.clear(); } },
+                  style: IconButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.all(14)),
+                ),
               ],
             ),
           ),
-        ),
-        const SizedBox(height: 24),
-      ],
-    );
-  }
-
-  Widget _buildChannelBar(String label, int pwmValue, Color color) {
-    double percent = ((pwmValue - 1000) / 1000.0).clamp(0.0, 1.0);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(label, style: const TextStyle(fontSize: 11, color: Colors.white70)),
-              Text("$pwmValue PWM", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color)),
-            ],
-          ),
-          const SizedBox(height: 2),
-          LinearProgressIndicator(value: percent, color: color, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
         ],
       ),
     );
@@ -1639,7 +1641,42 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
 }
 
 // ==========================================
-// ВИДЖЕТ АВИАГОРИЗОНТА СО ШКАЛАМИ
+// ГРАФИЧЕСКИЕ ШКАЛЫ ДЛЯ ТЕЛЕМЕТРИИ
+// ==========================================
+class TelemetryScalePainter extends CustomPainter {
+  final double value; // от -1.0 до 1.0
+  final Color color;
+  final bool isVertical;
+
+  TelemetryScalePainter({required this.value, required this.color, required this.isVertical});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paintBg = Paint()..color = Colors.white12..strokeWidth = 2..strokeCap = StrokeCap.round;
+    final paintIndicator = Paint()..color = color..strokeWidth = 4..strokeCap = StrokeCap.round;
+
+    if (isVertical) {
+      final cx = size.width / 2;
+      canvas.drawLine(Offset(cx, 4), Offset(cx, size.height - 4), paintBg);
+      // Маппинг от -1..1 в координаты высоты
+      double normalized = ((value.clamp(-1.0, 1.0) + 1.0) / 2.0);
+      double y = size.height - (normalized * size.height);
+      canvas.drawLine(Offset(cx - 6, y), Offset(cx + 6, y), paintIndicator);
+    } else {
+      final cy = size.height / 2;
+      canvas.drawLine(Offset(4, cy), Offset(size.width - 4, cy), paintBg);
+      double normalized = ((value.clamp(-1.0, 1.0) + 1.0) / 2.0);
+      double x = normalized * size.width;
+      canvas.drawLine(Offset(x, cy - 6), Offset(x, cy + 6), paintIndicator);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant TelemetryScalePainter oldDelegate) => oldDelegate.value != value;
+}
+
+// ==========================================
+// ВИДЖЕТ АВИАГОРИЗОНТА
 // ==========================================
 class ArtificialHorizonPainter extends CustomPainter {
   final double roll, pitch; 
@@ -1668,7 +1705,7 @@ class ArtificialHorizonPainter extends CustomPainter {
 }
 
 // ==========================================
-// ВКЛАДКА: МОНИТОР (ThreeDViewTab со шкалами)
+// ВКЛАДКА: ТЕЛЕМЕТРИЯ (ThreeDViewTab)
 // ==========================================
 class ThreeDViewTab extends StatefulWidget {
   const ThreeDViewTab({super.key});
@@ -1711,10 +1748,10 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
 
   @override
   Widget build(BuildContext context) {
-    // Нормализация для шкал (от -1 до 1)
-    double rollPercent = ((SerialService.gyroRoll / math.pi) + 0.5).clamp(0.0, 1.0);
-    double pitchPercent = ((SerialService.gyroPitch / math.pi) + 0.5).clamp(0.0, 1.0);
-    double yawPercent = ((SerialService.gyroYaw / math.pi) + 0.5).clamp(0.0, 1.0);
+    // Нормализация для графических шкал (-1.0 .. 1.0)
+    double rollVal = (SerialService.gyroRoll / 3.14).clamp(-1.0, 1.0);
+    double pitchVal = (SerialService.gyroPitch / 3.14).clamp(-1.0, 1.0);
+    double yawVal = (SerialService.gyroYaw / 3.14).clamp(-1.0, 1.0);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -1723,84 +1760,92 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
           Expanded(
             flex: 5,
             child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.06))),
               child: Column(
                 children: [
                   // Верхняя шкала поворота (Yaw Top)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 2),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text("YAW (Top)", style: TextStyle(fontSize: 9, color: Colors.amberAccent)),
-                        Text("${(SerialService.gyroYaw * 57.2958).toStringAsFixed(1)}°", style: const TextStyle(fontSize: 9, color: Colors.amberAccent, fontWeight: FontWeight.bold)),
-                      ],
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text("YAW (Top)", style: TextStyle(fontSize: 9, color: Colors.amberAccent)),
+                      Text("${(SerialService.gyroYaw * 57.2958).toStringAsFixed(1)}°", style: const TextStyle(fontSize: 9, color: Colors.amberAccent, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  SizedBox(
+                    height: 16,
+                    child: CustomPaint(
+                      painter: TelemetryScalePainter(value: yawVal, color: Colors.amberAccent, isVertical: false),
+                      size: const Size(double.infinity, 16),
                     ),
                   ),
-                  LinearProgressIndicator(value: yawPercent, color: Colors.amberAccent, backgroundColor: Colors.white12, minHeight: 4, borderRadius: BorderRadius.circular(2)),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
 
-                  // Центральная часть: Шкала Слева, Авиагоризонт, Шкала Справа
+                  // Центральная часть: Шкалы слева/справа + Авиагоризонт
                   Expanded(
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // Левая шкала (Крен / Roll Left)
-                        RotatedBox(
-                          quarterTurns: 3,
-                          child: SizedBox(
-                            width: 140,
-                            child: Column(
-                              children: [
-                                const Text("ROLL", style: TextStyle(fontSize: 8, color: Colors.blueAccent)),
-                                LinearProgressIndicator(value: rollPercent, color: Colors.blueAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
-                              ],
+                        // Левая шкала (Крен / Roll)
+                        Column(
+                          children: [
+                            const Text("ROLL", style: TextStyle(fontSize: 8, color: Colors.blueAccent)),
+                            Expanded(
+                              child: SizedBox(
+                                width: 24,
+                                child: CustomPaint(
+                                  painter: TelemetryScalePainter(value: rollVal, color: Colors.blueAccent, isVertical: true),
+                                ),
+                              ),
                             ),
-                          ),
+                          ],
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 12),
 
-                        // Сам авиагоризонт
+                        // Авиагоризонт
                         ClipRRect(
                           borderRadius: BorderRadius.circular(16),
                           child: Stack(
                             alignment: Alignment.center,
                             children: [
                               CustomPaint(
-                                size: const Size(180, 180),
+                                size: const Size(160, 160),
                                 painter: ArtificialHorizonPainter(roll: SerialService.gyroRoll, pitch: SerialService.gyroPitch),
                               ),
                             ],
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 12),
 
-                        // Правая шкала (Тангаж / Pitch Right)
-                        RotatedBox(
-                          quarterTurns: 3,
-                          child: SizedBox(
-                            width: 140,
-                            child: Column(
-                              children: [
-                                const Text("PITCH", style: TextStyle(fontSize: 8, color: Colors.cyanAccent)),
-                                LinearProgressIndicator(value: pitchPercent, color: Colors.cyanAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
-                              ],
+                        // Правая шкала (Тангаж / Pitch)
+                        Column(
+                          children: [
+                            const Text("PITCH", style: TextStyle(fontSize: 8, color: Colors.cyanAccent)),
+                            Expanded(
+                              child: SizedBox(
+                                width: 24,
+                                child: CustomPaint(
+                                  painter: TelemetryScalePainter(value: pitchVal, color: Colors.cyanAccent, isVertical: true),
+                                ),
+                              ),
                             ),
-                          ),
+                          ],
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
 
                   // Нижняя шкала поворота (Yaw Bottom)
-                  LinearProgressIndicator(value: yawPercent, color: Colors.amberAccent, backgroundColor: Colors.white12, minHeight: 4, borderRadius: BorderRadius.circular(2)),
-                  const Padding(
-                    padding: EdgeInsets.only(top: 2),
-                    child: Text("HEADING / ROTATION", style: TextStyle(fontSize: 8, color: Colors.amberAccent)),
+                  SizedBox(
+                    height: 16,
+                    child: CustomPaint(
+                      painter: TelemetryScalePainter(value: yawVal, color: Colors.amberAccent, isVertical: false),
+                      size: const Size(double.infinity, 16),
+                    ),
                   ),
+                  const Text("HEADING / ROTATION", style: TextStyle(fontSize: 8, color: Colors.amberAccent)),
                 ],
               ),
             ),
@@ -1810,7 +1855,7 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
           Expanded(
             flex: 5,
             child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(color: const Color(0xFF1C1C1E), borderRadius: BorderRadius.circular(16)),
               child: ListView(
@@ -1838,7 +1883,7 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
 }
 
 // ==========================================
-// ВКЛАДКА: ПРОШИВКА (Два загрузчика без излишеств)
+// ВКЛАДКА: ПРОШИВКА FC И RC (FlasherTab)
 // ==========================================
 class FlasherTab extends StatefulWidget {
   const FlasherTab({super.key});
@@ -1902,10 +1947,10 @@ class _FlasherTabState extends State<FlasherTab> {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.all(12.0),
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
         const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Text("ЗАГРУЗЧИКИ ЭКОСИСТЕМЫ XFIRE", style: TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
         ),
 
@@ -1936,7 +1981,6 @@ class _FlasherTabState extends State<FlasherTab> {
             ),
           ),
         ),
-        const SizedBox(height: 8),
 
         // Загрузчик 2: Пульт управления
         Card(
@@ -1949,7 +1993,7 @@ class _FlasherTabState extends State<FlasherTab> {
                 const SizedBox(height: 6),
                 Text(_statusRC, style: const TextStyle(fontFamily: 'monospace', fontSize: 11, color: Colors.greenAccent)),
                 const SizedBox(height: 10),
-                LinearProgressIndicator(value: _progressRC, color: Colors.amberAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
+                LinearProgressIndicator(value: _progressRC, color: Colors.blueAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
                 const SizedBox(height: 14),
                 SizedBox(
                   width: double.infinity,
@@ -1958,7 +2002,7 @@ class _FlasherTabState extends State<FlasherTab> {
                     onPressed: _isFlashingRC ? null : _flashRemoteControl,
                     icon: const Icon(Icons.gamepad, size: 16),
                     label: Text(_isFlashingRC ? "Прошивка пульта..." : "Прошить пульт управления", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.amberAccent, foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
                   ),
                 ),
               ],
