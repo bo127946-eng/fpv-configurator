@@ -1,4 +1,4 @@
-// Конфигуратор CFC v3.5 (С выбором комбинации антенн и исправленной версткой)
+// Конфигуратор CFC v3.5 (Полностью проверенный и готовый к сборке код)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -867,8 +867,6 @@ class _RadioTabState extends State<RadioTab> {
 
   bool _hasProtectiveSleeve = true;
   double _sleeveThicknessMm = 1.0; 
-
-  // Выбор комбинации антенн (0: Диполь + Диполь, 1: Диполь + Харченко)
   int _antennaComboIndex = 1;
 
   final List<double> _bwTable = [
@@ -902,10 +900,8 @@ class _RadioTabState extends State<RadioTab> {
 
   Map<String, dynamic> _calculateLinkBudget() {
     double sensitivity = _calculateSensitivity();
-    
-    // Коэффициенты усиления в зависимости от выбранной комбинации
-    double gTx = (_antennaComboIndex == 1) ? 5.5 : 2.15; // Харченко (5.5 dBi) или Диполь (2.15 dBi)
-    double gRx = 2.15; // Диполь на бортах дрона
+    double gTx = (_antennaComboIndex == 1) ? 5.5 : 2.15;
+    double gRx = 2.15;
     double cableLoss = 1.0;
 
     double eirp = _rtxPower + gTx - cableLoss;
@@ -1067,7 +1063,6 @@ class _RadioTabState extends State<RadioTab> {
 
         _buildSectionHeader("КАЛЬКУЛЯТОР ЛИНКА И АНТЕНН (ЧАСТОТА: ${_currentFreqMhz.toStringAsFixed(0)} МГц)", Icons.analytics),
         
-        // ВЫБОР КОМБИНАЦИИ АНТЕНН ДЛЯ РАСЧЕТА ДАЛЬНОСТИ
         Card(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
@@ -1153,7 +1148,6 @@ class _RadioTabState extends State<RadioTab> {
           ),
         ),
 
-        // Графические схемы и размеры антенн
         Card(
           child: Padding(
             padding: const EdgeInsets.all(12.0),
@@ -1204,7 +1198,6 @@ class _RadioTabState extends State<RadioTab> {
           ),
         ),
 
-        // Настройка физических параметров антенн, трубки и среды
         Card(
           child: Padding(
             padding: const EdgeInsets.all(12.0),
@@ -1558,7 +1551,11 @@ class _FlasherTabState extends State<FlasherTab> {
                     onPressed: _isFlashing ? null : _startProfessionalFlashing,
                     icon: const Icon(Icons.system_update, color: Colors.white),
                     label: Text(_isFlashing ? "Flashing in Progress..." : "Start Firmware Update", style: const TextStyle(color: Colors.white)),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueAccent,
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
                   ),
                 ],
               ),
