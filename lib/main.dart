@@ -1,4 +1,4 @@
-// XFire Ecosystem (Финальная версия с классическим HUD-интерфейсом телеметрии)
+// XFire Ecosystem (Финальная версия с красивым авиагоризонтом HUD и шкалами)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -1644,7 +1644,7 @@ class _TerminalTabState extends State<TerminalTab> {
 // КЛАССИЧЕСКИЕ ШКАЛЫ ДЛЯ HUD (Вариант 1)
 // ==========================================
 class ClassicHudScalePainter extends CustomPainter {
-  final double value; // текущее значение угла в градусах
+  final double value;
   final double minVal;
   final double maxVal;
   final Color color;
@@ -1665,11 +1665,9 @@ class ClassicHudScalePainter extends CustomPainter {
     final indicatorPaint = Paint()..color = color..style = PaintingStyle.fill;
 
     if (isVertical) {
-      // Вертикальная шкала (Roll / Pitch)
       final x = size.width - 12.0;
       canvas.drawLine(Offset(x, 8), Offset(x, size.height - 8), paintLine);
 
-      // Шаг отрисовки делений
       double range = maxVal - minVal;
       int steps = 4;
       for (int i = 0; i <= steps; i++) {
@@ -1687,7 +1685,6 @@ class ClassicHudScalePainter extends CustomPainter {
         paintText.paint(canvas, Offset(x - 26, y - 5));
       }
 
-      // Индикатор текущего положения
       double clampedVal = value.clamp(minVal, maxVal);
       double currentRatio = (clampedVal - minVal) / range;
       double currentY = size.height - 8 - currentRatio * (size.height - 16);
@@ -1700,7 +1697,6 @@ class ClassicHudScalePainter extends CustomPainter {
       canvas.drawPath(path, indicatorPaint);
 
     } else {
-      // Горизонтальная шкала (Yaw Heading)
       final y = size.height - 10.0;
       canvas.drawLine(Offset(8, y), Offset(size.width - 8, y), paintLine);
 
@@ -1740,7 +1736,7 @@ class ClassicHudScalePainter extends CustomPainter {
 }
 
 // ==========================================
-// ВИДЖЕТ АВИАГОРИЗОНТА
+// ВИДЖЕТ КРАСИВОГО АВИАГОРИЗОНТА С НЕБОМ И ЗЕМЛЕЙ
 // ==========================================
 class ArtificialHorizonPainter extends CustomPainter {
   final double roll, pitch; 
@@ -1749,27 +1745,64 @@ class ArtificialHorizonPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final radius = math.min(size.width, size.height) / 2 - 10;
+    final radius = math.min(size.width, size.height) / 2 - 8;
+
     canvas.save();
     canvas.translate(center.dx, center.dy);
-    final path = Path()..addOval(Rect.fromCircle(center: Offset.zero, radius: radius));
-    canvas.clipPath(path);
+
+    // Обрезаем область по кругу прибора
+    final clipPath = Path()..addOval(Rect.fromCircle(center: Offset.zero, radius: radius));
+    canvas.clipPath(clipPath);
+
+    // Вращаем холст на угол крена (Roll)
     canvas.rotate(-roll);
-    final pitchOffset = pitch * 75.0;
-    canvas.drawRect(Rect.fromLTWH(-radius * 2, -radius * 3 + pitchOffset, radius * 4, radius * 3), Paint()..color = const Color(0xFF1E6091));
-    canvas.drawRect(Rect.fromLTWH(-radius * 2, pitchOffset, radius * 4, radius * 3), Paint()..color = const Color(0xFF8B5A2B));
-    final horizonPaint = Paint()..color = Colors.white..strokeWidth = 2.0;
+
+    // Смещение по тангажу (Pitch)
+    final pitchOffset = pitch * 40.0;
+
+    // Рисуем небо (синий фон)
+    final skyRect = Rect.fromLTWH(-radius * 2, -radius * 3 + pitchOffset, radius * 4, radius * 3);
+    canvas.drawRect(skyRect, Paint()..color = const Color(0xFF1E6091));
+
+    // Рисуем землю (коричневый фон)
+    final groundRect = Rect.fromLTWH(-radius * 2, pitchOffset, radius * 4, radius * 3);
+    canvas.drawRect(groundRect, Paint()..color = const Color(0xFF6A4A3A));
+
+    // Линия горизонта
+    final horizonPaint = Paint()
+      ..color = Colors.white
+      ..strokeWidth = 2.0;
     canvas.drawLine(Offset(-radius * 2, pitchOffset), Offset(radius * 2, pitchOffset), horizonPaint);
+
+    // Штрихи тангажа
+    final strokePaint = Paint()..color = Colors.white70..strokeWidth = 1.5;
+    for (int p = -3; p <= 3; p++) {
+      if (p == 0) continue;
+      double yStep = pitchOffset - (p * 20.0);
+      double lineWidth = (p.abs() % 2 == 0) ? 20.0 : 10.0;
+      canvas.drawLine(Offset(-lineWidth / 2, yStep), Offset(lineWidth / 2, yStep), strokePaint);
+    }
+
     canvas.restore();
-    canvas.drawCircle(center, radius, Paint()..color = Colors.white24..strokeWidth = 3..style = PaintingStyle.stroke);
+
+    // Внешнее кольцо прибора
+    canvas.drawCircle(
+      center, 
+      radius, 
+      Paint()
+        ..color = Colors.blueAccent.withOpacity(0.5)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3.0,
+    );
   }
 
   @override
-  bool shouldRepaint(covariant ArtificialHorizonPainter oldDelegate) => oldDelegate.roll != roll || oldDelegate.pitch != pitch;
+  bool shouldRepaint(covariant ArtificialHorizonPainter oldDelegate) => 
+      oldDelegate.roll != roll || oldDelegate.pitch != pitch;
 }
 
 // ==========================================
-// ВКЛАДКА: ТЕЛЕМЕТРИЯ (Классический HUD)
+// ВКЛАДКА: ТЕЛЕМЕТРИЯ (Классический HUD со шкалами)
 // ==========================================
 class ThreeDViewTab extends StatefulWidget {
   const ThreeDViewTab({super.key});
@@ -1812,7 +1845,6 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
 
   @override
   Widget build(BuildContext context) {
-    // Конвертация в градусы для шкал HUD
     double rollDeg = SerialService.gyroRoll * 57.2958;
     double pitchDeg = SerialService.gyroPitch * 57.2958;
     double yawDeg = (SerialService.gyroYaw * 57.2958) % 360;
@@ -1830,22 +1862,19 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
               decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.06))),
               child: Column(
                 children: [
-                  // Верхняя шкала Yaw Heading
                   const Text("YAW HEADING", style: TextStyle(fontSize: 9, color: Colors.amberAccent, fontWeight: FontWeight.bold)),
                   SizedBox(
-                    height: 24,
+                    height: 22,
                     child: CustomPaint(
                       painter: ClassicHudScalePainter(value: yawDeg, minVal: 0, maxVal: 360, color: Colors.amberAccent, isVertical: false),
-                      size: const Size(double.infinity, 24),
+                      size: const Size(double.infinity, 22),
                     ),
                   ),
                   const SizedBox(height: 4),
 
-                  // Центральная часть: Левая шкала Roll, Авиагоризонт, Правая шкала Pitch
                   Expanded(
                     child: Row(
                       children: [
-                        // Левая шкала Roll
                         Expanded(
                           flex: 2,
                           child: Column(
@@ -1862,27 +1891,22 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
                           ),
                         ),
 
-                        // Авиагоризонт по центру
                         Expanded(
                           flex: 4,
                           child: Center(
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(16),
-                              child: Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  CustomPaint(
-                                    size: const Size(150, 150),
-                                    painter: ArtificialHorizonPainter(roll: SerialService.gyroRoll, pitch: SerialService.gyroPitch),
-                                  ),
-                                  const Icon(Icons.flight, color: Colors.amberAccent, size: 24),
-                                ],
-                              ),
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                CustomPaint(
+                                  size: const Size(150, 150),
+                                  painter: ArtificialHorizonPainter(roll: SerialService.gyroRoll, pitch: SerialService.gyroPitch),
+                                ),
+                                const Icon(Icons.local_fire_department, color: Colors.amberAccent, size: 22),
+                              ],
                             ),
                           ),
                         ),
 
-                        // Правая шкала Pitch
                         Expanded(
                           flex: 2,
                           child: Column(
@@ -1903,12 +1927,11 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
                   ),
                   const SizedBox(height: 4),
 
-                  // Нижняя шкала дублирования Heading
                   SizedBox(
-                    height: 20,
+                    height: 18,
                     child: CustomPaint(
                       painter: ClassicHudScalePainter(value: yawDeg, minVal: 0, maxVal: 360, color: Colors.amberAccent, isVertical: false),
-                      size: const Size(double.infinity, 20),
+                      size: const Size(double.infinity, 18),
                     ),
                   ),
                 ],
@@ -1916,7 +1939,6 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
             ),
           ),
 
-          // Блок датчиков снизу
           Expanded(
             flex: 4,
             child: Container(
