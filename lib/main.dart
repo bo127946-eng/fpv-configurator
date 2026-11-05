@@ -1,4 +1,4 @@
-// Конфигуратор CFC v3.5 (С прогресс-барами чувствительности и скорости воздуха)
+// Конфигуратор CFC v3.5 (С выбором комбинации антенн и исправленной версткой)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -60,7 +60,7 @@ class _MainContainerState extends State<MainContainer> {
     const InfoConnectionTab(), // 0: Инфо + Подключение USB
     const TerminalTab(),       // 1: CLI
     const SettingsTab(),       // 2: Основные настройки
-    const RadioTab(),          // 3: Радиомодуль RTX + Калькулятор с прогресс-барами и графикой антенн
+    const RadioTab(),          // 3: Радиомодуль RTX + Калькулятор с выбором антенн и прогресс-барами
     const TestsTab(),          // 4: Тесты и калибровки
     const ThreeDViewTab(),     // 5: Монитор
     const FlasherTab(),        // 6: Прошивка
@@ -772,27 +772,40 @@ class _SettingsTabState extends State<SettingsTab> {
 // ГРАФИЧЕСКИЕ СХЕМЫ АНТЕНН (Custom Painters)
 // ==========================================
 class DipoleSchematicPainter extends CustomPainter {
+  final bool hasSleeve;
+  DipoleSchematicPainter({required this.hasSleeve});
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..color = Colors.cyanAccent..strokeWidth = 3.0..strokeCap = StrokeCap.round;
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
     final cx = size.width / 2;
     
+    if (hasSleeve) {
+      final sleevePaint = Paint()
+        ..color = Colors.blueAccent.withOpacity(0.3)
+        ..style = PaintingStyle.fill;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, size.height / 2), width: 14, height: size.height - 10), const Radius.circular(6)),
+        sleevePaint,
+      );
+    }
+
     canvas.drawLine(Offset(cx, 15), Offset(cx, size.height / 2 - 5), paint);
     canvas.drawLine(Offset(cx, size.height / 2 + 5), Offset(cx, size.height - 15), paint..color = Colors.blueAccent..strokeWidth = 5.0);
     canvas.drawCircle(Offset(cx, size.height / 2), 3, Paint()..color = Colors.redAccent);
 
-    textPainter.text = const TextSpan(text: "Верхнее плечо (провод)", style: TextStyle(color: Colors.white70, fontSize: 10));
+    textPainter.text = const TextSpan(text: "Верхнее плечо", style: TextStyle(color: Colors.white70, fontSize: 9));
     textPainter.layout();
     textPainter.paint(canvas, Offset(cx + 12, 25));
 
-    textPainter.text = const TextSpan(text: "Нижнее плечо (трубка)", style: TextStyle(color: Colors.white70, fontSize: 10));
+    textPainter.text = const TextSpan(text: "Нижнее плечо (трубка)", style: TextStyle(color: Colors.white70, fontSize: 9));
     textPainter.layout();
     textPainter.paint(canvas, Offset(cx + 12, size.height - 35));
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant DipoleSchematicPainter oldDelegate) => oldDelegate.hasSleeve != hasSleeve;
 }
 
 class KharchenkoSchematicPainter extends CustomPainter {
@@ -852,6 +865,12 @@ class _RadioTabState extends State<RadioTab> {
   double _dipoleTopWireSqMm = 1.0;    
   double _kharchenkoWireSqMm = 2.0;   
 
+  bool _hasProtectiveSleeve = true;
+  double _sleeveThicknessMm = 1.0; 
+
+  // Выбор комбинации антенн (0: Диполь + Диполь, 1: Диполь + Харченко)
+  int _antennaComboIndex = 1;
+
   final List<double> _bwTable = [
     7800.0, 10400.0, 15600.0, 20800.0, 31250.0, 
     41700.0, 62500.0, 125000.0, 250000.0, 500000.0
@@ -883,12 +902,14 @@ class _RadioTabState extends State<RadioTab> {
 
   Map<String, dynamic> _calculateLinkBudget() {
     double sensitivity = _calculateSensitivity();
-    double gTxKharchenko = 5.5; 
-    double gRxDipole = 2.15;    
+    
+    // Коэффициенты усиления в зависимости от выбранной комбинации
+    double gTx = (_antennaComboIndex == 1) ? 5.5 : 2.15; // Харченко (5.5 dBi) или Диполь (2.15 dBi)
+    double gRx = 2.15; // Диполь на бортах дрона
     double cableLoss = 1.0;
 
-    double eirp = _rtxPower + gTxKharchenko - cableLoss;
-    double maxPathLoss = eirp + gRxDipole - sensitivity - _calcEnvironmentLoss;
+    double eirp = _rtxPower + gTx - cableLoss;
+    double maxPathLoss = eirp + gRx - sensitivity - _calcEnvironmentLoss;
     if (maxPathLoss < 0) maxPathLoss = 0;
 
     double freqLog = 20 * (math.log(_currentFreqMhz) / math.ln10);
@@ -909,22 +930,37 @@ class _RadioTabState extends State<RadioTab> {
     double nAtmosphere = 1.0003;
     double cInAir = 299792458.0 / nAtmosphere;
     double lambdaMm = (cInAir / freqHz) * 1000.0;
+    double quarterLambda = lambdaMm / 4.0;
 
-    double equivalentDiameterBot = _dipoleTubeDiameterMm; 
+    double dielectricLoading = 1.0;
+    if (_hasProtectiveSleeve) {
+      double epsilonR = 2.6;
+      dielectricLoading = 1.0 + (0.018 * (epsilonR - 1.0) * (_sleeveThicknessMm / 1.0));
+    }
+
+    double radiusBot = _dipoleTubeDiameterMm / 2.0;
+    double omegaBot = 2.0 * math.log(lambdaMm / radiusBot);
+    double kFactorDipoleBot = (0.97 - (2.5 / omegaBot) - (0.003 * (_dipoleTubeDiameterMm / 1.0))) / dielectricLoading;
+
+    double radiusTop = math.sqrt(_dipoleTopWireSqMm / math.pi);
+    double omegaTop = 2.0 * math.log(lambdaMm / radiusTop);
+    double kFactorDipoleTop = (0.97 - (2.0 / omegaTop)) / dielectricLoading;
+
     double feedGapMm = 3.0;
-    double shorteningFactorDipole = 0.95 
-        - (0.012 * (equivalentDiameterBot / (lambdaMm / 4.0))) 
-        - (0.005 * (feedGapMm / (lambdaMm / 4.0)));
-        
-    double dipoleArmMm = (lambdaMm / 4.0) * shorteningFactorDipole;
+    double gapCorrection = 0.002 * (feedGapMm / (lambdaMm / 100.0));
+
+    double dipoleArmTopMm = quarterLambda * kFactorDipoleTop - gapCorrection;
+    double dipoleArmBotMm = quarterLambda * kFactorDipoleBot - gapCorrection;
 
     double radiusKharc = math.sqrt(_kharchenkoWireSqMm / math.pi);
-    double shorteningFactorKharc = 0.97 - (0.008 * radiusKharc);
-    double kharchenkoSideMm = (lambdaMm / 4.0) * shorteningFactorKharc;
+    double omegaKharc = 2.0 * math.log(lambdaMm / (2.0 * radiusKharc));
+    double kFactorKharc = 0.96 - (1.8 / omegaKharc);
+    double kharchenkoSideMm = quarterLambda * kFactorKharc;
 
     return {
       'lambdaMm': lambdaMm,
-      'dipoleArmMm': dipoleArmMm,
+      'dipoleArmTopMm': dipoleArmTopMm,
+      'dipoleArmBotMm': dipoleArmBotMm,
       'kharchenkoSideMm': kharchenkoSideMm,
     };
   }
@@ -989,7 +1025,6 @@ class _RadioTabState extends State<RadioTab> {
     String bitRateStr = bitRate >= 1000 ? "${(bitRate / 1000).toStringAsFixed(1)} kbps" : "${bitRate.toStringAsFixed(0)} bps";
     double sensitivity = linkResults['sensitivity'];
 
-    // Нормализация прогресс-баров для чувствительности (-140 до -100 dBm) и скорости (0 до 30 kbps)
     double sensitivityProgress = ((sensitivity - (-140.0)) / ((-100.0) - (-140.0))).clamp(0.0, 1.0);
     double bitRateProgress = (bitRate / 30000.0).clamp(0.0, 1.0);
 
@@ -1030,11 +1065,34 @@ class _RadioTabState extends State<RadioTab> {
           onChangeEnd: (v) { SerialService.rtxPower = v; SerialService.sendCommand("rtx_power ${v.round()}"); },
         ),
 
-        // ==========================================
-        // КАЛЬКУЛЯТОР ЛИНКА И ПРОГРЕСС-БАРЫ SX
-        // ==========================================
         _buildSectionHeader("КАЛЬКУЛЯТОР ЛИНКА И АНТЕНН (ЧАСТОТА: ${_currentFreqMhz.toStringAsFixed(0)} МГц)", Icons.analytics),
         
+        // ВЫБОР КОМБИНАЦИИ АНТЕНН ДЛЯ РАСЧЕТА ДАЛЬНОСТИ
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text("Комбинация антенн:", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
+                DropdownButton<int>(
+                  value: _antennaComboIndex,
+                  dropdownColor: const Color(0xFF1C1C1E),
+                  underline: const SizedBox(),
+                  style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold),
+                  items: const [
+                    DropdownMenuItem(value: 0, child: Text("Штырь + Штырь (2.15 dBi)")),
+                    DropdownMenuItem(value: 1, child: Text("Харченко + Штырь (5.5 dBi)")),
+                  ],
+                  onChanged: (val) {
+                    if (val != null) setState(() => _antennaComboIndex = val);
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+
         Card(
           color: const Color(0xFF1E222B),
           child: Padding(
@@ -1048,56 +1106,46 @@ class _RadioTabState extends State<RadioTab> {
                 const Divider(color: Colors.white12),
                 const SizedBox(height: 8),
                 
-                // Прогресс-бар чувствительности приемника
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text("Чувствительность приемника (Sensitivity):", style: TextStyle(fontSize: 11, color: Colors.white70)),
+                        const Flexible(child: Text("Чувствительность приемника (Sensitivity):", style: TextStyle(fontSize: 11, color: Colors.white70), overflow: TextOverflow.ellipsis)),
+                        const SizedBox(width: 8),
                         Text("${sensitivity.toStringAsFixed(1)} dBm", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
                       ],
                     ),
                     const SizedBox(height: 4),
-                    LinearProgressIndicator(
-                      value: sensitivityProgress,
-                      color: Colors.cyanAccent,
-                      backgroundColor: Colors.white12,
-                      minHeight: 6,
-                      borderRadius: BorderRadius.circular(3),
-                    ),
+                    LinearProgressIndicator(value: sensitivityProgress, color: Colors.cyanAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
                   ],
                 ),
                 const SizedBox(height: 12),
 
-                // Прогресс-бар скорости передачи по воздуху (Air Data Rate)
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text("Скорость по воздуху (Air Data Rate):", style: TextStyle(fontSize: 11, color: Colors.white70)),
+                        const Flexible(child: Text("Скорость по воздуху (Air Data Rate):", style: TextStyle(fontSize: 11, color: Colors.white70), overflow: TextOverflow.ellipsis)),
+                        const SizedBox(width: 8),
                         Text(bitRateStr, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
                       ],
                     ),
                     const SizedBox(height: 4),
-                    LinearProgressIndicator(
-                      value: bitRateProgress,
-                      color: Colors.blueAccent,
-                      backgroundColor: Colors.white12,
-                      minHeight: 6,
-                      borderRadius: BorderRadius.circular(3),
-                    ),
+                    LinearProgressIndicator(value: bitRateProgress, color: Colors.blueAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
                   ],
                 ),
                 const SizedBox(height: 10),
 
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 12,
                   children: [
                     Text("EIRP Пульта: ${(linkResults['eirp'] as double).toStringAsFixed(1)} dBm", style: const TextStyle(fontSize: 11, color: Colors.white60)),
+                    Text("Запас: ${_calcEnvironmentLoss.toStringAsFixed(0)} dB", style: const TextStyle(fontSize: 11, color: Colors.white60)),
                   ],
                 ),
               ],
@@ -1124,10 +1172,11 @@ class _RadioTabState extends State<RadioTab> {
                           Container(
                             height: 120,
                             decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
-                            child: CustomPaint(painter: DipoleSchematicPainter(), size: const Size(double.infinity, 120)),
+                            child: CustomPaint(painter: DipoleSchematicPainter(hasSleeve: _hasProtectiveSleeve), size: const Size(double.infinity, 120)),
                           ),
                           const SizedBox(height: 6),
-                          Text("Плечо: ${(antResults['dipoleArmMm'] as double).toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
+                          Text("Верх: ${(antResults['dipoleArmTopMm'] as double).toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 10, color: Colors.white70)),
+                          Text("Низ: ${(antResults['dipoleArmBotMm'] as double).toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
                         ],
                       ),
                     ),
@@ -1143,6 +1192,7 @@ class _RadioTabState extends State<RadioTab> {
                             child: CustomPaint(painter: KharchenkoSchematicPainter(), size: const Size(double.infinity, 120)),
                           ),
                           const SizedBox(height: 6),
+                          const Text("Сторона ромба", style: TextStyle(fontSize: 10, color: Colors.white70)),
                           Text("Сторона: ${(antResults['kharchenkoSideMm'] as double).toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
                         ],
                       ),
@@ -1154,7 +1204,7 @@ class _RadioTabState extends State<RadioTab> {
           ),
         ),
 
-        // Настройка физических параметров антенн и условий
+        // Настройка физических параметров антенн, трубки и среды
         Card(
           child: Padding(
             padding: const EdgeInsets.all(12.0),
@@ -1162,8 +1212,26 @@ class _RadioTabState extends State<RadioTab> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text("Физические параметры материалов и среды", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                const SizedBox(height: 8),
+                const SizedBox(height: 10),
 
+                SwitchListTile(
+                  title: const Text("Защитная трубка / термоусадка на диполе", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                  subtitle: const Text("Учитывает диэлектрическую нагрузку пластика", style: TextStyle(fontSize: 10, color: Colors.white60)),
+                  value: _hasProtectiveSleeve,
+                  activeColor: Colors.blueAccent,
+                  contentPadding: EdgeInsets.zero,
+                  onChanged: (v) => setState(() => _hasProtectiveSleeve = v),
+                ),
+                if (_hasProtectiveSleeve) ...[
+                  const SizedBox(height: 4),
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    const Text("Толщина стенки трубки (чехла):", style: TextStyle(fontSize: 11, color: Colors.white70)),
+                    Text("${_sleeveThicknessMm.toStringAsFixed(1)} мм (0.5-3.0)", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                  ]),
+                  Slider(value: _sleeveThicknessMm, min: 0.5, max: 3.0, divisions: 25, onChanged: (v) => setState(() => _sleeveThicknessMm = v)),
+                ],
+
+                const SizedBox(height: 8),
                 Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                   const Text("Диаметр трубки диполя (нижн.):", style: TextStyle(fontSize: 11, color: Colors.white70)),
                   Text("${_dipoleTubeDiameterMm.toStringAsFixed(1)} мм (2-5мм)", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
@@ -1490,7 +1558,7 @@ class _FlasherTabState extends State<FlasherTab> {
                     onPressed: _isFlashing ? null : _startProfessionalFlashing,
                     icon: const Icon(Icons.system_update, color: Colors.white),
                     label: Text(_isFlashing ? "Flashing in Progress..." : "Start Firmware Update", style: const TextStyle(color: Colors.white)),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                 ],
               ),
