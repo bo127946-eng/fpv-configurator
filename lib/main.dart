@@ -1,4 +1,4 @@
-// XFire Ecosystem (Финальная отлаженная версия)
+// XFire Ecosystem (Финальная версия с классическим HUD-интерфейсом телеметрии)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -1641,38 +1641,102 @@ class _TerminalTabState extends State<TerminalTab> {
 }
 
 // ==========================================
-// ГРАФИЧЕСКИЕ ШКАЛЫ ДЛЯ ТЕЛЕМЕТРИИ
+// КЛАССИЧЕСКИЕ ШКАЛЫ ДЛЯ HUD (Вариант 1)
 // ==========================================
-class TelemetryScalePainter extends CustomPainter {
-  final double value; // от -1.0 до 1.0
+class ClassicHudScalePainter extends CustomPainter {
+  final double value; // текущее значение угла в градусах
+  final double minVal;
+  final double maxVal;
   final Color color;
   final bool isVertical;
 
-  TelemetryScalePainter({required this.value, required this.color, required this.isVertical});
+  ClassicHudScalePainter({
+    required this.value,
+    required this.minVal,
+    required this.maxVal,
+    required this.color,
+    required this.isVertical,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paintBg = Paint()..color = Colors.white12..strokeWidth = 2..strokeCap = StrokeCap.round;
-    final paintIndicator = Paint()..color = color..strokeWidth = 4..strokeCap = StrokeCap.round;
+    final paintLine = Paint()..color = Colors.white30..strokeWidth = 1.5;
+    final paintText = TextPainter(textDirection: TextDirection.ltr);
+    final indicatorPaint = Paint()..color = color..style = PaintingStyle.fill;
 
     if (isVertical) {
-      final cx = size.width / 2;
-      canvas.drawLine(Offset(cx, 4), Offset(cx, size.height - 4), paintBg);
-      // Маппинг от -1..1 в координаты высоты
-      double normalized = ((value.clamp(-1.0, 1.0) + 1.0) / 2.0);
-      double y = size.height - (normalized * size.height);
-      canvas.drawLine(Offset(cx - 6, y), Offset(cx + 6, y), paintIndicator);
+      // Вертикальная шкала (Roll / Pitch)
+      final x = size.width - 12.0;
+      canvas.drawLine(Offset(x, 8), Offset(x, size.height - 8), paintLine);
+
+      // Шаг отрисовки делений
+      double range = maxVal - minVal;
+      int steps = 4;
+      for (int i = 0; i <= steps; i++) {
+        double v = minVal + (range / steps) * i;
+        double ratio = (v - minVal) / range;
+        double y = size.height - 8 - ratio * (size.height - 16);
+
+        canvas.drawLine(Offset(x - 4, y), Offset(x, y), paintLine);
+
+        paintText.text = TextSpan(
+          text: "${v.toInt()}°",
+          style: const TextStyle(color: Colors.white60, fontSize: 8),
+        );
+        paintText.layout();
+        paintText.paint(canvas, Offset(x - 26, y - 5));
+      }
+
+      // Индикатор текущего положения
+      double clampedVal = value.clamp(minVal, maxVal);
+      double currentRatio = (clampedVal - minVal) / range;
+      double currentY = size.height - 8 - currentRatio * (size.height - 16);
+
+      final path = Path()
+        ..moveTo(x - 12, currentY)
+        ..lineTo(x - 4, currentY - 4)
+        ..lineTo(x - 4, currentY + 4)
+        ..close();
+      canvas.drawPath(path, indicatorPaint);
+
     } else {
-      final cy = size.height / 2;
-      canvas.drawLine(Offset(4, cy), Offset(size.width - 4, cy), paintBg);
-      double normalized = ((value.clamp(-1.0, 1.0) + 1.0) / 2.0);
-      double x = normalized * size.width;
-      canvas.drawLine(Offset(x, cy - 6), Offset(x, cy + 6), paintIndicator);
+      // Горизонтальная шкала (Yaw Heading)
+      final y = size.height - 10.0;
+      canvas.drawLine(Offset(8, y), Offset(size.width - 8, y), paintLine);
+
+      double range = maxVal - minVal;
+      int steps = 6;
+      for (int i = 0; i <= steps; i++) {
+        double v = minVal + (range / steps) * i;
+        double ratio = (v - minVal) / range;
+        double x = 8 + ratio * (size.width - 16);
+
+        canvas.drawLine(Offset(x, y), Offset(x, y + 4), paintLine);
+
+        paintText.text = TextSpan(
+          text: "${v.toInt()}°",
+          style: const TextStyle(color: Colors.white60, fontSize: 8),
+        );
+        paintText.layout();
+        paintText.paint(canvas, Offset(x - 6, y + 6));
+      }
+
+      double clampedVal = value.clamp(minVal, maxVal);
+      double currentRatio = (clampedVal - minVal) / range;
+      double currentX = 8 + currentRatio * (size.width - 16);
+
+      final path = Path()
+        ..moveTo(currentX, y - 8)
+        ..lineTo(currentX - 4, y)
+        ..lineTo(currentX + 4, y)
+        ..close();
+      canvas.drawPath(path, indicatorPaint);
     }
   }
 
   @override
-  bool shouldRepaint(covariant TelemetryScalePainter oldDelegate) => oldDelegate.value != value;
+  bool shouldRepaint(covariant ClassicHudScalePainter oldDelegate) =>
+      oldDelegate.value != value || oldDelegate.minVal != minVal || oldDelegate.maxVal != maxVal;
 }
 
 // ==========================================
@@ -1705,7 +1769,7 @@ class ArtificialHorizonPainter extends CustomPainter {
 }
 
 // ==========================================
-// ВКЛАДКА: ТЕЛЕМЕТРИЯ (ThreeDViewTab)
+// ВКЛАДКА: ТЕЛЕМЕТРИЯ (Классический HUD)
 // ==========================================
 class ThreeDViewTab extends StatefulWidget {
   const ThreeDViewTab({super.key});
@@ -1748,104 +1812,105 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
 
   @override
   Widget build(BuildContext context) {
-    // Нормализация для графических шкал (-1.0 .. 1.0)
-    double rollVal = (SerialService.gyroRoll / 3.14).clamp(-1.0, 1.0);
-    double pitchVal = (SerialService.gyroPitch / 3.14).clamp(-1.0, 1.0);
-    double yawVal = (SerialService.gyroYaw / 3.14).clamp(-1.0, 1.0);
+    // Конвертация в градусы для шкал HUD
+    double rollDeg = SerialService.gyroRoll * 57.2958;
+    double pitchDeg = SerialService.gyroPitch * 57.2958;
+    double yawDeg = (SerialService.gyroYaw * 57.2958) % 360;
+    if (yawDeg < 0) yawDeg += 360;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Column(
         children: [
           Expanded(
-            flex: 5,
+            flex: 6,
             child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.06))),
               child: Column(
                 children: [
-                  // Верхняя шкала поворота (Yaw Top)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text("YAW (Top)", style: TextStyle(fontSize: 9, color: Colors.amberAccent)),
-                      Text("${(SerialService.gyroYaw * 57.2958).toStringAsFixed(1)}°", style: const TextStyle(fontSize: 9, color: Colors.amberAccent, fontWeight: FontWeight.bold)),
-                    ],
-                  ),
+                  // Верхняя шкала Yaw Heading
+                  const Text("YAW HEADING", style: TextStyle(fontSize: 9, color: Colors.amberAccent, fontWeight: FontWeight.bold)),
                   SizedBox(
-                    height: 16,
+                    height: 24,
                     child: CustomPaint(
-                      painter: TelemetryScalePainter(value: yawVal, color: Colors.amberAccent, isVertical: false),
-                      size: const Size(double.infinity, 16),
+                      painter: ClassicHudScalePainter(value: yawDeg, minVal: 0, maxVal: 360, color: Colors.amberAccent, isVertical: false),
+                      size: const Size(double.infinity, 24),
                     ),
                   ),
                   const SizedBox(height: 4),
 
-                  // Центральная часть: Шкалы слева/справа + Авиагоризонт
+                  // Центральная часть: Левая шкала Roll, Авиагоризонт, Правая шкала Pitch
                   Expanded(
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // Левая шкала (Крен / Roll)
-                        Column(
-                          children: [
-                            const Text("ROLL", style: TextStyle(fontSize: 8, color: Colors.blueAccent)),
-                            Expanded(
-                              child: SizedBox(
-                                width: 24,
-                                child: CustomPaint(
-                                  painter: TelemetryScalePainter(value: rollVal, color: Colors.blueAccent, isVertical: true),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(width: 12),
-
-                        // Авиагоризонт
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
-                          child: Stack(
-                            alignment: Alignment.center,
+                        // Левая шкала Roll
+                        Expanded(
+                          flex: 2,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              CustomPaint(
-                                size: const Size(160, 160),
-                                painter: ArtificialHorizonPainter(roll: SerialService.gyroRoll, pitch: SerialService.gyroPitch),
+                              const Text("ROLL", style: TextStyle(fontSize: 9, color: Colors.blueAccent, fontWeight: FontWeight.bold)),
+                              Expanded(
+                                child: CustomPaint(
+                                  painter: ClassicHudScalePainter(value: rollDeg, minVal: -180, maxVal: 180, color: Colors.blueAccent, isVertical: true),
+                                  size: const Size(double.infinity, double.infinity),
+                                ),
                               ),
                             ],
                           ),
                         ),
-                        const SizedBox(width: 12),
 
-                        // Правая шкала (Тангаж / Pitch)
-                        Column(
-                          children: [
-                            const Text("PITCH", style: TextStyle(fontSize: 8, color: Colors.cyanAccent)),
-                            Expanded(
-                              child: SizedBox(
-                                width: 24,
-                                child: CustomPaint(
-                                  painter: TelemetryScalePainter(value: pitchVal, color: Colors.cyanAccent, isVertical: true),
-                                ),
+                        // Авиагоризонт по центру
+                        Expanded(
+                          flex: 4,
+                          child: Center(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  CustomPaint(
+                                    size: const Size(150, 150),
+                                    painter: ArtificialHorizonPainter(roll: SerialService.gyroRoll, pitch: SerialService.gyroPitch),
+                                  ),
+                                  const Icon(Icons.flight, color: Colors.amberAccent, size: 24),
+                                ],
                               ),
                             ),
-                          ],
+                          ),
+                        ),
+
+                        // Правая шкала Pitch
+                        Expanded(
+                          flex: 2,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              const Text("PITCH", style: TextStyle(fontSize: 9, color: Colors.cyanAccent, fontWeight: FontWeight.bold)),
+                              Expanded(
+                                child: CustomPaint(
+                                  painter: ClassicHudScalePainter(value: pitchDeg, minVal: -90, maxVal: 90, color: Colors.cyanAccent, isVertical: true),
+                                  size: const Size(double.infinity, double.infinity),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 4),
 
-                  // Нижняя шкала поворота (Yaw Bottom)
+                  // Нижняя шкала дублирования Heading
                   SizedBox(
-                    height: 16,
+                    height: 20,
                     child: CustomPaint(
-                      painter: TelemetryScalePainter(value: yawVal, color: Colors.amberAccent, isVertical: false),
-                      size: const Size(double.infinity, 16),
+                      painter: ClassicHudScalePainter(value: yawDeg, minVal: 0, maxVal: 360, color: Colors.amberAccent, isVertical: false),
+                      size: const Size(double.infinity, 20),
                     ),
                   ),
-                  const Text("HEADING / ROTATION", style: TextStyle(fontSize: 8, color: Colors.amberAccent)),
                 ],
               ),
             ),
@@ -1853,7 +1918,7 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
 
           // Блок датчиков снизу
           Expanded(
-            flex: 5,
+            flex: 4,
             child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               padding: const EdgeInsets.all(12),
