@@ -1,4 +1,4 @@
-// XFire Ecosystem (Указатели остальных шкал развернуты, Roll инвертирован, по центру крестик)
+// XFire Ecosystem (Финальная сборка: телеметрия с белым крестиком, большой белой окружностью и белыми указателями)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -1641,26 +1641,24 @@ class _TerminalTabState extends State<TerminalTab> {
 }
 
 // ==========================================
-// ХУДОЖНИК ДЛЯ ROLL (Инвертированная шкала и указатель)
+// ХУДОЖНИК ДЛЯ ROLL (Без названия, белый указатель)
 // ==========================================
 class RollHudScalePainter extends CustomPainter {
   final double value;
   final double minVal;
   final double maxVal;
-  final Color color;
 
   RollHudScalePainter({
     required this.value,
     required this.minVal,
     required this.maxVal,
-    required this.color,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
     final paintLine = Paint()..color = Colors.white30..strokeWidth = 1.5;
     final paintText = TextPainter(textDirection: TextDirection.ltr);
-    final indicatorPaint = Paint()..color = color..style = PaintingStyle.fill;
+    final indicatorPaint = Paint()..color = Colors.white..style = PaintingStyle.fill;
 
     final x = 12.0; 
     canvas.drawLine(Offset(x, 8), Offset(x, size.height - 8), paintLine);
@@ -1700,26 +1698,24 @@ class RollHudScalePainter extends CustomPainter {
 }
 
 // ==========================================
-// ХУДОЖНИК ДЛЯ PITCH (Шкала не тронута, указатель развернут)
+// ХУДОЖНИК ДЛЯ PITCH (Без названия, белый указатель)
 // ==========================================
 class PitchHudScalePainter extends CustomPainter {
   final double value;
   final double minVal;
   final double maxVal;
-  final Color color;
 
   PitchHudScalePainter({
     required this.value,
     required this.minVal,
     required this.maxVal,
-    required this.color,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
     final paintLine = Paint()..color = Colors.white30..strokeWidth = 1.5;
     final paintText = TextPainter(textDirection: TextDirection.ltr);
-    final indicatorPaint = Paint()..color = color..style = PaintingStyle.fill;
+    final indicatorPaint = Paint()..color = Colors.white..style = PaintingStyle.fill;
 
     final x = size.width - 12.0;
     canvas.drawLine(Offset(x, 8), Offset(x, size.height - 8), paintLine);
@@ -1745,7 +1741,6 @@ class PitchHudScalePainter extends CustomPainter {
     double currentRatio = (clampedVal - minVal) / range;
     double currentY = 8 + currentRatio * (size.height - 16);
 
-    // Указатель развернут в другую сторону (направлен влево на шкалу Pitch)
     final path = Path()
       ..moveTo(x - 2, currentY)
       ..lineTo(x + 6, currentY - 4)
@@ -1760,20 +1755,18 @@ class PitchHudScalePainter extends CustomPainter {
 }
 
 // ==========================================
-// ХУДОЖНИК ДЛЯ YAW HEADING (Шкала не тронута, указатели развернуты)
+// ХУДОЖНИК ДЛЯ YAW HEADING (Диапазон -180..180, без названия, белый указатель)
 // ==========================================
 class YawHudScalePainter extends CustomPainter {
   final double value;
   final double minVal;
   final double maxVal;
-  final Color color;
   final bool isTop;
 
   YawHudScalePainter({
     required this.value,
     required this.minVal,
     required this.maxVal,
-    required this.color,
     required this.isTop,
   });
 
@@ -1781,14 +1774,14 @@ class YawHudScalePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final paintLine = Paint()..color = Colors.white30..strokeWidth = 1.5;
     final paintText = TextPainter(textDirection: TextDirection.ltr);
-    final indicatorPaint = Paint()..color = color..style = PaintingStyle.fill;
+    final indicatorPaint = Paint()..color = Colors.white..style = PaintingStyle.fill;
 
     if (isTop) {
       final y = size.height - 6.0;
       canvas.drawLine(Offset(8, y), Offset(size.width - 8, y), paintLine);
 
       double range = maxVal - minVal;
-      int steps = 6;
+      int steps = 4;
       for (int i = 0; i <= steps; i++) {
         double v = minVal + (range / steps) * i;
         double ratio = (v - minVal) / range;
@@ -1801,14 +1794,13 @@ class YawHudScalePainter extends CustomPainter {
           style: const TextStyle(color: Colors.white60, fontSize: 8),
         );
         paintText.layout();
-        paintText.paint(canvas, Offset(x - 6, y + 6));
+        paintText.paint(canvas, Offset(x - 10, y + 6));
       }
 
       double clampedVal = value.clamp(minVal, maxVal);
       double currentRatio = (clampedVal - minVal) / range;
       double currentX = 8 + currentRatio * (size.width - 16);
 
-      // Верхний указатель Yaw развернут (направлен вниз на шкалу)
       final path = Path()
         ..moveTo(currentX, y - 2)
         ..lineTo(currentX - 4, y - 8)
@@ -1821,7 +1813,7 @@ class YawHudScalePainter extends CustomPainter {
       canvas.drawLine(Offset(8, y), Offset(size.width - 8, y), paintLine);
 
       double range = maxVal - minVal;
-      int steps = 6;
+      int steps = 4;
       for (int i = 0; i <= steps; i++) {
         double v = minVal + (range / steps) * i;
         double ratio = (v - minVal) / range;
@@ -1834,14 +1826,13 @@ class YawHudScalePainter extends CustomPainter {
           style: const TextStyle(color: Colors.white60, fontSize: 8),
         );
         paintText.layout();
-        paintText.paint(canvas, Offset(x - 6, y - 10));
+        paintText.paint(canvas, Offset(x - 10, y - 14));
       }
 
       double clampedVal = value.clamp(minVal, maxVal);
       double currentRatio = (clampedVal - minVal) / range;
       double currentX = 8 + currentRatio * (size.width - 16);
 
-      // Нижний указатель Yaw развернут (направлен вверх на шкалу)
       final path = Path()
         ..moveTo(currentX, y + 2)
         ..lineTo(currentX - 4, y + 8)
@@ -1857,7 +1848,7 @@ class YawHudScalePainter extends CustomPainter {
 }
 
 // ==========================================
-// ВИДЖЕТ КРАСИВОГО АВИАГОРИЗОНТА С НЕБОМ И ЗЕМЛЕЙ
+// ВИДЖЕТ АВИАГОРИЗОНТА (Увеличенный размер, белая окантовка)
 // ==========================================
 class ArtificialHorizonPainter extends CustomPainter {
   final double roll, pitch; 
@@ -1866,7 +1857,7 @@ class ArtificialHorizonPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final radius = math.min(size.width, size.height) / 2 - 8;
+    final radius = math.min(size.width, size.height) / 2 - 4;
 
     canvas.save();
     canvas.translate(center.dx, center.dy);
@@ -1903,9 +1894,9 @@ class ArtificialHorizonPainter extends CustomPainter {
       center, 
       radius, 
       Paint()
-        ..color = Colors.blueAccent.withOpacity(0.5)
+        ..color = Colors.white
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 3.0,
+        ..strokeWidth = 2.5,
     );
   }
 
@@ -1915,7 +1906,7 @@ class ArtificialHorizonPainter extends CustomPainter {
 }
 
 // ==========================================
-// ВКЛАДКА: ТЕЛЕМЕТРИЯ (Классический HUD с развернутыми указателями)
+// ВКЛАДКА: ТЕЛЕМЕТРИЯ (ThreeDViewTab)
 // ==========================================
 class ThreeDViewTab extends StatefulWidget {
   const ThreeDViewTab({super.key});
@@ -1960,8 +1951,9 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
   Widget build(BuildContext context) {
     double rollDeg = SerialService.gyroRoll * 57.2958;
     double pitchDeg = SerialService.gyroPitch * 57.2958;
-    double yawDeg = (SerialService.gyroYaw * 57.2958) % 360;
-    if (yawDeg < 0) yawDeg += 360;
+    double yawDeg = SerialService.gyroYaw * 57.2958;
+    while (yawDeg > 180) yawDeg -= 360;
+    while (yawDeg < -180) yawDeg += 360;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -1975,11 +1967,10 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
               decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.06))),
               child: Column(
                 children: [
-                  const Text("YAW HEADING", style: TextStyle(fontSize: 9, color: Colors.amberAccent, fontWeight: FontWeight.bold)),
                   SizedBox(
                     height: 22,
                     child: CustomPaint(
-                      painter: YawHudScalePainter(value: yawDeg, minVal: 0, maxVal: 360, color: Colors.amberAccent, isTop: true),
+                      painter: YawHudScalePainter(value: yawDeg, minVal: -180, maxVal: 180, isTop: true),
                       size: const Size(double.infinity, 22),
                     ),
                   ),
@@ -1993,10 +1984,9 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text("ROLL", style: TextStyle(fontSize: 9, color: Colors.blueAccent, fontWeight: FontWeight.bold)),
                               Expanded(
                                 child: CustomPaint(
-                                  painter: RollHudScalePainter(value: rollDeg, minVal: -180, maxVal: 180, color: Colors.blueAccent),
+                                  painter: RollHudScalePainter(value: rollDeg, minVal: -180, maxVal: 180),
                                   size: const Size(double.infinity, double.infinity),
                                 ),
                               ),
@@ -2011,10 +2001,10 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
                               alignment: Alignment.center,
                               children: [
                                 CustomPaint(
-                                  size: const Size(150, 150),
+                                  size: const Size(170, 170),
                                   painter: ArtificialHorizonPainter(roll: SerialService.gyroRoll, pitch: SerialService.gyroPitch),
                                 ),
-                                const Icon(Icons.add, color: Colors.amberAccent, size: 24),
+                                const Icon(Icons.add, color: Colors.white, size: 24),
                               ],
                             ),
                           ),
@@ -2025,10 +2015,9 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
-                              const Text("PITCH", style: TextStyle(fontSize: 9, color: Colors.cyanAccent, fontWeight: FontWeight.bold)),
                               Expanded(
                                 child: CustomPaint(
-                                  painter: PitchHudScalePainter(value: pitchDeg, minVal: -90, maxVal: 90, color: Colors.cyanAccent),
+                                  painter: PitchHudScalePainter(value: pitchDeg, minVal: -90, maxVal: 90),
                                   size: const Size(double.infinity, double.infinity),
                                 ),
                               ),
@@ -2043,7 +2032,7 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
                   SizedBox(
                     height: 18,
                     child: CustomPaint(
-                      painter: YawHudScalePainter(value: yawDeg, minVal: 0, maxVal: 360, color: Colors.amberAccent, isTop: false),
+                      painter: YawHudScalePainter(value: yawDeg, minVal: -180, maxVal: 180, isTop: false),
                       size: const Size(double.infinity, 18),
                     ),
                   ),
