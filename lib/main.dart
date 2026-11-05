@@ -1,4 +1,4 @@
-// XFire Ecosystem (Финальная версия с красивым авиагоризонтом HUD и шкалами)
+// XFire Ecosystem (Указатели остальных шкал развернуты, Roll инвертирован, по центру крестик)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -69,10 +69,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     );
 
     _animation = TweenSequence<double>([
-      TweenSequenceItem(tween: ConstantTween(0.0), weight: 15.0),          // Задержка 0.5 сек
-      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0), weight: 28.3), // Появление (1 сек)
-      TweenSequenceItem(tween: ConstantTween(1.0), weight: 28.3),          // Показ (1 сек)
-      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.0), weight: 28.4), // Исчезновение (1 сек)
+      TweenSequenceItem(tween: ConstantTween(0.0), weight: 15.0),          
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0), weight: 28.3), 
+      TweenSequenceItem(tween: ConstantTween(1.0), weight: 28.3),          
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.0), weight: 28.4), 
     ]).animate(_controller);
 
     _controller.forward();
@@ -1641,21 +1641,19 @@ class _TerminalTabState extends State<TerminalTab> {
 }
 
 // ==========================================
-// КЛАССИЧЕСКИЕ ШКАЛЫ ДЛЯ HUD (Вариант 1)
+// ХУДОЖНИК ДЛЯ ROLL (Инвертированная шкала и указатель)
 // ==========================================
-class ClassicHudScalePainter extends CustomPainter {
+class RollHudScalePainter extends CustomPainter {
   final double value;
   final double minVal;
   final double maxVal;
   final Color color;
-  final bool isVertical;
 
-  ClassicHudScalePainter({
+  RollHudScalePainter({
     required this.value,
     required this.minVal,
     required this.maxVal,
     required this.color,
-    required this.isVertical,
   });
 
   @override
@@ -1664,40 +1662,129 @@ class ClassicHudScalePainter extends CustomPainter {
     final paintText = TextPainter(textDirection: TextDirection.ltr);
     final indicatorPaint = Paint()..color = color..style = PaintingStyle.fill;
 
-    if (isVertical) {
-      final x = size.width - 12.0;
-      canvas.drawLine(Offset(x, 8), Offset(x, size.height - 8), paintLine);
+    final x = 12.0; 
+    canvas.drawLine(Offset(x, 8), Offset(x, size.height - 8), paintLine);
 
-      double range = maxVal - minVal;
-      int steps = 4;
-      for (int i = 0; i <= steps; i++) {
-        double v = minVal + (range / steps) * i;
-        double ratio = (v - minVal) / range;
-        double y = size.height - 8 - ratio * (size.height - 16);
+    double range = maxVal - minVal;
+    int steps = 4;
+    for (int i = 0; i <= steps; i++) {
+      double v = minVal + (range / steps) * i;
+      double ratio = (v - minVal) / range;
+      double y = size.height - 8 - ratio * (size.height - 16);
 
-        canvas.drawLine(Offset(x - 4, y), Offset(x, y), paintLine);
+      canvas.drawLine(Offset(x, y), Offset(x + 4, y), paintLine);
 
-        paintText.text = TextSpan(
-          text: "${v.toInt()}°",
-          style: const TextStyle(color: Colors.white60, fontSize: 8),
-        );
-        paintText.layout();
-        paintText.paint(canvas, Offset(x - 26, y - 5));
-      }
+      paintText.text = TextSpan(
+        text: "${v.toInt()}°",
+        style: const TextStyle(color: Colors.white60, fontSize: 8),
+      );
+      paintText.layout();
+      paintText.paint(canvas, Offset(x + 8, y - 5));
+    }
 
-      double clampedVal = value.clamp(minVal, maxVal);
-      double currentRatio = (clampedVal - minVal) / range;
-      double currentY = size.height - 8 - currentRatio * (size.height - 16);
+    double clampedVal = value.clamp(minVal, maxVal);
+    double currentRatio = (clampedVal - minVal) / range;
+    double currentY = size.height - 8 - currentRatio * (size.height - 16);
 
-      final path = Path()
-        ..moveTo(x - 12, currentY)
-        ..lineTo(x - 4, currentY - 4)
-        ..lineTo(x - 4, currentY + 4)
-        ..close();
-      canvas.drawPath(path, indicatorPaint);
+    final path = Path()
+      ..moveTo(x + 2, currentY)
+      ..lineTo(x + 10, currentY - 4)
+      ..lineTo(x + 10, currentY + 4)
+      ..close();
+    canvas.drawPath(path, indicatorPaint);
+  }
 
-    } else {
-      final y = size.height - 10.0;
+  @override
+  bool shouldRepaint(covariant RollHudScalePainter oldDelegate) =>
+      oldDelegate.value != value || oldDelegate.minVal != minVal || oldDelegate.maxVal != maxVal;
+}
+
+// ==========================================
+// ХУДОЖНИК ДЛЯ PITCH (Шкала не тронута, указатель развернут)
+// ==========================================
+class PitchHudScalePainter extends CustomPainter {
+  final double value;
+  final double minVal;
+  final double maxVal;
+  final Color color;
+
+  PitchHudScalePainter({
+    required this.value,
+    required this.minVal,
+    required this.maxVal,
+    required this.color,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paintLine = Paint()..color = Colors.white30..strokeWidth = 1.5;
+    final paintText = TextPainter(textDirection: TextDirection.ltr);
+    final indicatorPaint = Paint()..color = color..style = PaintingStyle.fill;
+
+    final x = size.width - 12.0;
+    canvas.drawLine(Offset(x, 8), Offset(x, size.height - 8), paintLine);
+
+    double range = maxVal - minVal;
+    int steps = 4;
+    for (int i = 0; i <= steps; i++) {
+      double v = minVal + (range / steps) * i;
+      double ratio = (v - minVal) / range;
+      double y = 8 + ratio * (size.height - 16);
+
+      canvas.drawLine(Offset(x - 4, y), Offset(x, y), paintLine);
+
+      paintText.text = TextSpan(
+        text: "${v.toInt()}°",
+        style: const TextStyle(color: Colors.white60, fontSize: 8),
+      );
+      paintText.layout();
+      paintText.paint(canvas, Offset(x - 26, y - 5));
+    }
+
+    double clampedVal = value.clamp(minVal, maxVal);
+    double currentRatio = (clampedVal - minVal) / range;
+    double currentY = 8 + currentRatio * (size.height - 16);
+
+    // Указатель развернут в другую сторону (направлен влево на шкалу Pitch)
+    final path = Path()
+      ..moveTo(x - 2, currentY)
+      ..lineTo(x + 6, currentY - 4)
+      ..lineTo(x + 6, currentY + 4)
+      ..close();
+    canvas.drawPath(path, indicatorPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant PitchHudScalePainter oldDelegate) =>
+      oldDelegate.value != value || oldDelegate.minVal != minVal || oldDelegate.maxVal != maxVal;
+}
+
+// ==========================================
+// ХУДОЖНИК ДЛЯ YAW HEADING (Шкала не тронута, указатели развернуты)
+// ==========================================
+class YawHudScalePainter extends CustomPainter {
+  final double value;
+  final double minVal;
+  final double maxVal;
+  final Color color;
+  final bool isTop;
+
+  YawHudScalePainter({
+    required this.value,
+    required this.minVal,
+    required this.maxVal,
+    required this.color,
+    required this.isTop,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paintLine = Paint()..color = Colors.white30..strokeWidth = 1.5;
+    final paintText = TextPainter(textDirection: TextDirection.ltr);
+    final indicatorPaint = Paint()..color = color..style = PaintingStyle.fill;
+
+    if (isTop) {
+      final y = size.height - 6.0;
       canvas.drawLine(Offset(8, y), Offset(size.width - 8, y), paintLine);
 
       double range = maxVal - minVal;
@@ -1721,17 +1808,51 @@ class ClassicHudScalePainter extends CustomPainter {
       double currentRatio = (clampedVal - minVal) / range;
       double currentX = 8 + currentRatio * (size.width - 16);
 
+      // Верхний указатель Yaw развернут (направлен вниз на шкалу)
       final path = Path()
-        ..moveTo(currentX, y - 8)
-        ..lineTo(currentX - 4, y)
-        ..lineTo(currentX + 4, y)
+        ..moveTo(currentX, y - 2)
+        ..lineTo(currentX - 4, y - 8)
+        ..lineTo(currentX + 4, y - 8)
+        ..close();
+      canvas.drawPath(path, indicatorPaint);
+
+    } else {
+      final y = 6.0;
+      canvas.drawLine(Offset(8, y), Offset(size.width - 8, y), paintLine);
+
+      double range = maxVal - minVal;
+      int steps = 6;
+      for (int i = 0; i <= steps; i++) {
+        double v = minVal + (range / steps) * i;
+        double ratio = (v - minVal) / range;
+        double x = 8 + ratio * (size.width - 16);
+
+        canvas.drawLine(Offset(x, y), Offset(x, y - 4), paintLine);
+
+        paintText.text = TextSpan(
+          text: "${v.toInt()}°",
+          style: const TextStyle(color: Colors.white60, fontSize: 8),
+        );
+        paintText.layout();
+        paintText.paint(canvas, Offset(x - 6, y - 10));
+      }
+
+      double clampedVal = value.clamp(minVal, maxVal);
+      double currentRatio = (clampedVal - minVal) / range;
+      double currentX = 8 + currentRatio * (size.width - 16);
+
+      // Нижний указатель Yaw развернут (направлен вверх на шкалу)
+      final path = Path()
+        ..moveTo(currentX, y + 2)
+        ..lineTo(currentX - 4, y + 8)
+        ..lineTo(currentX + 4, y + 8)
         ..close();
       canvas.drawPath(path, indicatorPaint);
     }
   }
 
   @override
-  bool shouldRepaint(covariant ClassicHudScalePainter oldDelegate) =>
+  bool shouldRepaint(covariant YawHudScalePainter oldDelegate) =>
       oldDelegate.value != value || oldDelegate.minVal != minVal || oldDelegate.maxVal != maxVal;
 }
 
@@ -1750,31 +1871,24 @@ class ArtificialHorizonPainter extends CustomPainter {
     canvas.save();
     canvas.translate(center.dx, center.dy);
 
-    // Обрезаем область по кругу прибора
     final clipPath = Path()..addOval(Rect.fromCircle(center: Offset.zero, radius: radius));
     canvas.clipPath(clipPath);
 
-    // Вращаем холст на угол крена (Roll)
     canvas.rotate(-roll);
 
-    // Смещение по тангажу (Pitch)
     final pitchOffset = pitch * 40.0;
 
-    // Рисуем небо (синий фон)
     final skyRect = Rect.fromLTWH(-radius * 2, -radius * 3 + pitchOffset, radius * 4, radius * 3);
     canvas.drawRect(skyRect, Paint()..color = const Color(0xFF1E6091));
 
-    // Рисуем землю (коричневый фон)
     final groundRect = Rect.fromLTWH(-radius * 2, pitchOffset, radius * 4, radius * 3);
     canvas.drawRect(groundRect, Paint()..color = const Color(0xFF6A4A3A));
 
-    // Линия горизонта
     final horizonPaint = Paint()
       ..color = Colors.white
       ..strokeWidth = 2.0;
     canvas.drawLine(Offset(-radius * 2, pitchOffset), Offset(radius * 2, pitchOffset), horizonPaint);
 
-    // Штрихи тангажа
     final strokePaint = Paint()..color = Colors.white70..strokeWidth = 1.5;
     for (int p = -3; p <= 3; p++) {
       if (p == 0) continue;
@@ -1785,7 +1899,6 @@ class ArtificialHorizonPainter extends CustomPainter {
 
     canvas.restore();
 
-    // Внешнее кольцо прибора
     canvas.drawCircle(
       center, 
       radius, 
@@ -1802,7 +1915,7 @@ class ArtificialHorizonPainter extends CustomPainter {
 }
 
 // ==========================================
-// ВКЛАДКА: ТЕЛЕМЕТРИЯ (Классический HUD со шкалами)
+// ВКЛАДКА: ТЕЛЕМЕТРИЯ (Классический HUD с развернутыми указателями)
 // ==========================================
 class ThreeDViewTab extends StatefulWidget {
   const ThreeDViewTab({super.key});
@@ -1866,7 +1979,7 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
                   SizedBox(
                     height: 22,
                     child: CustomPaint(
-                      painter: ClassicHudScalePainter(value: yawDeg, minVal: 0, maxVal: 360, color: Colors.amberAccent, isVertical: false),
+                      painter: YawHudScalePainter(value: yawDeg, minVal: 0, maxVal: 360, color: Colors.amberAccent, isTop: true),
                       size: const Size(double.infinity, 22),
                     ),
                   ),
@@ -1883,7 +1996,7 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
                               const Text("ROLL", style: TextStyle(fontSize: 9, color: Colors.blueAccent, fontWeight: FontWeight.bold)),
                               Expanded(
                                 child: CustomPaint(
-                                  painter: ClassicHudScalePainter(value: rollDeg, minVal: -180, maxVal: 180, color: Colors.blueAccent, isVertical: true),
+                                  painter: RollHudScalePainter(value: rollDeg, minVal: -180, maxVal: 180, color: Colors.blueAccent),
                                   size: const Size(double.infinity, double.infinity),
                                 ),
                               ),
@@ -1901,7 +2014,7 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
                                   size: const Size(150, 150),
                                   painter: ArtificialHorizonPainter(roll: SerialService.gyroRoll, pitch: SerialService.gyroPitch),
                                 ),
-                                const Icon(Icons.local_fire_department, color: Colors.amberAccent, size: 22),
+                                const Icon(Icons.add, color: Colors.amberAccent, size: 24),
                               ],
                             ),
                           ),
@@ -1915,7 +2028,7 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
                               const Text("PITCH", style: TextStyle(fontSize: 9, color: Colors.cyanAccent, fontWeight: FontWeight.bold)),
                               Expanded(
                                 child: CustomPaint(
-                                  painter: ClassicHudScalePainter(value: pitchDeg, minVal: -90, maxVal: 90, color: Colors.cyanAccent, isVertical: true),
+                                  painter: PitchHudScalePainter(value: pitchDeg, minVal: -90, maxVal: 90, color: Colors.cyanAccent),
                                   size: const Size(double.infinity, double.infinity),
                                 ),
                               ),
@@ -1930,7 +2043,7 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
                   SizedBox(
                     height: 18,
                     child: CustomPaint(
-                      painter: ClassicHudScalePainter(value: yawDeg, minVal: 0, maxVal: 360, color: Colors.amberAccent, isVertical: false),
+                      painter: YawHudScalePainter(value: yawDeg, minVal: 0, maxVal: 360, color: Colors.amberAccent, isTop: false),
                       size: const Size(double.infinity, 18),
                     ),
                   ),
@@ -2041,7 +2154,6 @@ class _FlasherTabState extends State<FlasherTab> {
           child: Text("ЗАГРУЗЧИКИ ЭКОСИСТЕМЫ XFIRE", style: TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
         ),
 
-        // Загрузчик 1: Полетный контроллер
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16.0),
@@ -2069,7 +2181,6 @@ class _FlasherTabState extends State<FlasherTab> {
           ),
         ),
 
-        // Загрузчик 2: Пульт управления
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16.0),
