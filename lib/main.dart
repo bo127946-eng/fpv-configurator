@@ -1,4 +1,4 @@
-// Конфигуратор CFC v3.5 (Обновленный расчет антенн с учетом физических факторов и графикой)
+// Конфигуратор CFC v3.5 (С новыми тестами оборудования и радиосвязи)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -59,9 +59,9 @@ class _MainContainerState extends State<MainContainer> {
   final List<Widget> _tabs = [
     const InfoConnectionTab(), // 0: Инфо + Подключение USB
     const TerminalTab(),       // 1: CLI
-    const SettingsTab(),       // 2: Основные настройки (включая порог связи и инициативу)
-    const RadioTab(),          // 3: Радиомодуль RTX + Калькулятор с физикой антенн и графикой
-    const TestsTab(),          // 4: Тесты
+    const SettingsTab(),       // 2: Основные настройки
+    const RadioTab(),          // 3: Радиомодуль RTX + Калькулятор и графика антенн
+    const TestsTab(),          // 4: Тесты и калибровки (с расширенными тестами)
     const ThreeDViewTab(),     // 5: Монитор
     const FlasherTab(),        // 6: Прошивка
   ];
@@ -132,9 +132,8 @@ class SerialService {
   static StreamController<String> logController = StreamController.broadcast();
   static StreamController<void> telemetryController = StreamController.broadcast();
 
-  // Синхронизированные параметры радиомодуля для калькулятора
-  static double rtxBand = 4.0; // x100 МГц (например, 4 -> 400, 8 -> 800)
-  static double rtxChan = 68.0; // Шаг МГц (например, 68 -> общая частота 868 МГц)
+  static double rtxBand = 4.0; 
+  static double rtxChan = 68.0; 
   static double rtxSf = 7.0;
   static double rtxBw = 7.0;
   static double rtxCr = 1.0;
@@ -208,7 +207,6 @@ void showAppDialog(BuildContext context, String title, String message, {bool isE
 class DocSection {
   final String title;
   final String content;
-
   DocSection({required this.title, required this.content});
 }
 
@@ -587,7 +585,7 @@ class _PidAxisCardWidgetState extends State<PidAxisCardWidget> {
 }
 
 // ==========================================
-// ВКЛАДКА: НАСТРОЙКИ ПОЛЕТА (SettingsTab) (Включая порог связи и инициативу)
+// ВКЛАДКА: НАСТРОЙКИ ПОЛЕТА (SettingsTab)
 // ==========================================
 class SettingsTab extends StatefulWidget {
   const SettingsTab({super.key});
@@ -608,7 +606,6 @@ class _SettingsTabState extends State<SettingsTab> {
   double _fsSpiEn = 1;
   double _fsI2cEn = 1;
 
-  // Возвращенные параметры связи
   double _rtxLinkWarnThreshold = SerialService.rtxLinkWarnThreshold;
   double _rtxAutoEn = SerialService.rtxAutoEn;
 
@@ -729,27 +726,15 @@ class _SettingsTabState extends State<SettingsTab> {
         _buildSwitchCard(title: "При обрыве связи по шине SPI", commandName: "fs_spi_en", value: _fsSpiEn == 1, onChanged: (v) { setState(() => _fsSpiEn = v ? 1 : 0); SerialService.sendCommand("fs_spi_en ${_fsSpiEn.round()}"); }),
         _buildSwitchCard(title: "При обрыве связи по шине I2C", commandName: "fs_i2c_en", value: _fsI2cEn == 1, onChanged: (v) { setState(() => _fsI2cEn = v ? 1 : 0); SerialService.sendCommand("fs_i2c_en ${_fsI2cEn.round()}"); }),
         
-        // Возвращенные настройки связи
         _buildSliderCard(
-          title: "Порог падения качества связи",
-          commandName: "rtx_link_warn_threshold",
-          value: _rtxLinkWarnThreshold,
+          title: "Порог падения качества связи", commandName: "rtx_link_warn_threshold", value: _rtxLinkWarnThreshold,
           min: 5, max: 90, divisions: 85, unit: "%",
           onChanged: (v) => setState(() => _rtxLinkWarnThreshold = v),
-          onChangeEnd: (v) {
-            SerialService.rtxLinkWarnThreshold = v;
-            SerialService.sendCommand("rtx_link_warn_threshold ${v.round()}");
-          },
+          onChangeEnd: (v) { SerialService.rtxLinkWarnThreshold = v; SerialService.sendCommand("rtx_link_warn_threshold ${v.round()}"); },
         ),
         _buildSwitchCard(
-          title: "Инициатива с борта при ухудшении связи",
-          commandName: "rtx_auto_en",
-          value: _rtxAutoEn == 1,
-          onChanged: (v) {
-            setState(() => _rtxAutoEn = v ? 1 : 0);
-            SerialService.rtxAutoEn = v ? 1.0 : 0.0;
-            SerialService.sendCommand("rtx_auto_en ${_rtxAutoEn.round()}");
-          },
+          title: "Инициатива с борта при ухудшении связи", commandName: "rtx_auto_en", value: _rtxAutoEn == 1,
+          onChanged: (v) { setState(() => _rtxAutoEn = v ? 1 : 0); SerialService.rtxAutoEn = v ? 1.0 : 0.0; SerialService.sendCommand("rtx_auto_en ${_rtxAutoEn.round()}"); },
         ),
 
         _buildSectionHeader("РАДИОУПРАВЛЕНИЕ И ЭКСПОНЕНТЫ", Icons.gamepad),
@@ -789,29 +774,14 @@ class _SettingsTabState extends State<SettingsTab> {
 class DipoleSchematicPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.cyanAccent
-      ..strokeWidth = 3.0
-      ..strokeCap = StrokeCap.round;
-
-    final thinPaint = Paint()
-      ..color = Colors.amberAccent
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke;
-
+    final paint = Paint()..color = Colors.cyanAccent..strokeWidth = 3.0..strokeCap = StrokeCap.round;
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
-
     final cx = size.width / 2;
     
-    // Верхнее плечо (провод)
     canvas.drawLine(Offset(cx, 15), Offset(cx, size.height / 2 - 5), paint);
-    // Нижнее плечо (трубка)
     canvas.drawLine(Offset(cx, size.height / 2 + 5), Offset(cx, size.height - 15), paint..color = Colors.blueAccent..strokeWidth = 5.0);
-
-    // Точка питания (зазор)
     canvas.drawCircle(Offset(cx, size.height / 2), 3, Paint()..color = Colors.redAccent);
 
-    // Размеры и подписи
     textPainter.text = const TextSpan(text: "Верхнее плечо (провод)", style: TextStyle(color: Colors.white70, fontSize: 10));
     textPainter.layout();
     textPainter.paint(canvas, Offset(cx + 12, 25));
@@ -819,10 +789,6 @@ class DipoleSchematicPainter extends CustomPainter {
     textPainter.text = const TextSpan(text: "Нижнее плечо (трубка)", style: TextStyle(color: Colors.white70, fontSize: 10));
     textPainter.layout();
     textPainter.paint(canvas, Offset(cx + 12, size.height - 35));
-
-    textPainter.text = const TextSpan(text: "Зазор питания", style: TextStyle(color: Colors.redAccent, fontSize: 9));
-    textPainter.layout();
-    textPainter.paint(canvas, Offset(cx + 12, size.height / 2 - 6));
   }
 
   @override
@@ -832,17 +798,11 @@ class DipoleSchematicPainter extends CustomPainter {
 class KharchenkoSchematicPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.amberAccent
-      ..strokeWidth = 3.0
-      ..style = PaintingStyle.stroke
-      ..strokeJoin = StrokeJoin.round;
-
+    final paint = Paint()..color = Colors.amberAccent..strokeWidth = 3.0..style = PaintingStyle.stroke..strokeJoin = StrokeJoin.round;
     final cx = size.width / 2;
     final cy = size.height / 2;
     const sizeDiamond = 35.0;
 
-    // Рисуем двойной ромб Харченко
     final path = Path()
       ..moveTo(cx, cy - sizeDiamond)
       ..lineTo(cx + sizeDiamond, cy)
@@ -855,8 +815,6 @@ class KharchenkoSchematicPainter extends CustomPainter {
       ..close();
 
     canvas.drawPath(path, paint);
-
-    // Точки питания
     canvas.drawCircle(Offset(cx, cy + sizeDiamond), 3, Paint()..color = Colors.redAccent);
 
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
@@ -882,7 +840,6 @@ class RadioTab extends StatefulWidget {
 class _RadioTabState extends State<RadioTab> {
   double _rtxEn = 1;
   double _rtxBand = SerialService.rtxBand;
-  double _rtxAddr = 1234;
   double _rtxChan = SerialService.rtxChan;
   double _rtxSf = SerialService.rtxSf;
   double _rtxBw = SerialService.rtxBw; 
@@ -891,10 +848,9 @@ class _RadioTabState extends State<RadioTab> {
   
   double _calcEnvironmentLoss = 15.0; 
 
-  // Параметры расчета антенн с физическими факторами
-  double _dipoleTubeDiameterMm = 3.0; // Диаметр трубки нижнего плеча (2 - 5 мм)
-  double _dipoleTopWireSqMm = 1.0;    // Сечение провода верхнего плеча (0.5 - 2.5 мм²)
-  double _kharchenkoWireSqMm = 2.0;   // Сечение провода Харченко (1 - 4 мм²)
+  double _dipoleTubeDiameterMm = 3.0; 
+  double _dipoleTopWireSqMm = 1.0;    
+  double _kharchenkoWireSqMm = 2.0;   
 
   final List<double> _bwTable = [
     7800.0, 10400.0, 15600.0, 20800.0, 31250.0, 
@@ -906,7 +862,6 @@ class _RadioTabState extends State<RadioTab> {
     9: -12.5, 10: -15.0, 11: -17.5, 12: -20.0
   };
 
-  // Частота берется напрямую из настроек радиомодуля
   double get _currentFreqMhz => (_rtxBand * 100.0) + _rtxChan;
 
   double _calculateSensitivity() {
@@ -949,21 +904,13 @@ class _RadioTabState extends State<RadioTab> {
     };
   }
 
-  // Расчет геометрии антенн с учетом физических факторов (диаметр, сечение, атмосфера, зазор)
   Map<String, dynamic> _calculateAntennaDimensions() {
     double freqHz = _currentFreqMhz * 1e6;
-    
-    // Атмосферный коэффициент (скорость радиоволн в стандартной атмосфере с учетом диэлектрической проницаемости воздуха n ≈ 1.0003)
     double nAtmosphere = 1.0003;
     double cInAir = 299792458.0 / nAtmosphere;
     double lambdaMm = (cInAir / freqHz) * 1000.0;
 
-    // 1. Вертикальный диполь (каждое плечо ≈ λ/4)
-    // Учитываем эквивалентный диаметр проводов и трубки, а также зазор питания (3 мм)
-    double radiusTop = math.sqrt(_dipoleTopWireSqMm / math.pi); // мм
-    double equivalentDiameterBot = _dipoleTubeDiameterMm; // мм
-    
-    // Эмпирический коэффициент укорочения с учетом толщины плеч и зазора питания
+    double equivalentDiameterBot = _dipoleTubeDiameterMm; 
     double feedGapMm = 3.0;
     double shorteningFactorDipole = 0.95 
         - (0.012 * (equivalentDiameterBot / (lambdaMm / 4.0))) 
@@ -971,9 +918,7 @@ class _RadioTabState extends State<RadioTab> {
         
     double dipoleArmMm = (lambdaMm / 4.0) * shorteningFactorDipole;
 
-    // 2. Антенна Харченко (сторона ромба)
     double radiusKharc = math.sqrt(_kharchenkoWireSqMm / math.pi);
-    // Укорочение провода Харченко с учетом его сечения и скин-эффекта
     double shorteningFactorKharc = 0.97 - (0.008 * radiusKharc);
     double kharchenkoSideMm = (lambdaMm / 4.0) * shorteningFactorKharc;
 
@@ -1081,10 +1026,7 @@ class _RadioTabState extends State<RadioTab> {
           onChangeEnd: (v) { SerialService.rtxPower = v; SerialService.sendCommand("rtx_power ${v.round()}"); },
         ),
 
-        // ==========================================
-        // КАЛЬКУЛЯТОР ДАЛЬНОСТИ И РАСЧЕТ АНТЕНН С ГРАФИКОЙ
-        // ==========================================
-        _buildSectionHeader("КАЛЬКУЛЯТОР ДАЛЬНОСТИ И АНТЕНН (ВХОДНАЯ ЧАСТОТА: ${_currentFreqMhz.toStringAsFixed(0)} МГц)", Icons.analytics),
+        _buildSectionHeader("КАЛЬКУЛЯТОР ЛИНКА И АНТЕНН (ЧАСТОТА: ${_currentFreqMhz.toStringAsFixed(0)} МГц)", Icons.analytics),
         
         Card(
           color: const Color(0xFF1E222B),
@@ -1101,9 +1043,9 @@ class _RadioTabState extends State<RadioTab> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    Column(children: [const Text("Чувствительность", style: TextStyle(fontSize: 10, color: Colors.white60)), const SizedBox(height: 2), Text("${sensitivity.toStringAsFixed(1)} dBm", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white))]),
+                    Column(children: [const Text("Чувствительность", style: TextStyle(fontSize: 10, color: Colors.white60)), const SizedBox(height: 2), Text("${sensitivity.toStringAsFixed(1)} dBm", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.cyanAccent))]),
+                    Column(children: [const Text("Скорость (Air)", style: TextStyle(fontSize: 10, color: Colors.white60)), const SizedBox(height: 2), Text(bitRateStr, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent))]),
                     Column(children: [const Text("EIRP Пульта", style: TextStyle(fontSize: 10, color: Colors.white60)), const SizedBox(height: 2), Text("${(linkResults['eirp'] as double).toStringAsFixed(1)} dBm", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white))]),
-                    Column(children: [const Text("Скорость (Air)", style: TextStyle(fontSize: 10, color: Colors.white60)), const SizedBox(height: 2), Text(bitRateStr, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white))]),
                   ],
                 ),
               ],
@@ -1111,7 +1053,6 @@ class _RadioTabState extends State<RadioTab> {
           ),
         ),
 
-        // Графические схемы и размеры антенн
         Card(
           child: Padding(
             padding: const EdgeInsets.all(12.0),
@@ -1122,7 +1063,6 @@ class _RadioTabState extends State<RadioTab> {
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    // Вертикальный диполь (схема + размеры)
                     Expanded(
                       child: Column(
                         children: [
@@ -1139,7 +1079,6 @@ class _RadioTabState extends State<RadioTab> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    // Антена Харченко (схема + размеры)
                     Expanded(
                       child: Column(
                         children: [
@@ -1162,7 +1101,6 @@ class _RadioTabState extends State<RadioTab> {
           ),
         ),
 
-        // Настройка физических параметров антенн и условий
         Card(
           child: Padding(
             padding: const EdgeInsets.all(12.0),
@@ -1206,10 +1144,17 @@ class _RadioTabState extends State<RadioTab> {
 }
 
 // ==========================================
-// ВКЛАДКА: ТЕСТЫ (TestsTab)
+// ВКЛАДКА: ТЕСТЫ И КАЛИБРОВКИ (TestsTab)
 // ==========================================
-class TestsTab extends StatelessWidget {
+class TestsTab extends StatefulWidget {
   const TestsTab({super.key});
+
+  @override
+  State<TestsTab> createState() => _TestsTabState();
+}
+
+class _TestsTabState extends State<TestsTab> {
+  int _selectedChannel = 0; // Для теста смены канала связи
 
   Widget _buildSectionHeader(String title, IconData icon) {
     return Padding(
@@ -1249,12 +1194,149 @@ class TestsTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
+        _buildSectionHeader("АППАРАТНЫЕ ТЕСТЫ ОБОРУДОВАНИЯ", Icons.memory),
+        _buildActionCard(
+          context: context, title: "Тест подключения MPU6050", subtitleCommand: "test_mpu", icon: Icons.explore, color: Colors.cyanAccent,
+          onTap: () {
+            if (!SerialService.isConnected) {
+              showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
+            } else {
+              SerialService.sendCommand("test_mpu");
+              showAppDialog(context, "Тест MPU6050", "Команда отправлена. Проверьте терминал на наличие ответа гироскопа/акселерометра.");
+            }
+          },
+        ),
+        _buildActionCard(
+          context: context, title: "Тест подключения SX126x", subtitleCommand: "test_sx", icon: Icons.wifi, color: Colors.blueAccent,
+          onTap: () {
+            if (!SerialService.isConnected) {
+              showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
+            } else {
+              SerialService.sendCommand("test_sx");
+              showAppDialog(context, "Тест SX126x", "Проверка инициализации радиомодуля по SPI запущенна!");
+            }
+          },
+        ),
+        _buildActionCard(
+          context: context, title: "Тест подключения лидара", subtitleCommand: "test_lidar", icon: Icons.radar, color: Colors.orangeAccent,
+          onTap: () {
+            if (!SerialService.isConnected) {
+              showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
+            } else {
+              SerialService.sendCommand("test_lidar");
+              showAppDialog(context, "Тест лидара", "Запрос расстояния с дальномера отправлен!");
+            }
+          },
+        ),
+
+        _buildSectionHeader("ИСПОЛНИТЕЛЬНЫЕ И СИСТЕМНЫЕ ТЕСТЫ", Icons.gavel),
+        _buildActionCard(
+          context: context, title: "Тест моторов 25%", subtitleCommand: "test_motor", icon: Icons.sports_motorsports, color: Colors.redAccent,
+          onTap: () {
+            if (!SerialService.isConnected) {
+              showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
+            } else {
+              SerialService.sendCommand("test_motor");
+              showAppDialog(context, "Внимание", "Запущен тест моторов на 25 мощности! Убедитесь, что пропеллеры сняты!", isError: true);
+            }
+          },
+        ),
+        _buildActionCard(
+          context: context, title: "Тест PID 25%", subtitleCommand: "test_pid", icon: Icons.tune, color: Colors.purpleAccent,
+          onTap: () {
+            if (!SerialService.isConnected) {
+              showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
+            } else {
+              SerialService.sendCommand("test_pid");
+              showAppDialog(context, "Тест PID", "Стресс-тест ПИД-регуляторов (25%) активирован.");
+            }
+          },
+        ),
+        _buildActionCard(
+          context: context, title: "Тест связи с пультом", subtitleCommand: "test_rc", icon: Icons.gamepad, color: Colors.greenAccent,
+          onTap: () {
+            if (!SerialService.isConnected) {
+              showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
+            } else {
+              SerialService.sendCommand("test_rc");
+              showAppDialog(context, "Тест RC", "Диагностика пакетов управления пульта запущена.");
+            }
+          },
+        ),
+
+        // ТЕСТ СМЕНЫ КАНАЛА СВЯЗИ С ПУЛЬТОМ С ВЫБОРОМ НОМЕРА
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Тест смены канала связи с пультом", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amberAccent)),
+                const Text("test_rc_can", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontFamily: 'monospace')),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text("Выбор канала (0 - 99):", style: TextStyle(fontSize: 11, color: Colors.white70)),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
+                      child: Text("КАНАЛ: ${_selectedChannel.toInt()}", style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                    ),
+                  ],
+                ),
+                Slider(
+                  value: _selectedChannel.toDouble(),
+                  min: 0,
+                  max: 99,
+                  divisions: 99,
+                  onChanged: (v) => setState(() => _selectedChannel = v.round()),
+                ),
+                const SizedBox(height: 6),
+                SizedBox(
+                  width: double.infinity,
+                  height: 36,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      if (!SerialService.isConnected) {
+                        showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
+                      } else {
+                        SerialService.sendCommand("test_rc_can $_selectedChannel");
+                        showAppDialog(context, "Успех", "Отправлена команда: test_rc_can $_selectedChannel");
+                      }
+                    },
+                    icon: const Icon(Icons.wifi_channel, size: 16),
+                    label: const Text("Выполнить тест смены канала", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueAccent,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
         _buildSectionHeader("КАЛИБРОВКИ ДАТЧИКОВ", Icons.explore),
-        _buildActionCard(context: context, title: "Калибровка гироскопа", subtitleCommand: "cal_gyro", icon: Icons.explore_outlined, color: Colors.blueAccent, onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("cal_gyro"); showAppDialog(context, "Успех", "Калибровка гироскопа запущена!"); } }),
-        _buildActionCard(context: context, title: "Калибровка акселерометра", subtitleCommand: "cal_acc", icon: Icons.grid_view, color: Colors.cyanAccent, onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("cal_acc"); showAppDialog(context, "Успех", "Калибровка акселерометра запущена!"); } }),
-        _buildActionCard(context: context, title: "Калибровка лидара (Xtalk)", subtitleCommand: "cal_lidar", icon: Icons.radar, color: Colors.orangeAccent, onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("cal_lidar"); showAppDialog(context, "Успех", "Калибровка лидара запущена!"); } }),
+        _buildActionCard(
+          context: context, title: "Калибровка гироскопа", subtitleCommand: "cal_gyro", icon: Icons.explore_outlined, color: Colors.blueAccent,
+          onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("cal_gyro"); showAppDialog(context, "Успех", "Калибровка гироскопа запущена!"); } },
+        ),
+        _buildActionCard(
+          context: context, title: "Калибровка акселерометра", subtitleCommand: "cal_acc", icon: Icons.grid_view, color: Colors.cyanAccent,
+          onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("cal_acc"); showAppDialog(context, "Успех", "Калибровка акселерометра запущена!"); } },
+        ),
+        _buildActionCard(
+          context: context, title: "Калибровка лидара (Xtalk)", subtitleCommand: "cal_lidar", icon: Icons.radar, color: Colors.orangeAccent,
+          onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("cal_lidar"); showAppDialog(context, "Успех", "Калибровка лидара запущена!"); } },
+        ),
         _buildSectionHeader("СИСТЕМНЫЕ КОМАНДЫ", Icons.settings),
-        _buildActionCard(context: context, title: "Применить настройки RTX", subtitleCommand: "rtx_write", icon: Icons.save, color: Colors.greenAccent, onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("rtx_write"); showAppDialog(context, "Успех", "Настройки радиомодуля применены!"); } }),
+        _buildActionCard(
+          context: context, title: "Применить настройки RTX", subtitleCommand: "rtx_write", icon: Icons.save, color: Colors.greenAccent,
+          onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("rtx_write"); showAppDialog(context, "Успех", "Настройки радиомодуля применены!"); } },
+        ),
       ],
     );
   }
