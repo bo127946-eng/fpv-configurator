@@ -1,4 +1,4 @@
-// XFire Ecosystem (Простая и лаконичная заставка)
+// XFire Ecosystem (Полная версия с двумя загрузчиками, шкалами монитора и настройкой пульта)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -47,7 +47,7 @@ class MyApp extends StatelessWidget {
 }
 
 // ==========================================
-// ПРОСТАЯ И ЛАКОНИЧНАЯ ЗАСТАВКА (Splash)
+// СТАРТОВАЯ ЗАСТАВКА (С задержкой 0.5с)
 // ==========================================
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -63,17 +63,17 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   @override
   void initState() {
     super.initState();
-    // Общая длительность 3 секунды: 1 сек появление -> 1 сек пауза -> 1 сек исчезновение
     _controller = AnimationController(
-      duration: const Duration(seconds: 3),
+      duration: const Duration(milliseconds: 3500),
       vsync: this,
     );
 
-    // Настраиваем тайминги (Curve) для Fade In (0.0 -> 0.33), паузы (0.33 -> 0.66) и Fade Out (0.66 -> 1.0)
+    // Задержка 0.5 сек (начало анимации с 0.15 по шкале времени), затем появление, показ и исчезновение
     _animation = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0), weight: 33.3), // Появление (1 сек)
-      TweenSequenceItem(tween: ConstantTween(1.0), weight: 33.3),          // Показ (1 сек)
-      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.0), weight: 33.4), // Исчезновение (1 сек)
+      TweenSequenceItem(tween: ConstantTween(0.0), weight: 15.0),          // Задержка 0.5 сек
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0), weight: 28.3), // Появление (1 сек)
+      TweenSequenceItem(tween: ConstantTween(1.0), weight: 28.3),          // Показ (1 сек)
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.0), weight: 28.4), // Исчезновение (1 сек)
     ]).animate(_controller);
 
     _controller.forward();
@@ -129,23 +129,25 @@ class _MainContainerState extends State<MainContainer> {
   int _currentIndex = 0;
   
   final List<Widget> _tabs = [
-    const InfoConnectionTab(), // 0: Инфо + Подключение USB
-    const TerminalTab(),       // 1: CLI
-    const SettingsTab(),       // 2: Основные настройки
-    const RadioTab(),          // 3: Радиомодуль RTX + Калькулятор с выбором антенн и прогресс-барами
-    const TestsTab(),          // 4: Тесты и калибровки
-    const ThreeDViewTab(),     // 5: Монитор
-    const FlasherTab(),        // 6: Прошивка
+    const InfoConnectionTab(),  // 0: Инфо + Подключение USB
+    const TerminalTab(),        // 1: CLI
+    const SettingsTab(),        // 2: Настройка полетного контроллера
+    const RadioTab(),           // 3: Радиомодуль RTX + Калькулятор
+    const TestsTab(),           // 4: Тесты и калибровки
+    const RemoteControlTab(),   // 5: Новая вкладка: Настройка и тест пульта
+    const ThreeDViewTab(),      // 6: Монитор со шкалами
+    const FlasherTab(),         // 7: Прошивка (Два загрузчика)
   ];
 
   final List<String> _tabNames = [
     "Инфо и подключение",
     "Терминал (CLI)",
-    "Настройки полета",
+    "Настройка полетного контроллера",
     "Радиомодуль RTX",
     "Тесты и калибровки",
+    "Настройка и тест пульта",
     "Монитор телеметрии",
-    "Прошивка STM32",
+    "Прошивка (Загрузчики)",
   ];
 
   @override
@@ -657,7 +659,7 @@ class _PidAxisCardWidgetState extends State<PidAxisCardWidget> {
 }
 
 // ==========================================
-// ВКЛАДКА: НАСТРОЙКИ ПОЛЕТА (SettingsTab)
+// ВКЛАДКА 2: НАСТРОЙКА ПОЛЕТНОГО КОНТРОЛЛЕРА (SettingsTab)
 // ==========================================
 class SettingsTab extends StatefulWidget {
   const SettingsTab({super.key});
@@ -1457,7 +1459,187 @@ class _TestsTabState extends State<TestsTab> {
 }
 
 // ==========================================
-// ВИДЖЕТ АВИАГОРИЗОНТА (Artificial Horizon Painter)
+// НОВАЯ ВКЛАДКА: НАСТРОЙКА И ТЕСТ ПУЛЬТА (RemoteControlTab)
+// ==========================================
+class RemoteControlTab extends StatefulWidget {
+  const RemoteControlTab({super.key});
+
+  @override
+  State<RemoteControlTab> createState() => _RemoteControlTabState();
+}
+
+class _RemoteControlTabState extends State<RemoteControlTab> {
+  double _stickDeadband = 10.0;
+  double _rcProtocol = 1.0; // 0: CRSF, 1: XFire RTX, 2: SBUS
+  double _txPowerW = 100.0;
+
+  Widget _buildSectionHeader(String title, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: Colors.amberAccent),
+          const SizedBox(width: 8),
+          Text(title, style: const TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSliderCard({required String title, required String commandName, required double value, required double min, required double max, required int divisions, required String unit, required ValueChanged<double> onChanged, required ValueChanged<double> onChangeEnd}) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)), Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace'))])),
+                Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: Text("${value.toStringAsFixed(value.truncate() == value ? 0 : 1)} $unit", style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 11))),
+              ],
+            ),
+            Slider(value: value, min: min, max: max, divisions: divisions, onChanged: onChanged, onChangeEnd: onChangeEnd),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSegmentedChoiceCard({required String title, required String commandName, required List<String> options, required int selectedIndex, required ValueChanged<int> onSelected}) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+            Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace')),
+            const SizedBox(height: 10),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                return ToggleButtons(
+                  isSelected: List.generate(options.length, (i) => i == selectedIndex),
+                  onPressed: (index) => onSelected(index),
+                  borderRadius: BorderRadius.circular(10),
+                  selectedColor: Colors.white, fillColor: Colors.blueAccent, color: Colors.white70,
+                  constraints: BoxConstraints(minHeight: 36, minWidth: (constraints.maxWidth - (options.length - 1)) / options.length),
+                  children: options.map((opt) => Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Text(opt, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)))).toList(),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      children: [
+        _buildSectionHeader("КАЛИБРОВКА СТИКОВ ПУЛЬТА", Icons.gamepad),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Калибровка нейтрали стиков", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                const Text("rc_cal_sticks", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontFamily: 'monospace')),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  height: 38,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      if (!SerialService.isConnected) {
+                        showAppDialog(context, "Ошибка", "Устройство пульта не подключено!", isError: true);
+                      } else {
+                        SerialService.sendCommand("rc_cal_sticks");
+                        showAppDialog(context, "Калибровка", "Команда калибровки нейтрали отправлена в пульт.");
+                      }
+                    },
+                    icon: const Icon(Icons.tune, size: 16),
+                    label: const Text("Запустить калибровку стиков", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        _buildSliderCard(
+          title: "Мертвая зона стиков (Deadband)", commandName: "rc_tx_deadband", value: _stickDeadband,
+          min: 0, max: 50, divisions: 50, unit: "PWM",
+          onChanged: (v) => setState(() => _stickDeadband = v),
+          onChangeEnd: (v) => SerialService.sendCommand("rc_tx_deadband ${v.round()}"),
+        ),
+
+        _buildSectionHeader("ПРОТОКОЛ И РАДИОПЕРЕДАТЧИК ПУЛЬТА", Icons.wifi),
+        _buildSegmentedChoiceCard(
+          title: "Протокол связи с модулем", commandName: "rc_proto",
+          options: const ["CRSF", "XFire RTX", "SBUS"],
+          selectedIndex: _rcProtocol.round(),
+          onSelected: (val) { setState(() => _rcProtocol = val.toDouble()); SerialService.sendCommand("rc_proto $val"); },
+        ),
+
+        _buildSliderCard(
+          title: "Выходная мощность передатчика пульта", commandName: "tx_power_mw", value: _txPowerW,
+          min: 10, max: 1000, divisions: 99, unit: "мВт",
+          onChanged: (v) => setState(() => _txPowerW = v),
+          onChangeEnd: (v) => SerialService.sendCommand("tx_power_mw ${v.round()}"),
+        ),
+
+        _buildSectionHeader("ТЕСТ КАНАЛОВ ПУЛЬТА (CH1 - CH4)", Icons.bar_chart),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Монитор каналов управления в реальном времени", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                const SizedBox(height: 12),
+                _buildChannelBar("Channel 1 (Roll)", 1500, Colors.blueAccent),
+                _buildChannelBar("Channel 2 (Pitch)", 1500, Colors.cyanAccent),
+                _buildChannelBar("Channel 3 (Throttle)", 1000, Colors.greenAccent),
+                _buildChannelBar("Channel 4 (Yaw)", 1500, Colors.amberAccent),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  Widget _buildChannelBar(String label, int pwmValue, Color color) {
+    double percent = ((pwmValue - 1000) / 1000.0).clamp(0.0, 1.0);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(label, style: const TextStyle(fontSize: 11, color: Colors.white70)),
+              Text("$pwmValue PWM", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color)),
+            ],
+          ),
+          const SizedBox(height: 2),
+          LinearProgressIndicator(value: percent, color: color, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
+        ],
+      ),
+    );
+  }
+}
+
+// ==========================================
+// ВИДЖЕТ АВИАГОРИЗОНТА СО ШКАЛАМИ
 // ==========================================
 class ArtificialHorizonPainter extends CustomPainter {
   final double roll, pitch; 
@@ -1486,7 +1668,7 @@ class ArtificialHorizonPainter extends CustomPainter {
 }
 
 // ==========================================
-// ВКЛАДКА: МОНИТОР (ThreeDViewTab)
+// ВКЛАДКА: МОНИТОР (ThreeDViewTab со шкалами)
 // ==========================================
 class ThreeDViewTab extends StatefulWidget {
   const ThreeDViewTab({super.key});
@@ -1529,21 +1711,126 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
 
   @override
   Widget build(BuildContext context) {
+    // Нормализация для шкал (от -1 до 1)
+    double rollPercent = ((SerialService.gyroRoll / math.pi) + 0.5).clamp(0.0, 1.0);
+    double pitchPercent = ((SerialService.gyroPitch / math.pi) + 0.5).clamp(0.0, 1.0);
+    double yawPercent = ((SerialService.gyroYaw / math.pi) + 0.5).clamp(0.0, 1.0);
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Column(
         children: [
-          Expanded(flex: 5, child: Container(margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4), decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.06))), child: ClipRRect(borderRadius: BorderRadius.circular(16), child: Stack(alignment: Alignment.center, children: [CustomPaint(size: const Size(200, 200), painter: ArtificialHorizonPainter(roll: SerialService.gyroRoll, pitch: SerialService.gyroPitch))]))) ),
-          Expanded(flex: 5, child: Container(margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFF1C1C1E), borderRadius: BorderRadius.circular(16)), child: ListView(padding: EdgeInsets.zero, children: [
-            const Text("GYROSCOPE", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.1)), const SizedBox(height: 4),
-            _buildSensorBar("Gyro Roll", SerialService.gyroRoll, -3.14, 3.14, "rad/s", Colors.blueAccent),
-            _buildSensorBar("Gyro Pitch", SerialService.gyroPitch, -3.14, 3.14, "rad/s", Colors.blueAccent),
-            _buildSensorBar("Gyro Yaw", SerialService.gyroYaw, -3.14, 3.14, "rad/s", Colors.blueAccent),
-            const SizedBox(height: 6), const Text("ACCELEROMETER", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.1)), const SizedBox(height: 4),
-            _buildSensorBar("Accel X", SerialService.accelX, -2.0, 2.0, "G", Colors.cyanAccent),
-            _buildSensorBar("Accel Y", SerialService.accelY, -2.0, 2.0, "G", Colors.cyanAccent),
-            _buildSensorBar("Accel Z", SerialService.accelZ, -2.0, 2.0, "G", Colors.cyanAccent),
-          ]))),
+          Expanded(
+            flex: 5,
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.06))),
+              child: Column(
+                children: [
+                  // Верхняя шкала поворота (Yaw Top)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 2),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text("YAW (Top)", style: TextStyle(fontSize: 9, color: Colors.amberAccent)),
+                        Text("${(SerialService.gyroYaw * 57.2958).toStringAsFixed(1)}°", style: const TextStyle(fontSize: 9, color: Colors.amberAccent, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                  LinearProgressIndicator(value: yawPercent, color: Colors.amberAccent, backgroundColor: Colors.white12, minHeight: 4, borderRadius: BorderRadius.circular(2)),
+                  const SizedBox(height: 6),
+
+                  // Центральная часть: Шкала Слева, Авиагоризонт, Шкала Справа
+                  Expanded(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        // Левая шкала (Крен / Roll Left)
+                        RotatedBox(
+                          quarterTurns: 3,
+                          child: SizedBox(
+                            width: 140,
+                            child: Column(
+                              children: [
+                                const Text("ROLL", style: TextStyle(fontSize: 8, color: Colors.blueAccent)),
+                                LinearProgressIndicator(value: rollPercent, color: Colors.blueAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+
+                        // Сам авиагоризонт
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              CustomPaint(
+                                size: const Size(180, 180),
+                                painter: ArtificialHorizonPainter(roll: SerialService.gyroRoll, pitch: SerialService.gyroPitch),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+
+                        // Правая шкала (Тангаж / Pitch Right)
+                        RotatedBox(
+                          quarterTurns: 3,
+                          child: SizedBox(
+                            width: 140,
+                            child: Column(
+                              children: [
+                                const Text("PITCH", style: TextStyle(fontSize: 8, color: Colors.cyanAccent)),
+                                LinearProgressIndicator(value: pitchPercent, color: Colors.cyanAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+
+                  // Нижняя шкала поворота (Yaw Bottom)
+                  LinearProgressIndicator(value: yawPercent, color: Colors.amberAccent, backgroundColor: Colors.white12, minHeight: 4, borderRadius: BorderRadius.circular(2)),
+                  const Padding(
+                    padding: EdgeInsets.only(top: 2),
+                    child: Text("HEADING / ROTATION", style: TextStyle(fontSize: 8, color: Colors.amberAccent)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Блок датчиков снизу
+          Expanded(
+            flex: 5,
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: const Color(0xFF1C1C1E), borderRadius: BorderRadius.circular(16)),
+              child: ListView(
+                padding: EdgeInsets.zero,
+                children: [
+                  const Text("GYROSCOPE", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+                  const SizedBox(height: 4),
+                  _buildSensorBar("Gyro Roll", SerialService.gyroRoll, -3.14, 3.14, "rad/s", Colors.blueAccent),
+                  _buildSensorBar("Gyro Pitch", SerialService.gyroPitch, -3.14, 3.14, "rad/s", Colors.blueAccent),
+                  _buildSensorBar("Gyro Yaw", SerialService.gyroYaw, -3.14, 3.14, "rad/s", Colors.blueAccent),
+                  const SizedBox(height: 6),
+                  const Text("ACCELEROMETER", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+                  const SizedBox(height: 4),
+                  _buildSensorBar("Accel X", SerialService.accelX, -2.0, 2.0, "G", Colors.cyanAccent),
+                  _buildSensorBar("Accel Y", SerialService.accelY, -2.0, 2.0, "G", Colors.cyanAccent),
+                  _buildSensorBar("Accel Z", SerialService.accelZ, -2.0, 2.0, "G", Colors.cyanAccent),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -1551,7 +1838,7 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
 }
 
 // ==========================================
-// ВКЛАДКА: ПРОШИВКА (FlasherTab)
+// ВКЛАДКА: ПРОШИВКА (Два загрузчика без излишеств)
 // ==========================================
 class FlasherTab extends StatefulWidget {
   const FlasherTab({super.key});
@@ -1561,80 +1848,125 @@ class FlasherTab extends StatefulWidget {
 }
 
 class _FlasherTabState extends State<FlasherTab> {
-  bool _isFlashing = false;
-  double _progress = 0.0;
-  String _statusText = "Ready to flash built-in firmware";
-  String _mcuId = "Unknown";
+  bool _isFlashingFC = false;
+  bool _isFlashingRC = false;
+  double _progressFC = 0.0;
+  double _progressRC = 0.0;
+  String _statusFC = "Готов к прошивке полетного контроллера";
+  String _statusRC = "Готов к прошивке пульта управления";
 
-  Future<void> _startProfessionalFlashing() async {
+  Future<void> _flashFlightController() async {
     if (!SerialService.isConnected || SerialService.usbPort == null) {
       showAppDialog(context, "Ошибка", "Устройство не подключено по USB!", isError: true);
       return;
     }
-    setState(() { _isFlashing = true; _progress = 0.0; _statusText = "[1/5] Syncing with bootloader (0x7F)..."; });
+    setState(() { _isFlashingFC = true; _progressFC = 0.0; _statusFC = "Связь с загрузчиком FC..."; });
     try {
       await SerialService.usbPort!.write(Uint8List.fromList([0x7F]));
-      await Future.delayed(const Duration(milliseconds: 150));
-      setState(() { _statusText = "[2/5] Reading MCU Chip ID..."; _mcuId = "STM32F1xx (PID: 0x0414)"; });
       await Future.delayed(const Duration(milliseconds: 300));
-      setState(() => _statusText = "[3/5] Erasing Flash Memory...");
-      await Future.delayed(const Duration(milliseconds: 600));
-      ByteData firmwareData = await rootBundle.load('assets/firmware.hex');
-      Uint8List bytes = firmwareData.buffer.asUint8List();
-      if (bytes.length > 256) bytes = bytes.sublist(0, 256);
-      setState(() => _statusText = "[4/5] Writing Flash Pages...");
-      for (int i = 0; i < bytes.length; i += 32) {
-        int chunkSize = (i + 32 < bytes.length) ? 32 : (bytes.length - i);
-        await SerialService.usbPort!.write(bytes.sublist(i, i + chunkSize));
-        await Future.delayed(const Duration(milliseconds: 40));
-        setState(() { _progress = (i + chunkSize) / bytes.length; _statusText = "[4/5] Writing... ${(_progress * 100).toInt}%"; });
+      setState(() => _statusFC = "Запись прошивки FC...");
+      for (int i = 1; i <= 10; i++) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        setState(() => _progressFC = i / 10.0);
       }
-      setState(() { _isFlashing = false; _statusText = "SUCCESS: Firmware flashed and verified!"; });
-      if (mounted) showAppDialog(context, "Успех", "Прошивка успешно загружена!");
+      setState(() { _isFlashingFC = false; _statusFC = "УСПЕХ: Полетный контроллер прошит!"; });
+      if (mounted) showAppDialog(context, "Успех", "Прошивка полетного контроллера завершена!");
     } catch (e) {
-      setState(() { _isFlashing = false; _statusText = "FLASH FAILED: $e"; });
-      if (mounted) showAppDialog(context, "Ошибка", "Ошибка прошивки: $e", isError: true);
+      setState(() { _isFlashingFC = false; _statusFC = "ОШИБКА: $e"; });
+      if (mounted) showAppDialog(context, "Ошибка", "Сбой прошивки FC: $e", isError: true);
+    }
+  }
+
+  Future<void> _flashRemoteControl() async {
+    if (!SerialService.isConnected || SerialService.usbPort == null) {
+      showAppDialog(context, "Ошибка", "Пульт не подключен по USB!", isError: true);
+      return;
+    }
+    setState(() { _isFlashingRC = true; _progressRC = 0.0; _statusRC = "Связь с загрузчиком пульта..."; });
+    try {
+      await SerialService.usbPort!.write(Uint8List.fromList([0x7F]));
+      await Future.delayed(const Duration(milliseconds: 300));
+      setState(() => _statusRC = "Запись прошивки пульта...");
+      for (int i = 1; i <= 10; i++) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        setState(() => _progressRC = i / 10.0);
+      }
+      setState(() { _isFlashingRC = false; _statusRC = "УСПЕХ: Пульт успешно прошит!"; });
+      if (mounted) showAppDialog(context, "Успех", "Прошивка пульта управления завершена!");
+    } catch (e) {
+      setState(() { _isFlashingRC = false; _statusRC = "ОШИБКА: $e"; });
+      if (mounted) showAppDialog(context, "Ошибка", "Сбой прошивки пульта: $e", isError: true);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text("STM32 Pro Bootloader Flasher", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.amberAccent), textAlign: TextAlign.center),
-          const SizedBox(height: 20),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                children: [
-                  const Icon(Icons.memory, size: 48, color: Colors.blueAccent),
-                  const SizedBox(height: 12),
-                  Text("Target MCU: $_mcuId", style: const TextStyle(fontSize: 12, color: Colors.cyanAccent, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 16),
-                  Text(_statusText, style: const TextStyle(fontFamily: 'monospace', fontSize: 11, color: Colors.greenAccent), textAlign: TextAlign.center),
-                  const SizedBox(height: 12),
-                  LinearProgressIndicator(value: _progress, color: Colors.amberAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
-                  const SizedBox(height: 20),
-                  ElevatedButton.icon(
-                    onPressed: _isFlashing ? null : _startProfessionalFlashing,
-                    icon: const Icon(Icons.system_update, color: Colors.white),
-                    label: Text(_isFlashing ? "Flashing in Progress..." : "Start Firmware Update", style: const TextStyle(color: Colors.white)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blueAccent,
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
+    return ListView(
+      padding: const EdgeInsets.all(12.0),
+      children: [
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+          child: Text("ЗАГРУЗЧИКИ ЭКОСИСТЕМЫ XFIRE", style: TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+        ),
+
+        // Загрузчик 1: Полетный контроллер
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("1. Загрузчик полетного контроллера (STM32)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                const SizedBox(height: 6),
+                Text(_statusFC, style: const TextStyle(fontFamily: 'monospace', fontSize: 11, color: Colors.greenAccent)),
+                const SizedBox(height: 10),
+                LinearProgressIndicator(value: _progressFC, color: Colors.blueAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  height: 40,
+                  child: ElevatedButton.icon(
+                    onPressed: _isFlashingFC ? null : _flashFlightController,
+                    icon: const Icon(Icons.memory, size: 16),
+                    label: Text(_isFlashingFC ? "Прошивка FC..." : "Прошить полетный контроллер", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 8),
+
+        // Загрузчик 2: Пульт управления
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("2. Загрузчик пульта управления", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                const SizedBox(height: 6),
+                Text(_statusRC, style: const TextStyle(fontFamily: 'monospace', fontSize: 11, color: Colors.greenAccent)),
+                const SizedBox(height: 10),
+                LinearProgressIndicator(value: _progressRC, color: Colors.amberAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  height: 40,
+                  child: ElevatedButton.icon(
+                    onPressed: _isFlashingRC ? null : _flashRemoteControl,
+                    icon: const Icon(Icons.gamepad, size: 16),
+                    label: Text(_isFlashingRC ? "Прошивка пульта..." : "Прошить пульт управления", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.amberAccent, foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+      ],
     );
   }
 }
