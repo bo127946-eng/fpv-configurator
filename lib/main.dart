@@ -1,4 +1,4 @@
-// XFire Ecosystem (Полностью оптимизированная версия со строгим единым стилем элементов)
+// XFire Ecosystem (Финальный вариант с отступами horizontal: 16.0)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -1062,22 +1062,6 @@ class RtxAntennaExpansion extends StatelessWidget {
     required this.onComboChanged, required this.onSleeveToggle, required this.onSleeveThickChanged, required this.onTubeDiamChanged, required this.onTopWireChanged, required this.onKharcChanged, required this.onEnvLossChanged,
   });
 
-  Widget _buildInternalSlider(String title, double val, double min, double max, int div, String unit, ValueChanged<double> onChanged) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(title, style: const TextStyle(fontSize: 11, color: Colors.white70, fontWeight: FontWeight.w600)),
-            Text("${val.toStringAsFixed(val.truncate() == val ? 0 : 1)} $unit", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
-          ],
-        ),
-        Slider(value: val, min: min, max: max, divisions: div, onChanged: onChanged),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -1172,13 +1156,13 @@ class RtxAntennaExpansion extends StatelessWidget {
                   ),
                   if (hasProtectiveSleeve) ...[
                     const SizedBox(height: 4),
-                    _buildInternalSlider("Толщина стенки трубки (чехла):", sleeveThicknessMm, 0.5, 3.0, 25, "мм", onSleeveThickChanged),
+                    XFireSliderCard(title: "Толщина стенки трубки (чехла):", commandName: "sleeve_thick", value: sleeveThicknessMm, min: 0.5, max: 3.0, divisions: 25, unit: "мм", onChanged: onSleeveThickChanged, onChangeEnd: (_) {}),
                   ],
                   const SizedBox(height: 8),
-                  _buildInternalSlider("Диаметр трубки диполя (нижн.):", dipoleTubeDiameterMm, 2.0, 5.0, 6, "мм", onTubeDiamChanged),
-                  _buildInternalSlider("Сечение провода диполя (верхн.):", dipoleTopWireSqMm, 0.5, 2.5, 20, "мм²", onTopWireChanged),
-                  _buildInternalSlider("Сечение провода Харченко:", kharchenkoWireSqMm, 1.0, 4.0, 15, "мм²", onKharcChanged),
-                  _buildInternalSlider("Запас на условия (Fade Margin):", calcEnvironmentLoss, 5.0, 30.0, 25, "dB", onEnvLossChanged),
+                  XFireSliderCard(title: "Диаметр трубки диполя (нижн.):", commandName: "tube_diam", value: dipoleTubeDiameterMm, min: 2.0, max: 5.0, divisions: 6, unit: "мм", onChanged: onTubeDiamChanged, onChangeEnd: (_) {}),
+                  XFireSliderCard(title: "Сечение провода диполя (верхн.):", commandName: "top_wire", value: dipoleTopWireSqMm, min: 0.5, max: 2.5, divisions: 20, unit: "мм²", onChanged: onTopWireChanged, onChangeEnd: (_) {}),
+                  XFireSliderCard(title: "Сечение провода Харченко:", commandName: "kharc_wire", value: kharchenkoWireSqMm, min: 1.0, max: 4.0, divisions: 15, unit: "мм²", onChanged: onKharcChanged, onChangeEnd: (_) {}),
+                  XFireSliderCard(title: "Запас на условия (Fade Margin):", commandName: "fade_margin", value: calcEnvironmentLoss, min: 5.0, max: 30.0, divisions: 25, unit: "dB", onChanged: onEnvLossChanged, onChangeEnd: (_) {}),
                 ],
               ),
             ),
