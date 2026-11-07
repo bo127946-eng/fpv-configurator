@@ -1,4 +1,4 @@
-// XFire Ecosystem (Финальный вариант с отступами horizontal: 16.0)
+// XFire Ecosystem (Финальная версия с точной подгонкой размеров: выпадающие блоки +4мм, карточки +6мм, слайдеры +8мм)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -30,7 +30,7 @@ class MyApp extends StatelessWidget {
         cardTheme: CardTheme(
           color: const Color(0xFF1C1C1E),
           elevation: 2,
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          margin: const EdgeInsets.symmetric(horizontal: 19.0, vertical: 8), // Карточки шире на 6мм
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
         inputDecorationTheme: InputDecorationTheme(
@@ -47,7 +47,7 @@ class MyApp extends StatelessWidget {
 }
 
 // ==========================================
-// ГЛОБАЛЬНЫЕ UI КОМПОНЕНТЫ ЕДИНОГО СТИЛЯ
+// УНИВЕРСАЛЬНЫЕ КОМПОНЕНТЫ СДИЗАЙНОМ ШИРИНЫ
 // ==========================================
 
 class XFireCard extends StatelessWidget {
@@ -57,7 +57,7 @@ class XFireCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+      padding: const EdgeInsets.symmetric(horizontal: 19.0, vertical: 4.0), // Карточки +6мм шире
       child: Container(
         padding: const EdgeInsets.all(14.0),
         decoration: BoxDecoration(
@@ -97,36 +97,46 @@ class XFireSliderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return XFireCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-                    const SizedBox(height: 2),
-                    Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
-                  ],
+    return Padding(
+      // Слайдеры шире карточек еще на 8мм (суммарно шире на 14мм)
+      padding: const EdgeInsets.symmetric(horizontal: 15.0, vertical: 4.0),
+      child: Container(
+        padding: const EdgeInsets.all(14.0),
+        decoration: BoxDecoration(
+          color: const Color(0xFF141416),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.white12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                      const SizedBox(height: 2),
+                      Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
+                    ],
+                  ),
                 ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
-                child: Text(
-                  "${value.toStringAsFixed(value.truncate() == value ? 0 : 2)} $unit",
-                  style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 11),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+                  child: Text(
+                    "${value.toStringAsFixed(value.truncate() == value ? 0 : 2)} $unit",
+                    style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 11),
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Slider(value: value, min: min, max: max, divisions: divisions, onChanged: onChanged, onChangeEnd: onChangeEnd),
-        ],
+              ],
+            ),
+            const SizedBox(height: 8),
+            Slider(value: value, min: min, max: max, divisions: divisions, onChanged: onChanged, onChangeEnd: onChangeEnd),
+          ],
+        ),
       ),
     );
   }
@@ -225,19 +235,11 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  late Animation<double> _animation;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(duration: const Duration(milliseconds: 3500), vsync: this);
-    _animation = TweenSequence<double>([
-      TweenSequenceItem(tween: ConstantTween(0.0), weight: 15.0),          
-      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0), weight: 28.3), 
-      TweenSequenceItem(tween: ConstantTween(1.0), weight: 28.3),          
-      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.0), weight: 28.4), 
-    ]).animate(_controller);
-
     _controller.forward();
     _controller.addStatusListener((status) {
       if (status == AnimationStatus.completed && mounted) {
@@ -580,18 +582,23 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
           ),
         ),
         const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: EdgeInsets.symmetric(horizontal: 19, vertical: 8),
           child: Text('СПРАВОЧНИК CLI КОМАНД (doc.txt)', style: TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
         ),
         if (_isLoading)
           const Center(child: Padding(padding: EdgeInsets.all(20.0), child: CircularProgressIndicator(color: Colors.blueAccent)))
         else
-          ..._sections.map((sec) => Card(
-            child: ExpansionTile(
-              title: Text(sec.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-              iconColor: Colors.amberAccent,
-              collapsedIconColor: Colors.white54,
-              children: [Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: _buildContentWidgets(sec.content)))],
+          ..._sections.map((sec) => Padding(
+            // Выпадающие блоки расширены на 4мм (+2.5 horizontal от стандартных 16)
+            padding: const EdgeInsets.symmetric(horizontal: 13.5, vertical: 4.0),
+            child: Card(
+              margin: EdgeInsets.zero,
+              child: ExpansionTile(
+                title: Text(sec.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                iconColor: Colors.amberAccent,
+                collapsedIconColor: Colors.white54,
+                children: [Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: _buildContentWidgets(sec.content)))],
+              ),
             ),
           )),
         const SizedBox(height: 24),
@@ -649,7 +656,7 @@ class _SettingsTabState extends State<SettingsTab> {
 
   Widget _buildSectionHeader(String title, IconData icon) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
+      padding: const EdgeInsets.fromLTRB(19, 16, 19, 6),
       child: Row(
         children: [
           Icon(icon, size: 16, color: Colors.amberAccent),
@@ -762,7 +769,7 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
 
   Widget _buildSectionHeader(String title, IconData icon) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
+      padding: const EdgeInsets.fromLTRB(19, 16, 19, 6),
       child: Row(
         children: [
           Icon(icon, size: 16, color: Colors.amberAccent),
@@ -937,7 +944,8 @@ class RtxParametersExpansion extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+      // Выпадающий блок шире на 4мм
+      padding: const EdgeInsets.symmetric(horizontal: 13.5, vertical: 4.0),
       child: Card(
         margin: EdgeInsets.zero,
         child: ExpansionTile(
@@ -985,7 +993,8 @@ class RtxLinkCalculatorCard extends StatelessWidget {
     String bitRateStr = bitRate >= 1000 ? "${(bitRate / 1000).toStringAsFixed(1)} kbps" : "${bitRate.toStringAsFixed(0)} bps";
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+      // Выпадающий блок шире на 4мм
+      padding: const EdgeInsets.symmetric(horizontal: 13.5, vertical: 4.0),
       child: Card(
         margin: EdgeInsets.zero,
         child: ExpansionTile(
@@ -1065,7 +1074,8 @@ class RtxAntennaExpansion extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+      // Выпадающий блок шире на 4мм
+      padding: const EdgeInsets.symmetric(horizontal: 13.5, vertical: 4.0),
       child: Card(
         margin: EdgeInsets.zero,
         child: ExpansionTile(
@@ -1075,7 +1085,7 @@ class RtxAntennaExpansion extends StatelessWidget {
           collapsedIconColor: Colors.white54,
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              padding: const EdgeInsets.symmetric(horizontal: 19.0, vertical: 8.0),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -1156,13 +1166,89 @@ class RtxAntennaExpansion extends StatelessWidget {
                   ),
                   if (hasProtectiveSleeve) ...[
                     const SizedBox(height: 4),
-                    XFireSliderCard(title: "Толщина стенки трубки (чехла):", commandName: "sleeve_thick", value: sleeveThicknessMm, min: 0.5, max: 3.0, divisions: 25, unit: "мм", onChanged: onSleeveThickChanged, onChangeEnd: (_) {}),
+                    // Слайдер внутри карточки антенн
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 4.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text("Толщина стенки трубки (чехла):", style: TextStyle(fontSize: 11, color: Colors.white70, fontWeight: FontWeight.w600)),
+                              Text("${sleeveThicknessMm.toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                            ],
+                          ),
+                          Slider(value: sleeveThicknessMm, min: 0.5, max: 3.0, divisions: 25, onChanged: onSleeveThickChanged),
+                        ],
+                      ),
+                    ),
                   ],
                   const SizedBox(height: 8),
-                  XFireSliderCard(title: "Диаметр трубки диполя (нижн.):", commandName: "tube_diam", value: dipoleTubeDiameterMm, min: 2.0, max: 5.0, divisions: 6, unit: "мм", onChanged: onTubeDiamChanged, onChangeEnd: (_) {}),
-                  XFireSliderCard(title: "Сечение провода диполя (верхн.):", commandName: "top_wire", value: dipoleTopWireSqMm, min: 0.5, max: 2.5, divisions: 20, unit: "мм²", onChanged: onTopWireChanged, onChangeEnd: (_) {}),
-                  XFireSliderCard(title: "Сечение провода Харченко:", commandName: "kharc_wire", value: kharchenkoWireSqMm, min: 1.0, max: 4.0, divisions: 15, unit: "мм²", onChanged: onKharcChanged, onChangeEnd: (_) {}),
-                  XFireSliderCard(title: "Запас на условия (Fade Margin):", commandName: "fade_margin", value: calcEnvironmentLoss, min: 5.0, max: 30.0, divisions: 25, unit: "dB", onChanged: onEnvLossChanged, onChangeEnd: (_) {}),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 4.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text("Диаметр трубки диполя (нижн.):", style: TextStyle(fontSize: 11, color: Colors.white70, fontWeight: FontWeight.w600)),
+                            Text("${dipoleTubeDiameterMm.toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                          ],
+                        ),
+                        Slider(value: dipoleTubeDiameterMm, min: 2.0, max: 5.0, divisions: 6, onChanged: onTubeDiamChanged),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 4.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text("Сечение провода диполя (верхн.):", style: TextStyle(fontSize: 11, color: Colors.white70, fontWeight: FontWeight.w600)),
+                            Text("${dipoleTopWireSqMm.toStringAsFixed(1)} мм²", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                          ],
+                        ),
+                        Slider(value: dipoleTopWireSqMm, min: 0.5, max: 2.5, divisions: 20, onChanged: onTopWireChanged),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 4.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text("Сечение провода Харченко:", style: TextStyle(fontSize: 11, color: Colors.white70, fontWeight: FontWeight.w600)),
+                            Text("${kharchenkoWireSqMm.toStringAsFixed(1)} мм²", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                          ],
+                        ),
+                        Slider(value: kharchenkoWireSqMm, min: 1.0, max: 4.0, divisions: 15, onChanged: onKharcChanged),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 4.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text("Запас на условия (Fade Margin):", style: TextStyle(fontSize: 11, color: Colors.white70, fontWeight: FontWeight.w600)),
+                            Text("${calcEnvironmentLoss.toStringAsFixed(1)} dB", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                          ],
+                        ),
+                        Slider(value: calcEnvironmentLoss, min: 5.0, max: 30.0, divisions: 25, onChanged: onEnvLossChanged),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -1326,7 +1412,7 @@ class _TestsTabState extends State<TestsTab> {
 
   Widget _buildSectionHeader(String title, IconData icon) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
+      padding: const EdgeInsets.fromLTRB(19, 16, 19, 6),
       child: Row(
         children: [
           Icon(icon, size: 16, color: Colors.amberAccent),
@@ -1339,7 +1425,7 @@ class _TestsTabState extends State<TestsTab> {
 
   Widget _buildActionCard({required BuildContext context, required String title, required String subtitleCommand, required IconData icon, required Color color, required VoidCallback onTap}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+      padding: const EdgeInsets.symmetric(horizontal: 19.0, vertical: 4.0),
       child: Card(
         margin: EdgeInsets.zero,
         child: InkWell(
@@ -1464,7 +1550,7 @@ class _TerminalTabState extends State<TerminalTab> {
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+            padding: const EdgeInsets.symmetric(horizontal: 19.0, vertical: 4.0),
             child: Row(
               children: [
                 Expanded(
@@ -1490,14 +1576,14 @@ class _TerminalTabState extends State<TerminalTab> {
           ),
           Expanded(
             child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              margin: const EdgeInsets.symmetric(horizontal: 19, vertical: 4),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.06))),
               child: SingleChildScrollView(reverse: true, child: Text(_displayLog, style: const TextStyle(fontFamily: 'monospace', color: Colors.greenAccent, fontSize: 11))),
             ),
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            padding: const EdgeInsets.symmetric(horizontal: 19.0, vertical: 8.0),
             child: Row(
               children: [
                 Expanded(
@@ -1685,7 +1771,7 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
           Expanded(
             flex: 6,
             child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              margin: const EdgeInsets.symmetric(horizontal: 19, vertical: 4),
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.06))),
               child: Column(
@@ -1710,7 +1796,7 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
           Expanded(
             flex: 4,
             child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              margin: const EdgeInsets.symmetric(horizontal: 19, vertical: 4),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(color: const Color(0xFF1C1C1E), borderRadius: BorderRadius.circular(16)),
               child: ListView(
@@ -1798,7 +1884,7 @@ class _FlasherTabState extends State<FlasherTab> {
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
         const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: EdgeInsets.symmetric(horizontal: 19, vertical: 8),
           child: Text("ЗАГРУЗЧИКИ ЭКОСИСТЕМЫ XFIRE", style: TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
         ),
         Card(
