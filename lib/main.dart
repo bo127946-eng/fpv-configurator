@@ -1,4 +1,4 @@
-// XFire Ecosystem (Финальный вариант с единым виджетом и исправленными отступами слайдеров)
+// XFire Ecosystem (Две раздельные карточки в едином стиле с увеличенной шириной и одинаковой типографикой)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -285,9 +285,6 @@ void showAppDialog(BuildContext context, String title, String message, {bool isE
   );
 }
 
-// ==========================================
-// МОДЕЛЬ ДАННЫХ ДОКУМЕНТАЦИИ
-// ==========================================
 class DocSection {
   final String title;
   final String content;
@@ -1032,7 +1029,7 @@ class KharchenkoSchematicPainter extends CustomPainter {
 }
 
 // ==========================================
-// ЕДИНЫЙ ВИДЖЕТ СЛАЙДЕРА ДЛЯ ВКЛАДКИ RTX
+// КАРТОЧКА 1: ПАРАМЕТРЫ РАДИОМОДУЛЯ (ДВУХУРОВНЕВАЯ СТРУКТУРА С УНИФИЦИРОВАННЫМИ СЛАЙДЕРАМИ)
 // ==========================================
 class RtxParametersExpansion extends StatelessWidget {
   final double rtxEn, rtxBand, rtxChan, rtxSf, rtxBw, rtxCr, rtxPower;
@@ -1046,8 +1043,8 @@ class RtxParametersExpansion extends StatelessWidget {
     required this.onRtxEnChanged, required this.onBandChanged, required this.onChanChanged, required this.onSfChanged, required this.onBwChanged, required this.onCrChanged, required this.onPowerChanged, required this.onEnvLossChanged,
   });
 
-  // ЕДИНЫЙ МЕТОД ДЛЯ ВСЕХ СЛАЙДЕРОВ С СИММЕТРИЧНЫМИ ОТСТУПАМИ И ЕДИНОЙ ТИПОГРАФИКОЙ
-  Widget _buildUniformSliderCard({
+  // Единый шаблон слайдера с увеличенной шириной (+10мм) и идентичным оформлением значений
+  Widget _buildUnifiedSlider({
     required String title,
     required String commandName,
     required double value,
@@ -1059,89 +1056,142 @@ class RtxParametersExpansion extends StatelessWidget {
     required ValueChanged<double> onChangeEnd,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 22.0, vertical: 5.0), // Шире на ~10мм по бокам
-      child: Card(
-        margin: EdgeInsets.zero,
-        child: Padding(
-          padding: const EdgeInsets.all(14.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title, 
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          commandName, 
-                          style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600),
-                        ),
-                      ],
-                    ),
+      padding: const EdgeInsets.symmetric(horizontal: 22.0, vertical: 6.0),
+      child: Container(
+        padding: const EdgeInsets.all(12.0),
+        decoration: BoxDecoration(
+          color: const Color(0xFF141416),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title, 
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        commandName, 
+                        style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600),
+                      ),
+                    ],
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                    decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
-                    child: Text(
-                      "${value.toStringAsFixed(value.truncate() == value ? 0 : 2)} $unit",
-                      style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 11),
-                    ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.blueAccent.withOpacity(0.15), 
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Slider(
-                value: value,
-                min: min,
-                max: max,
-                divisions: divisions,
-                onChanged: onChanged,
-                onChangeEnd: onChangeEnd,
-              ),
-            ],
-          ),
+                  child: Text(
+                    "${value.toStringAsFixed(value.truncate() == value ? 0 : 2)} $unit",
+                    style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 11),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Slider(
+              value: value,
+              min: min,
+              max: max,
+              divisions: divisions,
+              onChanged: onChanged,
+              onChangeEnd: onChangeEnd,
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildUniformSwitchCard({
+  // Единый шаблон переключателя
+  Widget _buildUnifiedSwitch({
     required String title,
     required String commandName,
     required bool value,
     required ValueChanged<bool> onChanged,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 22.0, vertical: 5.0),
-      child: Card(
-        margin: EdgeInsets.zero,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-                  const SizedBox(height: 2),
-                  Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
-                ],
-              ),
-              Switch(value: value, onChanged: onChanged, activeColor: Colors.blueAccent),
-            ],
-          ),
+      padding: const EdgeInsets.symmetric(horizontal: 22.0, vertical: 6.0),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8.0),
+        decoration: BoxDecoration(
+          color: const Color(0xFF141416),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white12),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                const SizedBox(height: 2),
+                Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
+              ],
+            ),
+            Switch(value: value, onChanged: onChanged, activeColor: Colors.blueAccent),
+          ],
         ),
       ),
     );
   }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+      child: Card(
+        margin: EdgeInsets.zero,
+        child: ExpansionTile(
+          title: const Text("Параметры радиомодуля RTX (SPI)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amberAccent)),
+          subtitle: const Text("Настройки каналов, мощности и связи", style: TextStyle(fontSize: 10, color: Colors.white70)),
+          iconColor: Colors.amberAccent,
+          collapsedIconColor: Colors.white54,
+          children: [
+            const SizedBox(height: 8),
+            _buildUnifiedSwitch(title: "Включить RTX модуль", commandName: "rtx_en", value: rtxEn == 1, onChanged: (v) => onRtxEnChanged(v ? 1.0 : 0.0)),
+            _buildUnifiedSlider(title: "Частотный диапазон (x100 МГц)", commandName: "rtx_band", value: rtxBand, min: 1, max: 9, divisions: 8, unit: "", onChanged: onRtxEnChanged, onChangeEnd: onBandChanged),
+            _buildUnifiedSlider(title: "Сетевой адрес устройства", commandName: "rtx_addr", value: 1234, min: 0, max: 65535, divisions: 100, unit: "", onChanged: (v) {}, onChangeEnd: (v) {}),
+            _buildUnifiedSlider(title: "Рабочий канал связи (1 МГц шаг)", commandName: "rtx_chan", value: rtxChan, min: 0, max: 99, divisions: 99, unit: "МГц", onChanged: onRtxEnChanged, onChangeEnd: onChanChanged),
+            _buildUnifiedSlider(title: "Spreading Factor (SF)", commandName: "rtx_sf", value: rtxSf, min: 5, max: 12, divisions: 7, unit: "", onChanged: onRtxEnChanged, onChangeEnd: onSfChanged),
+            _buildUnifiedSlider(title: "Полоса пропускания (Bandwidth)", commandName: "rtx_bw", value: rtxBw, min: 0, max: 9, divisions: 9, unit: "", onChanged: onRtxEnChanged, onChangeEnd: onBwChanged),
+            _buildUnifiedSlider(title: "Коэффициент кодирования (Coding Rate)", commandName: "rtx_cr", value: rtxCr, min: 1, max: 4, divisions: 3, unit: "", onChanged: onRtxEnChanged, onChangeEnd: onCrChanged),
+            _buildUnifiedSlider(title: "Мощность передатчика", commandName: "rtx_power", value: rtxPower, min: -9, max: 22, divisions: 31, unit: "dBm", onChanged: onRtxEnChanged, onChangeEnd: onPowerChanged),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ==========================================
+// КАРТОЧКА 2: КАЛЬКУЛЯТОР ЛИНКА (ВТОРАЯ КАРТОЧКА В СТРОГО ЕДИНОМ СТИЛЕ)
+// ==========================================
+class RtxLinkCalculatorCard extends StatelessWidget {
+  final double currentFreqMhz, sensitivity, distKm, bitRate, sensitivityProgress, bitRateProgress;
+
+  const RtxLinkCalculatorCard({
+    super.key,
+    required this.currentFreqMhz,
+    required this.sensitivity,
+    required this.distKm,
+    required this.bitRate,
+    required this.sensitivityProgress,
+    required this.bitRateProgress,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1153,69 +1203,60 @@ class RtxParametersExpansion extends StatelessWidget {
       child: Card(
         margin: EdgeInsets.zero,
         child: ExpansionTile(
-          title: const Text("Параметры радиомодуля RTX (SPI)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amberAccent)),
-          subtitle: const Text("Настройки каналов, мощности и калькулятор линка", style: TextStyle(fontSize: 10, color: Colors.white70)),
+          title: const Text("Калькулятор линка и дальности связи", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amberAccent)),
+          subtitle: const Text("Расчет чувствительности и скорости по воздуху", style: TextStyle(fontSize: 10, color: Colors.white70)),
           iconColor: Colors.amberAccent,
           collapsedIconColor: Colors.white54,
           children: [
-            const SizedBox(height: 6),
-            _buildUniformSwitchCard(title: "Включить RTX модуль", commandName: "rtx_en", value: rtxEn == 1, onChanged: (v) => onRtxEnChanged(v ? 1.0 : 0.0)),
-            _buildUniformSliderCard(title: "Частотный диапазон (x100 МГц)", commandName: "rtx_band", value: rtxBand, min: 1, max: 9, divisions: 8, unit: "", onChanged: onRtxEnChanged, onChangeEnd: onBandChanged),
-            _buildUniformSliderCard(title: "Сетевой адрес устройства", commandName: "rtx_addr", value: 1234, min: 0, max: 65535, divisions: 100, unit: "", onChanged: (v) {}, onChangeEnd: (v) {}),
-            _buildUniformSliderCard(title: "Рабочий канал связи (1 МГц шаг)", commandName: "rtx_chan", value: rtxChan, min: 0, max: 99, divisions: 99, unit: "МГц", onChanged: onRtxEnChanged, onChangeEnd: onChanChanged),
-            _buildUniformSliderCard(title: "Spreading Factor (SF)", commandName: "rtx_sf", value: rtxSf, min: 5, max: 12, divisions: 7, unit: "", onChanged: onRtxEnChanged, onChangeEnd: onSfChanged),
-            _buildUniformSliderCard(title: "Полоса пропускания (Bandwidth)", commandName: "rtx_bw", value: rtxBw, min: 0, max: 9, divisions: 9, unit: "", onChanged: onRtxEnChanged, onChangeEnd: onBwChanged),
-            _buildUniformSliderCard(title: "Коэффициент кодирования (Coding Rate)", commandName: "rtx_cr", value: rtxCr, min: 1, max: 4, divisions: 3, unit: "", onChanged: onRtxEnChanged, onChangeEnd: onCrChanged),
-            _buildUniformSliderCard(title: "Мощность передатчика", commandName: "rtx_power", value: rtxPower, min: -9, max: 22, divisions: 31, unit: "dBm", onChanged: onRtxEnChanged, onChangeEnd: onPowerChanged),
-            const SizedBox(height: 8),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 22.0, vertical: 4.0),
-              child: Card(
-                margin: EdgeInsets.zero,
-                color: const Color(0xFF1E222B),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    children: [
-                      Text("КАЛЬКУЛЯТОР ЛИНКА (ЧАСТОТА: ${currentFreqMhz.toStringAsFixed(0)} МГц)", style: const TextStyle(fontSize: 10, color: Colors.amberAccent, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
-                      const SizedBox(height: 8),
-                      Text(distFormatted, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
-                      const SizedBox(height: 12),
-                      const Divider(color: Colors.white12),
-                      const SizedBox(height: 8),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Flexible(child: Text("Чувствительность приемника (Sensitivity):", style: TextStyle(fontSize: 11, color: Colors.white70), overflow: TextOverflow.ellipsis)),
-                              const SizedBox(width: 8),
-                              Text("${sensitivity.toStringAsFixed(1)} dBm", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          LinearProgressIndicator(value: sensitivityProgress, color: Colors.cyanAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Flexible(child: Text("Скорость по воздуху (Air Data Rate):", style: TextStyle(fontSize: 11, color: Colors.white70), overflow: TextOverflow.ellipsis)),
-                              const SizedBox(width: 8),
-                              Text(bitRateStr, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          LinearProgressIndicator(value: bitRateProgress, color: Colors.blueAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
-                        ],
-                      ),
-                    ],
-                  ),
+              padding: const EdgeInsets.symmetric(horizontal: 22.0, vertical: 8.0),
+              child: Container(
+                padding: const EdgeInsets.all(16.0),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF141416),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white12),
+                ),
+                child: Column(
+                  children: [
+                    Text("КАЛЬКУЛЯТОР ЛИНКА (ЧАСТОТА: ${currentFreqMhz.toStringAsFixed(0)} МГц)", style: const TextStyle(fontSize: 10, color: Colors.amberAccent, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+                    const SizedBox(height: 8),
+                    Text(distFormatted, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
+                    const SizedBox(height: 12),
+                    const Divider(color: Colors.white12),
+                    const SizedBox(height: 8),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Flexible(child: Text("Чувствительность приемника (Sensitivity):", style: TextStyle(fontSize: 11, color: Colors.white70), overflow: TextOverflow.ellipsis)),
+                            const SizedBox(width: 8),
+                            Text("${sensitivity.toStringAsFixed(1)} dBm", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        LinearProgressIndicator(value: sensitivityProgress, color: Colors.cyanAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Flexible(child: Text("Скорость по воздуху (Air Data Rate):", style: TextStyle(fontSize: 11, color: Colors.white70), overflow: TextOverflow.ellipsis)),
+                            const SizedBox(width: 8),
+                            Text(bitRateStr, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        LinearProgressIndicator(value: bitRateProgress, color: Colors.blueAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -1515,6 +1556,7 @@ class _RadioTabState extends State<RadioTab> {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
+        // Карточка 1: Параметры радиомодуля со слайдерами
         RtxParametersExpansion(
           rtxEn: _rtxEn, rtxBand: _rtxBand, rtxChan: _rtxChan, rtxSf: _rtxSf, rtxBw: _rtxBw, rtxCr: _rtxCr, rtxPower: _rtxPower,
           currentFreqMhz: _currentFreqMhz, sensitivity: linkResults['sensitivity'], distKm: linkResults['distanceKm'], bitRate: linkResults['bitRate'],
@@ -1530,6 +1572,16 @@ class _RadioTabState extends State<RadioTab> {
           onPowerChanged: (v) { setState(() => _rtxPower = v); SerialService.rtxPower = v; SerialService.sendCommand("rtx_power ${v.round()}"); },
           onEnvLossChanged: (v) => setState(() => _calcEnvironmentLoss = v),
         ),
+        // Карточка 2: Отдельная карточка калькулятора линка в том же визуальном стиле
+        RtxLinkCalculatorCard(
+          currentFreqMhz: _currentFreqMhz,
+          sensitivity: linkResults['sensitivity'],
+          distKm: linkResults['distanceKm'],
+          bitRate: linkResults['bitRate'],
+          sensitivityProgress: ((linkResults['sensitivity'] - (-140.0)) / ((-100.0) - (-140.0))).clamp(0.0, 1.0),
+          bitRateProgress: (linkResults['bitRate'] / 30000.0).clamp(0.0, 1.0),
+        ),
+        // Карточка 3: Антенны
         RtxAntennaExpansion(
           antennaComboIndex: _antennaComboIndex, hasProtectiveSleeve: _hasProtectiveSleeve,
           sleeveThicknessMm: _sleeveThicknessMm, dipoleTubeDiameterMm: _dipoleTubeDiameterMm,
@@ -2241,7 +2293,7 @@ class _FlasherTabState extends State<FlasherTab> {
       setState(() => _statusRC = "Запись прошивки пульта...");
       for (int i = 1; i <= 10; i++) {
         await Future.delayed(const Duration(milliseconds: 100));
-        setState(() => _progressRC = _progressRC = i / 10.0);
+        setState(() => _progressRC = i / 10.0);
       }
       setState(() { _isFlashingRC = false; _statusRC = "УСПЕХ: Пульт успешно прошит!"; });
       if (mounted) showAppDialog(context, "Успех", "Прошивка пульта управления завершена!");
@@ -2280,7 +2332,7 @@ class _FlasherTabState extends State<FlasherTab> {
                     onPressed: _isFlashingFC ? null : _flashFlightController,
                     icon: const Icon(Icons.memory, size: 16),
                     label: Text(_isFlashingFC ? "Прошивка FC..." : "Прошить полетный контроллер", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                 ),
               ],
@@ -2307,7 +2359,7 @@ class _FlasherTabState extends State<FlasherTab> {
                     onPressed: _isFlashingRC ? null : _flashRemoteControl,
                     icon: const Icon(Icons.gamepad, size: 16),
                     label: Text(_isFlashingRC ? "Прошивка пульта..." : "Прошить пульт управления", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                 ),
               ],
