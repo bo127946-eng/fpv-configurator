@@ -1,4 +1,4 @@
-// XFire Ecosystem (Две раздельные карточки в едином стиле с увеличенной шириной и одинаковой типографикой)
+// XFire Ecosystem (Полностью оптимизированная версия со строгим единым стилем элементов)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -47,6 +47,173 @@ class MyApp extends StatelessWidget {
 }
 
 // ==========================================
+// ГЛОБАЛЬНЫЕ UI КОМПОНЕНТЫ ЕДИНОГО СТИЛЯ
+// ==========================================
+
+class XFireCard extends StatelessWidget {
+  final Widget child;
+  const XFireCard({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+      child: Container(
+        padding: const EdgeInsets.all(14.0),
+        decoration: BoxDecoration(
+          color: const Color(0xFF141416),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.white12),
+        ),
+        child: child,
+      ),
+    );
+  }
+}
+
+class XFireSliderCard extends StatelessWidget {
+  final String title;
+  final String commandName;
+  final double value;
+  final double min;
+  final double max;
+  final int divisions;
+  final String unit;
+  final ValueChanged<double> onChanged;
+  final ValueChanged<double> onChangeEnd;
+
+  const XFireSliderCard({
+    super.key,
+    required this.title,
+    required this.commandName,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.divisions,
+    required this.unit,
+    required this.onChanged,
+    required this.onChangeEnd,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return XFireCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                    const SizedBox(height: 2),
+                    Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+                child: Text(
+                  "${value.toStringAsFixed(value.truncate() == value ? 0 : 2)} $unit",
+                  style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 11),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Slider(value: value, min: min, max: max, divisions: divisions, onChanged: onChanged, onChangeEnd: onChangeEnd),
+        ],
+      ),
+    );
+  }
+}
+
+class XFireSwitchCard extends StatelessWidget {
+  final String title;
+  final String commandName;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const XFireSwitchCard({
+    super.key,
+    required this.title,
+    required this.commandName,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return XFireCard(
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                const SizedBox(height: 2),
+                Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+          Switch(value: value, onChanged: onChanged, activeColor: Colors.blueAccent),
+        ],
+      ),
+    );
+  }
+}
+
+class XFireSegmentedCard extends StatelessWidget {
+  final String title;
+  final String commandName;
+  final List<String> options;
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
+
+  const XFireSegmentedCard({
+    super.key,
+    required this.title,
+    required this.commandName,
+    required this.options,
+    required this.selectedIndex,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return XFireCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+          const SizedBox(height: 2),
+          Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
+          const SizedBox(height: 10),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              return ToggleButtons(
+                isSelected: List.generate(options.length, (i) => i == selectedIndex),
+                onPressed: onSelected,
+                borderRadius: BorderRadius.circular(10),
+                selectedColor: Colors.white, fillColor: Colors.blueAccent, color: Colors.white70,
+                constraints: BoxConstraints(minHeight: 36, minWidth: (constraints.maxWidth - (options.length - 1)) / options.length),
+                children: options.map((opt) => Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Text(opt, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)))).toList(),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ==========================================
 // СТАРТОВАЯ ЗАСТАВКА
 // ==========================================
 class SplashScreen extends StatefulWidget {
@@ -63,11 +230,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 3500),
-      vsync: this,
-    );
-
+    _controller = AnimationController(duration: const Duration(milliseconds: 3500), vsync: this);
     _animation = TweenSequence<double>([
       TweenSequenceItem(tween: ConstantTween(0.0), weight: 15.0),          
       TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0), weight: 28.3), 
@@ -76,15 +239,9 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     ]).animate(_controller);
 
     _controller.forward();
-
     _controller.addStatusListener((status) {
-      if (status == AnimationStatus.completed) {
-        if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const MainContainer()),
-          );
-        }
+      if (status == AnimationStatus.completed && mounted) {
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const MainContainer()));
       }
     });
   }
@@ -97,21 +254,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0A),
+    return const Scaffold(
+      backgroundColor: Color(0xFF0A0A0A),
       body: Center(
-        child: FadeTransition(
-          opacity: _animation,
-          child: const Text(
-            "XFire",
-            style: TextStyle(
-              fontSize: 42,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 4.0,
-              color: Colors.white,
-            ),
-          ),
-        ),
+        child: Text("XFire", style: TextStyle(fontSize: 42, fontWeight: FontWeight.bold, letterSpacing: 4.0, color: Colors.white)),
       ),
     );
   }
@@ -128,25 +274,19 @@ class _MainContainerState extends State<MainContainer> {
   int _currentIndex = 0;
   
   final List<Widget> _tabs = [
-    const InfoConnectionTab(),  // 0: Инфо
-    const SettingsTab(),        // 1: Полетный контроллер FC
-    const RemoteControlTab(),   // 2: Пульт RC
-    const RadioTab(),           // 3: Радиомодуль RTX
-    const TestsTab(),           // 4: Калибровка и тесты
-    const ThreeDViewTab(),      // 5: Телеметрия
-    const TerminalTab(),        // 6: Терминал CLI
-    const FlasherTab(),         // 7: Прошивка FC и RC
+    const InfoConnectionTab(),
+    const SettingsTab(),
+    const RemoteControlTab(),
+    const RadioTab(),
+    const TestsTab(),
+    const ThreeDViewTab(),
+    const TerminalTab(),
+    const FlasherTab(),
   ];
 
   final List<String> _tabNames = [
-    "Инфо",
-    "Полетный контроллер FC",
-    "Пульт RC",
-    "Радиомодуль RTX",
-    "Калибровка и тесты",
-    "Телеметрия",
-    "Терминал CLI",
-    "Прошивка FC и RC",
+    "Инфо", "Полетный контроллер FC", "Пульт RC", "Радиомодуль RTX",
+    "Калибровка и тесты", "Телеметрия", "Терминал CLI", "Прошивка FC и RC",
   ];
 
   @override
@@ -176,19 +316,10 @@ class _MainContainerState extends State<MainContainer> {
                     items: List.generate(_tabs.length, (index) {
                       return DropdownMenuItem<int>(
                         value: index,
-                        child: Text(
-                          _tabNames[index],
-                          style: TextStyle(
-                            color: index == 0 ? Colors.greenAccent : Colors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                        child: Text(_tabNames[index], style: TextStyle(color: index == 0 ? Colors.greenAccent : Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
                       );
                     }),
-                    onChanged: (val) {
-                      if (val != null) setState(() => _currentIndex = val);
-                    },
+                    onChanged: (val) { if (val != null) setState(() => _currentIndex = val); },
                   ),
                 ),
               ),
@@ -197,17 +328,14 @@ class _MainContainerState extends State<MainContainer> {
         ),
       ),
       body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 600),
-          child: _tabs[_currentIndex],
-        ),
+        child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 600), child: _tabs[_currentIndex]),
       ),
     );
   }
 }
 
 // ==========================================
-// СЕРВИС СВЯЗИ И ОБЩИЕ ПАРАМЕТРЫ РАДИО
+// СЕРВИС СВЯЗИ И УТИЛИТЫ
 // ==========================================
 class SerialService {
   static bool isConnected = false;
@@ -264,9 +392,6 @@ class SerialService {
   }
 }
 
-// ==========================================
-// ВСПОМОГАТЕЛЬНЫЕ ОКНА СООБЩЕНИЙ (POPUP)
-// ==========================================
 void showAppDialog(BuildContext context, String title, String message, {bool isError = false}) {
   showDialog(
     context: context,
@@ -292,7 +417,7 @@ class DocSection {
 }
 
 // ==========================================
-// ВКЛАДКА 0: ИНФО (InfoConnectionTab)
+// ВКЛАДКА 0: ИНФО
 // ==========================================
 class InfoConnectionTab extends StatefulWidget {
   const InfoConnectionTab({super.key});
@@ -305,7 +430,6 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
   String _displayResponse = SerialService.lastResponse;
   bool _isConnected = SerialService.isConnected;
   late StreamSubscription<String> _sub;
-  
   List<DocSection> _sections = [];
   bool _isLoading = true;
 
@@ -313,12 +437,7 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
   void initState() {
     super.initState();
     _sub = SerialService.logController.stream.listen((_) {
-      if (mounted) {
-        setState(() {
-          _displayResponse = SerialService.lastResponse;
-          _isConnected = SerialService.isConnected;
-        });
-      }
+      if (mounted) setState(() { _displayResponse = SerialService.lastResponse; _isConnected = SerialService.isConnected; });
     });
     _loadDocumentation();
   }
@@ -334,25 +453,14 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
       await SerialService.disconnect();
     } else {
       List<UsbDevice> devices = await UsbSerial.listDevices();
-      if (devices.isEmpty) {
-        setState(() => SerialService.lastResponse = "No USB devices found");
-        return;
-      }
+      if (devices.isEmpty) { setState(() => SerialService.lastResponse = "No USB devices found"); return; }
       SerialService.usbPort = await devices[0].create();
       bool openResult = await SerialService.usbPort!.open();
-      if (!openResult) {
-        setState(() => SerialService.lastResponse = "Failed to open USB port");
-        return;
-      }
+      if (!openResult) { setState(() => SerialService.lastResponse = "Failed to open USB port"); return; }
       await SerialService.usbPort!.setPortParameters(115200, UsbPort.DATABITS_8, UsbPort.STOPBITS_1, UsbPort.PARITY_NONE);
       SerialService.isConnected = true;
-      setState(() {
-        _isConnected = true;
-        SerialService.lastResponse = "USB Connected: ${devices[0].deviceName}";
-      });
-      SerialService._usbSubscription = SerialService.usbPort!.inputStream!.listen((data) {
-        SerialService.handleIncomingData(data);
-      });
+      setState(() { _isConnected = true; SerialService.lastResponse = "USB Connected: ${devices[0].deviceName}"; });
+      SerialService._usbSubscription = SerialService.usbPort!.inputStream!.listen((data) => SerialService.handleIncomingData(data));
     }
   }
 
@@ -369,10 +477,7 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
       if (parsedSections.isEmpty) parsedSections.add(DocSection(title: 'Справочник CLI команд', content: fileContent));
       setState(() { _sections = parsedSections; _isLoading = false; });
     } catch (e) {
-      setState(() {
-        _sections = [DocSection(title: 'Ошибка загрузки doc.txt', content: 'Не удалось загрузить doc.txt из assets.\nОшибка: $e')];
-        _isLoading = false;
-      });
+      setState(() { _sections = [DocSection(title: 'Ошибка загрузки doc.txt', content: 'Ошибка: $e')]; _isLoading = false; });
     }
   }
 
@@ -496,7 +601,7 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
 }
 
 // ==========================================
-// ВКЛАДКА: ПОЛЕТНЫЙ КОНТРОЛЛЕР FC (SettingsTab)
+// ВКЛАДКА 1: ПОЛЕТНЫЙ КОНТРОЛЛЕР FC
 // ==========================================
 class SettingsTab extends StatefulWidget {
   const SettingsTab({super.key});
@@ -555,130 +660,46 @@ class _SettingsTabState extends State<SettingsTab> {
     );
   }
 
-  Widget _buildSliderCard({required String title, required String commandName, required double value, required double min, required double max, required int divisions, required String unit, required ValueChanged<double> onChanged, required ValueChanged<double> onChangeEnd}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
-      child: Card(
-        margin: EdgeInsets.zero,
-        child: Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)), Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace'))])),
-                  Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: Text("${value.toStringAsFixed(value.truncate() == value ? 0 : 2)} $unit", style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 11))),
-                ],
-              ),
-              Slider(value: value, min: min, max: max, divisions: divisions, onChanged: onChanged, onChangeEnd: onChangeEnd),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSegmentedChoiceCard({required String title, required String commandName, required List<String> options, required int selectedIndex, required ValueChanged<int> onSelected}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
-      child: Card(
-        margin: EdgeInsets.zero,
-        child: Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-              Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace')),
-              const SizedBox(height: 10),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  return ToggleButtons(
-                    isSelected: List.generate(options.length, (i) => i == selectedIndex),
-                    onPressed: (index) => onSelected(index),
-                    borderRadius: BorderRadius.circular(10),
-                    selectedColor: Colors.white, fillColor: Colors.blueAccent, color: Colors.white70,
-                    constraints: BoxConstraints(minHeight: 36, minWidth: (constraints.maxWidth - (options.length - 1)) / options.length),
-                    children: options.map((opt) => Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Text(opt, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)))).toList(),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSwitchCard({required String title, required String commandName, required bool value, required ValueChanged<bool> onChanged}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
-      child: Card(
-        margin: EdgeInsets.zero,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)), Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace'))]),
-              Switch(value: value, onChanged: onChanged, activeColor: Colors.blueAccent),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
         _buildSectionHeader("ПОЛЕТНЫЕ РЕЖИМЫ И ОГРАНИЧЕНИЯ", Icons.flight),
-        _buildSegmentedChoiceCard(title: "Режим полета", commandName: "fl_mode", options: const ["Acro", "Angle", "Horizon"], selectedIndex: _flMode.round(), onSelected: (val) { setState(() => _flMode = val.toDouble()); SerialService.sendCommand("fl_mode $val"); }),
-        _buildSliderCard(title: "Максимальный угол крена", commandName: "fl_roll_max", value: _flRollMax, min: 10.0, max: 80.0, divisions: 14, unit: "°", onChanged: (v) => setState(() => _flRollMax = v), onChangeEnd: (v) => SerialService.sendCommand("fl_roll_max $v")),
-        _buildSliderCard(title: "Максимальный угол тангажа", commandName: "fl_pitch_max", value: _flPitchMax, min: 10.0, max: 80.0, divisions: 14, unit: "°", onChanged: (v) => setState(() => _flPitchMax = v), onChangeEnd: (v) => SerialService.sendCommand("fl_pitch_max $v")),
-        _buildSliderCard(title: "Максимальная вертикальная скорость", commandName: "fl_vz_speed_max", value: _flVzSpeedMax, min: 0.5, max: 3.0, divisions: 25, unit: "м/с", onChanged: (v) => setState(() => _flVzSpeedMax = v), onChangeEnd: (v) => SerialService.sendCommand("fl_vz_speed_max $v")),
-        _buildSliderCard(title: "Минимальная высота полета", commandName: "fl_height_min", value: _flHeightMin, min: 0.0, max: 5.0, divisions: 50, unit: "м", onChanged: (v) => setState(() => _flHeightMin = v), onChangeEnd: (v) => SerialService.sendCommand("fl_height_min $v")),
+        XFireSegmentedCard(title: "Режим полета", commandName: "fl_mode", options: const ["Acro", "Angle", "Horizon"], selectedIndex: _flMode.round(), onSelected: (val) { setState(() => _flMode = val.toDouble()); SerialService.sendCommand("fl_mode $val"); }),
+        XFireSliderCard(title: "Максимальный угол крена", commandName: "fl_roll_max", value: _flRollMax, min: 10.0, max: 80.0, divisions: 14, unit: "°", onChanged: (v) => setState(() => _flRollMax = v), onChangeEnd: (v) => SerialService.sendCommand("fl_roll_max $v")),
+        XFireSliderCard(title: "Максимальный угол тангажа", commandName: "fl_pitch_max", value: _flPitchMax, min: 10.0, max: 80.0, divisions: 14, unit: "°", onChanged: (v) => setState(() => _flPitchMax = v), onChangeEnd: (v) => SerialService.sendCommand("fl_pitch_max $v")),
+        XFireSliderCard(title: "Максимальная вертикальная скорость", commandName: "fl_vz_speed_max", value: _flVzSpeedMax, min: 0.5, max: 3.0, divisions: 25, unit: "м/с", onChanged: (v) => setState(() => _flVzSpeedMax = v), onChangeEnd: (v) => SerialService.sendCommand("fl_vz_speed_max $v")),
+        XFireSliderCard(title: "Минимальная высота полета", commandName: "fl_height_min", value: _flHeightMin, min: 0.0, max: 5.0, divisions: 50, unit: "м", onChanged: (v) => setState(() => _flHeightMin = v), onChangeEnd: (v) => SerialService.sendCommand("fl_height_min $v")),
 
         _buildSectionHeader("АВАРИЙНАЯ ПОСАДКА И СВЯЗЬ", Icons.warning_amber_rounded),
-        _buildSwitchCard(title: "При разряде батареи", commandName: "fs_bat_en", value: _fsBatEn == 1, onChanged: (v) { setState(() => _fsBatEn = v ? 1 : 0); SerialService.sendCommand("fs_bat_en ${_fsBatEn.round()}"); }),
-        _buildSwitchCard(title: "При обрыве связи с пультом", commandName: "fs_rtx_en", value: _fsRtxEn == 1, onChanged: (v) { setState(() => _fsRtxEn = v ? 1 : 0); SerialService.sendCommand("fs_rtx_en ${_fsRtxEn.round()}"); }),
-        _buildSwitchCard(title: "При обрыве связи по шине SPI", commandName: "fs_spi_en", value: _fsSpiEn == 1, onChanged: (v) { setState(() => _fsSpiEn = v ? 1 : 0); SerialService.sendCommand("fs_spi_en ${_fsSpiEn.round()}"); }),
-        _buildSwitchCard(title: "При обрыве связи по шине I2C", commandName: "fs_i2c_en", value: _fsI2cEn == 1, onChanged: (v) { setState(() => _fsI2cEn = v ? 1 : 0); SerialService.sendCommand("fs_i2c_en ${_fsI2cEn.round()}"); }),
+        XFireSwitchCard(title: "При разряде батареи", commandName: "fs_bat_en", value: _fsBatEn == 1, onChanged: (v) { setState(() => _fsBatEn = v ? 1 : 0); SerialService.sendCommand("fs_bat_en ${_fsBatEn.round()}"); }),
+        XFireSwitchCard(title: "При обрыве связи с пультом", commandName: "fs_rtx_en", value: _fsRtxEn == 1, onChanged: (v) { setState(() => _fsRtxEn = v ? 1 : 0); SerialService.sendCommand("fs_rtx_en ${_fsRtxEn.round()}"); }),
+        XFireSwitchCard(title: "При обрыве связи по шине SPI", commandName: "fs_spi_en", value: _fsSpiEn == 1, onChanged: (v) { setState(() => _fsSpiEn = v ? 1 : 0); SerialService.sendCommand("fs_spi_en ${_fsSpiEn.round()}"); }),
+        XFireSwitchCard(title: "При обрыве связи по шине I2C", commandName: "fs_i2c_en", value: _fsI2cEn == 1, onChanged: (v) { setState(() => _fsI2cEn = v ? 1 : 0); SerialService.sendCommand("fs_i2c_en ${_fsI2cEn.round()}"); }),
         
-        _buildSliderCard(
-          title: "Порог падения качества связи", commandName: "rtx_link_warn_threshold", value: _rtxLinkWarnThreshold,
-          min: 5, max: 90, divisions: 85, unit: "%",
-          onChanged: (v) => setState(() => _rtxLinkWarnThreshold = v),
-          onChangeEnd: (v) { SerialService.rtxLinkWarnThreshold = v; SerialService.sendCommand("rtx_link_warn_threshold ${v.round()}"); },
-        ),
-        _buildSwitchCard(
-          title: "Инициатива с борта при ухудшении связи", commandName: "rtx_auto_en", value: _rtxAutoEn == 1,
-          onChanged: (v) { setState(() => _rtxAutoEn = v ? 1 : 0); SerialService.rtxAutoEn = v ? 1.0 : 0.0; SerialService.sendCommand("rtx_auto_en ${_rtxAutoEn.round()}"); },
-        ),
+        XFireSliderCard(title: "Порог падения качества связи", commandName: "rtx_link_warn_threshold", value: _rtxLinkWarnThreshold, min: 5, max: 90, divisions: 85, unit: "%", onChanged: (v) => setState(() => _rtxLinkWarnThreshold = v), onChangeEnd: (v) { SerialService.rtxLinkWarnThreshold = v; SerialService.sendCommand("rtx_link_warn_threshold ${v.round()}"); }),
+        XFireSwitchCard(title: "Инициатива с борта при ухудшении связи", commandName: "rtx_auto_en", value: _rtxAutoEn == 1, onChanged: (v) { setState(() => _rtxAutoEn = v ? 1 : 0); SerialService.rtxAutoEn = v ? 1.0 : 0.0; SerialService.sendCommand("rtx_auto_en ${_rtxAutoEn.round()}"); }),
 
         _buildSectionHeader("РАДИОУПРАВЛЕНИЕ И ЭКСПОНЕНТЫ", Icons.gamepad),
-        _buildSliderCard(title: "RC Rate (Roll/Pitch)", commandName: "rc_rate", value: _rcRate, min: 0.1, max: 2.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcRate = v), onChangeEnd: (v) => SerialService.sendCommand("rc_rate $v")),
-        _buildSliderCard(title: "RC Super Expo", commandName: "rc_super_expo", value: _rcSuperExpo, min: 0.0, max: 0.9, divisions: 18, unit: "", onChanged: (v) => setState(() => _rcSuperExpo = v), onChangeEnd: (v) => SerialService.sendCommand("rc_super_expo $v")),
-        _buildSliderCard(title: "RC Stick Expo", commandName: "rc_stick_expo", value: _rcStickExpo, min: 0.0, max: 1.0, divisions: 20, unit: "", onChanged: (v) => setState(() => _rcStickExpo = v), onChangeEnd: (v) => SerialService.sendCommand("rc_stick_expo $v")),
-        _buildSliderCard(title: "Yaw Rate", commandName: "rc_yaw_rate", value: _rcYawRate, min: 0.1, max: 2.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcYawRate = v), onChangeEnd: (v) => SerialService.sendCommand("rc_yaw_rate $v")),
-        _buildSliderCard(title: "Мертвая зона стиков", commandName: "rc_deadband", value: _rcDeadband, min: 0, max: 50, divisions: 50, unit: "PWM", onChanged: (v) => setState(() => _rcDeadband = v), onChangeEnd: (v) => SerialService.sendCommand("rc_deadband $v")),
-        _buildSliderCard(title: "Сглаживание RC", commandName: "rc_filter_smoothing", value: _rcFilterSmoothing, min: 0.05, max: 1.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcFilterSmoothing = v), onChangeEnd: (v) => SerialService.sendCommand("rc_filter_smoothing $v")),
+        XFireSliderCard(title: "RC Rate (Roll/Pitch)", commandName: "rc_rate", value: _rcRate, min: 0.1, max: 2.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcRate = v), onChangeEnd: (v) => SerialService.sendCommand("rc_rate $v")),
+        XFireSliderCard(title: "RC Super Expo", commandName: "rc_super_expo", value: _rcSuperExpo, min: 0.0, max: 0.9, divisions: 18, unit: "", onChanged: (v) => setState(() => _rcSuperExpo = v), onChangeEnd: (v) => SerialService.sendCommand("rc_super_expo $v")),
+        XFireSliderCard(title: "RC Stick Expo", commandName: "rc_stick_expo", value: _rcStickExpo, min: 0.0, max: 1.0, divisions: 20, unit: "", onChanged: (v) => setState(() => _rcStickExpo = v), onChangeEnd: (v) => SerialService.sendCommand("rc_stick_expo $v")),
+        XFireSliderCard(title: "Yaw Rate", commandName: "rc_yaw_rate", value: _rcYawRate, min: 0.1, max: 2.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcYawRate = v), onChangeEnd: (v) => SerialService.sendCommand("rc_yaw_rate $v")),
+        XFireSliderCard(title: "Мертвая зона стиков", commandName: "rc_deadband", value: _rcDeadband, min: 0, max: 50, divisions: 50, unit: "PWM", onChanged: (v) => setState(() => _rcDeadband = v), onChangeEnd: (v) => SerialService.sendCommand("rc_deadband $v")),
+        XFireSliderCard(title: "Сглаживание RC", commandName: "rc_filter_smoothing", value: _rcFilterSmoothing, min: 0.05, max: 1.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcFilterSmoothing = v), onChangeEnd: (v) => SerialService.sendCommand("rc_filter_smoothing $v")),
 
         _buildSectionHeader("ПИТАНИЕ И БАТАРЕЯ", Icons.battery_charging_full),
-        _buildSliderCard(title: "Количество ячеек LiPo", commandName: "bat_cells", value: _batCells, min: 1, max: 6, divisions: 5, unit: "S", onChanged: (v) => setState(() => _batCells = v), onChangeEnd: (v) => SerialService.sendCommand("bat_cells ${v.round()}")),
-        _buildSliderCard(title: "Порог Failsafe батареи", commandName: "bat_fs_v", value: _batFsV, min: 6.0, max: 25.0, divisions: 190, unit: "В", onChanged: (v) => setState(() => _batFsV = v), onChangeEnd: (v) => SerialService.sendCommand("bat_fs_v $v")),
-        _buildSliderCard(title: "Скорость посадки Failsafe", commandName: "fs_speed", value: _fsSpeed, min: 0.2, max: 2.0, divisions: 18, unit: "м/с", onChanged: (v) => setState(() => _fsSpeed = v), onChangeEnd: (v) => SerialService.sendCommand("fs_speed $v")),
+        XFireSliderCard(title: "Количество ячеек LiPo", commandName: "bat_cells", value: _batCells, min: 1, max: 6, divisions: 5, unit: "S", onChanged: (v) => setState(() => _batCells = v), onChangeEnd: (v) => SerialService.sendCommand("bat_cells ${v.round()}")),
+        XFireSliderCard(title: "Порог Failsafe батареи", commandName: "bat_fs_v", value: _batFsV, min: 6.0, max: 25.0, divisions: 190, unit: "В", onChanged: (v) => setState(() => _batFsV = v), onChangeEnd: (v) => SerialService.sendCommand("bat_fs_v $v")),
+        XFireSliderCard(title: "Скорость посадки Failsafe", commandName: "fs_speed", value: _fsSpeed, min: 0.2, max: 2.0, divisions: 18, unit: "м/с", onChanged: (v) => setState(() => _fsSpeed = v), onChangeEnd: (v) => SerialService.sendCommand("fs_speed $v")),
 
         _buildSectionHeader("ЛИДАР И ФИЛЬТРЫ СЕНСОРОВ", Icons.waves),
-        _buildSwitchCard(title: "Включить лидар VL53L1X", commandName: "lidar_en", value: _lidarEn == 1, onChanged: (v) { setState(() => _lidarEn = v ? 1 : 0); SerialService.sendCommand("lidar_en ${_lidarEn.round()}"); }),
-        _buildSliderCard(title: "Фильтр гироскопа LPF", commandName: "gyro_filter_alpha", value: _gyroFilterAlpha, min: 0.05, max: 1.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _gyroFilterAlpha = v), onChangeEnd: (v) => SerialService.sendCommand("gyro_filter_alpha $v")),
-        _buildSliderCard(title: "Фильтр акселерометра LPF", commandName: "acc_filter_alpha", value: _accFilterAlpha, min: 0.01, max: 1.0, divisions: 99, unit: "", onChanged: (v) => setState(() => _accFilterAlpha = v), onChangeEnd: (v) => SerialService.sendCommand("acc_filter_alpha $v")),
-        _buildSwitchCard(title: "Динамический Notch фильтр", commandName: "filter_dyn_notch_en", value: _filterDynNotchEn == 1, onChanged: (v) { setState(() => _filterDynNotchEn = v ? 1 : 0); SerialService.sendCommand("filter_dyn_notch_en ${_filterDynNotchEn.round()}"); }),
-        _buildSliderCard(title: "Центр Notch фильтра", commandName: "filter_notch_freq", value: _filterNotchFreq, min: 30, max: 150, divisions: 120, unit: "Гц", onChanged: (v) => setState(() => _filterNotchFreq = v), onChangeEnd: (v) => SerialService.sendCommand("filter_notch_freq $v")),
+        XFireSwitchCard(title: "Включить лидар VL53L1X", commandName: "lidar_en", value: _lidarEn == 1, onChanged: (v) { setState(() => _lidarEn = v ? 1 : 0); SerialService.sendCommand("lidar_en ${_lidarEn.round()}"); }),
+        XFireSliderCard(title: "Фильтр гироскопа LPF", commandName: "gyro_filter_alpha", value: _gyroFilterAlpha, min: 0.05, max: 1.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _gyroFilterAlpha = v), onChangeEnd: (v) => SerialService.sendCommand("gyro_filter_alpha $v")),
+        XFireSliderCard(title: "Фильтр акселерометра LPF", commandName: "acc_filter_alpha", value: _accFilterAlpha, min: 0.01, max: 1.0, divisions: 99, unit: "", onChanged: (v) => setState(() => _accFilterAlpha = v), onChangeEnd: (v) => SerialService.sendCommand("acc_filter_alpha $v")),
+        XFireSwitchCard(title: "Динамический Notch фильтр", commandName: "filter_dyn_notch_en", value: _filterDynNotchEn == 1, onChanged: (v) { setState(() => _filterDynNotchEn = v ? 1 : 0); SerialService.sendCommand("filter_dyn_notch_en ${_filterDynNotchEn.round()}"); }),
+        XFireSliderCard(title: "Центр Notch фильтра", commandName: "filter_notch_freq", value: _filterNotchFreq, min: 30, max: 150, divisions: 120, unit: "Гц", onChanged: (v) => setState(() => _filterNotchFreq = v), onChangeEnd: (v) => SerialService.sendCommand("filter_notch_freq $v")),
 
         _buildSectionHeader("ПИД-РЕГУЛЯТОРЫ (PID TUNINGS)", Icons.tune),
         PidAxisCardWidget(axisName: "Roll Axis (Rate)", kpCmd: "roll_kp", kiCmd: "roll_ki", kdCmd: "roll_kd", kp: _rollKp, ki: _rollKi, kd: _rollKd, onUpdate: (p, i, d) { setState(() { _rollKp = p; _rollKi = i; _rollKd = d; }); SerialService.sendCommand("roll_kp $p"); SerialService.sendCommand("roll_ki $i"); SerialService.sendCommand("roll_kd $d"); }),
@@ -691,7 +712,7 @@ class _SettingsTabState extends State<SettingsTab> {
   }
 }
 
-class PidAxisCardWidget extends StatefulWidget {
+class PidAxisCardWidget extends StatelessWidget {
   final String axisName;
   final String kpCmd, kiCmd, kdCmd;
   final double kp, ki, kd;
@@ -700,68 +721,32 @@ class PidAxisCardWidget extends StatefulWidget {
   const PidAxisCardWidget({super.key, required this.axisName, required this.kpCmd, required this.kiCmd, required this.kdCmd, required this.kp, required this.ki, required this.kd, required this.onUpdate});
 
   @override
-  State<PidAxisCardWidget> createState() => _PidAxisCardWidgetState();
-}
-
-class _PidAxisCardWidgetState extends State<PidAxisCardWidget> {
-  late TextEditingController _pController, _iController, _dController;
-
-  @override
-  void initState() {
-    super.initState();
-    _pController = TextEditingController(text: widget.kp.toString());
-    _iController = TextEditingController(text: widget.ki.toString());
-    _dController = TextEditingController(text: widget.kd.toString());
-  }
-
-  @override
-  void didUpdateWidget(covariant PidAxisCardWidget oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.kp != widget.kp) _pController.text = widget.kp.toString();
-    if (oldWidget.ki != widget.ki) _iController.text = widget.ki.toString();
-    if (oldWidget.kd != widget.kd) _dController.text = widget.kd.toString();
-  }
-
-  @override
-  void dispose() {
-    _pController.dispose(); _iController.dispose(); _dController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
-      child: Card(
-        margin: EdgeInsets.zero,
-        child: Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return XFireCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(axisName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+          const SizedBox(height: 2),
+          Text("$kpCmd / $kiCmd / $kdCmd", style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 9, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          Row(
             children: [
-              Text(widget.axisName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-              const SizedBox(height: 2),
-              Text("${widget.kpCmd} / ${widget.kiCmd} / ${widget.kdCmd}", style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 9, fontFamily: 'monospace')),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(child: TextField(controller: _pController, decoration: const InputDecoration(labelText: 'Kp', isDense: true), keyboardType: TextInputType.number, onSubmitted: (val) { double? np = double.tryParse(val); if (np != null) widget.onUpdate(np, widget.ki, widget.kd); })),
-                  const SizedBox(width: 8),
-                  Expanded(child: TextField(controller: _iController, decoration: const InputDecoration(labelText: 'Ki', isDense: true), keyboardType: TextInputType.number, onSubmitted: (val) { double? ni = double.tryParse(val); if (ni != null) widget.onUpdate(widget.kp, ni, widget.kd); })),
-                  const SizedBox(width: 8),
-                  Expanded(child: TextField(controller: _dController, decoration: const InputDecoration(labelText: 'Kd', isDense: true), keyboardType: TextInputType.number, onSubmitted: (val) { double? nd = double.tryParse(val); if (nd != null) widget.onUpdate(widget.kp, widget.ki, nd); })),
-                ],
-              ),
+              Expanded(child: TextField(decoration: const InputDecoration(labelText: 'Kp', isDense: true), keyboardType: TextInputType.number, controller: TextEditingController(text: kp.toString())..selection = TextSelection.fromPosition(TextPosition(offset: kp.toString().length)), onSubmitted: (val) { double? np = double.tryParse(val); if (np != null) onUpdate(np, ki, kd); })),
+              const SizedBox(width: 8),
+              Expanded(child: TextField(decoration: const InputDecoration(labelText: 'Ki', isDense: true), keyboardType: TextInputType.number, controller: TextEditingController(text: ki.toString())..selection = TextSelection.fromPosition(TextPosition(offset: ki.toString().length)), onSubmitted: (val) { double? ni = double.tryParse(val); if (ni != null) onUpdate(kp, ni, kd); })),
+              const SizedBox(width: 8),
+              Expanded(child: TextField(decoration: const InputDecoration(labelText: 'Kd', isDense: true), keyboardType: TextInputType.number, controller: TextEditingController(text: kd.toString())..selection = TextSelection.fromPosition(TextPosition(offset: kd.toString().length)), onSubmitted: (val) { double? nd = double.tryParse(val); if (nd != null) onUpdate(kp, ki, nd); })),
             ],
           ),
-        ),
+        ],
       ),
     );
   }
 }
 
 // ==========================================
-// ВКЛАДКА: ПУЛЬТ RC (RemoteControlTab)
+// ВКЛАДКА 2: ПУЛЬТ RC
 // ==========================================
 class RemoteControlTab extends StatefulWidget {
   const RemoteControlTab({super.key});
@@ -788,145 +773,58 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
     );
   }
 
-  Widget _buildSliderCard({required String title, required String commandName, required double value, required double min, required double max, required int divisions, required String unit, required ValueChanged<double> onChanged, required ValueChanged<double> onChangeEnd}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
-      child: Card(
-        margin: EdgeInsets.zero,
-        child: Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)), Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace'))])),
-                  Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: Text("${value.toStringAsFixed(value.truncate() == value ? 0 : 1)} $unit", style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 11))),
-                ],
-              ),
-              Slider(value: value, min: min, max: max, divisions: divisions, onChanged: onChanged, onChangeEnd: onChangeEnd),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSegmentedChoiceCard({required String title, required String commandName, required List<String> options, required int selectedIndex, required ValueChanged<int> onSelected}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
-      child: Card(
-        margin: EdgeInsets.zero,
-        child: Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-              Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace')),
-              const SizedBox(height: 10),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  return ToggleButtons(
-                    isSelected: List.generate(options.length, (i) => i == selectedIndex),
-                    onPressed: (index) => onSelected(index),
-                    borderRadius: BorderRadius.circular(10),
-                    selectedColor: Colors.white, fillColor: Colors.blueAccent, color: Colors.white70,
-                    constraints: BoxConstraints(minHeight: 36, minWidth: (constraints.maxWidth - (options.length - 1)) / options.length),
-                    children: options.map((opt) => Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Text(opt, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)))).toList(),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
         _buildSectionHeader("КАЛИБРОВКА СТИКОВ ПУЛЬТА", Icons.gamepad),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
-          child: Card(
-            margin: EdgeInsets.zero,
-            child: Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text("Калибровка нейтрали стиков", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                  const Text("rc_cal_sticks", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontFamily: 'monospace')),
-                  const SizedBox(height: 10),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 38,
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        if (!SerialService.isConnected) {
-                          showAppDialog(context, "Ошибка", "Устройство пульта не подключено!", isError: true);
-                        } else {
-                          SerialService.sendCommand("rc_cal_sticks");
-                          showAppDialog(context, "Калибровка", "Команда калибровки нейтрали отправлена в пульт.");
-                        }
-                      },
-                      icon: const Icon(Icons.tune, size: 16),
-                      label: const Text("Запустить калибровку стиков", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                    ),
-                  ),
-                ],
+        XFireCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text("Калибровка нейтрали стиков", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+              const Text("rc_cal_sticks", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                height: 38,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    if (!SerialService.isConnected) {
+                      showAppDialog(context, "Ошибка", "Устройство пульта не подключено!", isError: true);
+                    } else {
+                      SerialService.sendCommand("rc_cal_sticks");
+                      showAppDialog(context, "Калибровка", "Команда калибровки нейтрали отправлена в пульт.");
+                    }
+                  },
+                  icon: const Icon(Icons.tune, size: 16),
+                  label: const Text("Запустить калибровку стиков", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                ),
               ),
-            ),
+            ],
           ),
         ),
 
-        _buildSliderCard(
-          title: "Мертвая зона стиков (Deadband)", commandName: "rc_tx_deadband", value: _stickDeadband,
-          min: 0, max: 50, divisions: 50, unit: "PWM",
-          onChanged: (v) => setState(() => _stickDeadband = v),
-          onChangeEnd: (v) => SerialService.sendCommand("rc_tx_deadband ${v.round()}"),
-        ),
+        XFireSliderCard(title: "Мертвая зона стиков (Deadband)", commandName: "rc_tx_deadband", value: _stickDeadband, min: 0, max: 50, divisions: 50, unit: "PWM", onChanged: (v) => setState(() => _stickDeadband = v), onChangeEnd: (v) => SerialService.sendCommand("rc_tx_deadband ${v.round()}")),
 
         _buildSectionHeader("ПРОТОКОЛ И РАДИОПЕРЕДАТЧИК ПУЛЬТА", Icons.wifi),
-        _buildSegmentedChoiceCard(
-          title: "Протокол связи с модулем", commandName: "rc_proto",
-          options: const ["CRSF", "XFire RTX", "SBUS"],
-          selectedIndex: _rcProtocol.round(),
-          onSelected: (val) { setState(() => _rcProtocol = val.toDouble()); SerialService.sendCommand("rc_proto $val"); },
-        ),
-
-        _buildSliderCard(
-          title: "Выходная мощность передатчика пульта", commandName: "tx_power_mw", value: _txPowerW,
-          min: 10, max: 1000, divisions: 99, unit: "мВт",
-          onChanged: (v) => setState(() => _txPowerW = v),
-          onChangeEnd: (v) => SerialService.sendCommand("tx_power_mw ${v.round()}"),
-        ),
+        XFireSegmentedCard(title: "Протокол связи с модулем", commandName: "rc_proto", options: const ["CRSF", "XFire RTX", "SBUS"], selectedIndex: _rcProtocol.round(), onSelected: (val) { setState(() => _rcProtocol = val.toDouble()); SerialService.sendCommand("rc_proto $val"); }),
+        XFireSliderCard(title: "Выходная мощность передатчика пульта", commandName: "tx_power_mw", value: _txPowerW, min: 10, max: 1000, divisions: 99, unit: "мВт", onChanged: (v) => setState(() => _txPowerW = v), onChangeEnd: (v) => SerialService.sendCommand("tx_power_mw ${v.round()}")),
 
         _buildSectionHeader("ТЕСТ КАНАЛОВ ПУЛЬТА (CH1 - CH4)", Icons.bar_chart),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
-          child: Card(
-            margin: EdgeInsets.zero,
-            child: Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text("Монитор каналов управления в реальном времени", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                  const SizedBox(height: 12),
-                  _buildChannelBar("Channel 1 (Roll)", 1500, Colors.blueAccent),
-                  _buildChannelBar("Channel 2 (Pitch)", 1500, Colors.cyanAccent),
-                  _buildChannelBar("Channel 3 (Throttle)", 1000, Colors.greenAccent),
-                  _buildChannelBar("Channel 4 (Yaw)", 1500, Colors.amberAccent),
-                ],
-              ),
-            ),
+        XFireCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text("Монитор каналов управления в реальном времени", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+              const SizedBox(height: 12),
+              _buildChannelBar("Channel 1 (Roll)", 1500, Colors.blueAccent),
+              _buildChannelBar("Channel 2 (Pitch)", 1500, Colors.cyanAccent),
+              _buildChannelBar("Channel 3 (Throttle)", 1000, Colors.greenAccent),
+              _buildChannelBar("Channel 4 (Yaw)", 1500, Colors.amberAccent),
+            ],
           ),
         ),
         const SizedBox(height: 24),
@@ -970,13 +868,8 @@ class DipoleSchematicPainter extends CustomPainter {
     final cx = size.width / 2;
     
     if (hasSleeve) {
-      final sleevePaint = Paint()
-        ..color = Colors.blueAccent.withOpacity(0.3)
-        ..style = PaintingStyle.fill;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, size.height / 2), width: 14, height: size.height - 10), const Radius.circular(6)),
-        sleevePaint,
-      );
+      final sleevePaint = Paint()..color = Colors.blueAccent.withOpacity(0.3)..style = PaintingStyle.fill;
+      canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, size.height / 2), width: 14, height: size.height - 10), const Radius.circular(6)), sleevePaint);
     }
 
     canvas.drawLine(Offset(cx, 15), Offset(cx, size.height / 2 - 5), paint);
@@ -987,7 +880,7 @@ class DipoleSchematicPainter extends CustomPainter {
     textPainter.layout();
     textPainter.paint(canvas, Offset(cx + 12, 25));
 
-    textPainter.text = const TextSpan(text: "Нижнее плечо (трубка)", style: TextStyle(color: Colors.white70, fontSize: 9));
+    textPainter.text = const TextSpan(text: "Нижнее плечо", style: TextStyle(color: Colors.white70, fontSize: 9));
     textPainter.layout();
     textPainter.paint(canvas, Offset(cx + 12, size.height - 35));
   }
@@ -1019,7 +912,7 @@ class KharchenkoSchematicPainter extends CustomPainter {
     canvas.drawCircle(Offset(cx, cy + sizeDiamond), 3, Paint()..color = Colors.redAccent);
 
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
-    textPainter.text = const TextSpan(text: "Сторона ромба (λ/4)", style: TextStyle(color: Colors.cyanAccent, fontSize: 10));
+    textPainter.text = const TextSpan(text: "λ/4", style: TextStyle(color: Colors.cyanAccent, fontSize: 10));
     textPainter.layout();
     textPainter.paint(canvas, Offset(cx + 8, cy - 25));
   }
@@ -1029,129 +922,22 @@ class KharchenkoSchematicPainter extends CustomPainter {
 }
 
 // ==========================================
-// КАРТОЧКА 1: ПАРАМЕТРЫ РАДИОМОДУЛЯ (ДВУХУРОВНЕВАЯ СТРУКТУРА С УНИФИЦИРОВАННЫМИ СЛАЙДЕРАМИ)
+// КАРТОЧКА 1: ПАРАМЕТРЫ РАДИОМОДУЛЯ
 // ==========================================
 class RtxParametersExpansion extends StatelessWidget {
   final double rtxEn, rtxBand, rtxChan, rtxSf, rtxBw, rtxCr, rtxPower;
-  final double currentFreqMhz, sensitivity, distKm, bitRate, sensitivityProgress, bitRateProgress, calcEnvironmentLoss;
-  final ValueChanged<double> onRtxEnChanged, onBandChanged, onChanChanged, onSfChanged, onBwChanged, onCrChanged, onPowerChanged, onEnvLossChanged;
+  final ValueChanged<double> onRtxEnChanged, onBandChanged, onChanChanged, onSfChanged, onBwChanged, onCrChanged, onPowerChanged;
 
   const RtxParametersExpansion({
     super.key,
     required this.rtxEn, required this.rtxBand, required this.rtxChan, required this.rtxSf, required this.rtxBw, required this.rtxCr, required this.rtxPower,
-    required this.currentFreqMhz, required this.sensitivity, required this.distKm, required this.bitRate, required this.sensitivityProgress, required this.bitRateProgress, required this.calcEnvironmentLoss,
-    required this.onRtxEnChanged, required this.onBandChanged, required this.onChanChanged, required this.onSfChanged, required this.onBwChanged, required this.onCrChanged, required this.onPowerChanged, required this.onEnvLossChanged,
+    required this.onRtxEnChanged, required this.onBandChanged, required this.onChanChanged, required this.onSfChanged, required this.onBwChanged, required this.onCrChanged, required this.onPowerChanged,
   });
-
-  // Единый шаблон слайдера с увеличенной шириной (+10мм) и идентичным оформлением значений
-  Widget _buildUnifiedSlider({
-    required String title,
-    required String commandName,
-    required double value,
-    required double min,
-    required double max,
-    required int divisions,
-    required String unit,
-    required ValueChanged<double> onChanged,
-    required ValueChanged<double> onChangeEnd,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 22.0, vertical: 6.0),
-      child: Container(
-        padding: const EdgeInsets.all(12.0),
-        decoration: BoxDecoration(
-          color: const Color(0xFF141416),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white12),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title, 
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        commandName, 
-                        style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.blueAccent.withOpacity(0.15), 
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    "${value.toStringAsFixed(value.truncate() == value ? 0 : 2)} $unit",
-                    style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 11),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Slider(
-              value: value,
-              min: min,
-              max: max,
-              divisions: divisions,
-              onChanged: onChanged,
-              onChangeEnd: onChangeEnd,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // Единый шаблон переключателя
-  Widget _buildUnifiedSwitch({
-    required String title,
-    required String commandName,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 22.0, vertical: 6.0),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8.0),
-        decoration: BoxDecoration(
-          color: const Color(0xFF141416),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white12),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-                const SizedBox(height: 2),
-                Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
-              ],
-            ),
-            Switch(value: value, onChanged: onChanged, activeColor: Colors.blueAccent),
-          ],
-        ),
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
       child: Card(
         margin: EdgeInsets.zero,
         child: ExpansionTile(
@@ -1161,14 +947,14 @@ class RtxParametersExpansion extends StatelessWidget {
           collapsedIconColor: Colors.white54,
           children: [
             const SizedBox(height: 8),
-            _buildUnifiedSwitch(title: "Включить RTX модуль", commandName: "rtx_en", value: rtxEn == 1, onChanged: (v) => onRtxEnChanged(v ? 1.0 : 0.0)),
-            _buildUnifiedSlider(title: "Частотный диапазон (x100 МГц)", commandName: "rtx_band", value: rtxBand, min: 1, max: 9, divisions: 8, unit: "", onChanged: onRtxEnChanged, onChangeEnd: onBandChanged),
-            _buildUnifiedSlider(title: "Сетевой адрес устройства", commandName: "rtx_addr", value: 1234, min: 0, max: 65535, divisions: 100, unit: "", onChanged: (v) {}, onChangeEnd: (v) {}),
-            _buildUnifiedSlider(title: "Рабочий канал связи (1 МГц шаг)", commandName: "rtx_chan", value: rtxChan, min: 0, max: 99, divisions: 99, unit: "МГц", onChanged: onRtxEnChanged, onChangeEnd: onChanChanged),
-            _buildUnifiedSlider(title: "Spreading Factor (SF)", commandName: "rtx_sf", value: rtxSf, min: 5, max: 12, divisions: 7, unit: "", onChanged: onRtxEnChanged, onChangeEnd: onSfChanged),
-            _buildUnifiedSlider(title: "Полоса пропускания (Bandwidth)", commandName: "rtx_bw", value: rtxBw, min: 0, max: 9, divisions: 9, unit: "", onChanged: onRtxEnChanged, onChangeEnd: onBwChanged),
-            _buildUnifiedSlider(title: "Коэффициент кодирования (Coding Rate)", commandName: "rtx_cr", value: rtxCr, min: 1, max: 4, divisions: 3, unit: "", onChanged: onRtxEnChanged, onChangeEnd: onCrChanged),
-            _buildUnifiedSlider(title: "Мощность передатчика", commandName: "rtx_power", value: rtxPower, min: -9, max: 22, divisions: 31, unit: "dBm", onChanged: onRtxEnChanged, onChangeEnd: onPowerChanged),
+            XFireSwitchCard(title: "Включить RTX модуль", commandName: "rtx_en", value: rtxEn == 1, onChanged: (v) => onRtxEnChanged(v ? 1.0 : 0.0)),
+            XFireSliderCard(title: "Частотный диапазон (x100 МГц)", commandName: "rtx_band", value: rtxBand, min: 1, max: 9, divisions: 8, unit: "", onChanged: onRtxEnChanged, onChangeEnd: onBandChanged),
+            XFireSliderCard(title: "Сетевой адрес устройства", commandName: "rtx_addr", value: 1234, min: 0, max: 65535, divisions: 100, unit: "", onChanged: (v) {}, onChangeEnd: (v) {}),
+            XFireSliderCard(title: "Рабочий канал связи (1 МГц шаг)", commandName: "rtx_chan", value: rtxChan, min: 0, max: 99, divisions: 99, unit: "МГц", onChanged: onRtxEnChanged, onChangeEnd: onChanChanged),
+            XFireSliderCard(title: "Spreading Factor (SF)", commandName: "rtx_sf", value: rtxSf, min: 5, max: 12, divisions: 7, unit: "", onChanged: onRtxEnChanged, onChangeEnd: onSfChanged),
+            XFireSliderCard(title: "Полоса пропускания (Bandwidth)", commandName: "rtx_bw", value: rtxBw, min: 0, max: 9, divisions: 9, unit: "", onChanged: onRtxEnChanged, onChangeEnd: onBwChanged),
+            XFireSliderCard(title: "Коэффициент кодирования (Coding Rate)", commandName: "rtx_cr", value: rtxCr, min: 1, max: 4, divisions: 3, unit: "", onChanged: onRtxEnChanged, onChangeEnd: onCrChanged),
+            XFireSliderCard(title: "Мощность передатчика", commandName: "rtx_power", value: rtxPower, min: -9, max: 22, divisions: 31, unit: "dBm", onChanged: onRtxEnChanged, onChangeEnd: onPowerChanged),
             const SizedBox(height: 12),
           ],
         ),
@@ -1178,7 +964,7 @@ class RtxParametersExpansion extends StatelessWidget {
 }
 
 // ==========================================
-// КАРТОЧКА 2: КАЛЬКУЛЯТОР ЛИНКА (ВТОРАЯ КАРТОЧКА В СТРОГО ЕДИНОМ СТИЛЕ)
+// КАРТОЧКА 2: КАЛЬКУЛЯТОР ЛИНКА
 // ==========================================
 class RtxLinkCalculatorCard extends StatelessWidget {
   final double currentFreqMhz, sensitivity, distKm, bitRate, sensitivityProgress, bitRateProgress;
@@ -1199,7 +985,7 @@ class RtxLinkCalculatorCard extends StatelessWidget {
     String bitRateStr = bitRate >= 1000 ? "${(bitRate / 1000).toStringAsFixed(1)} kbps" : "${bitRate.toStringAsFixed(0)} bps";
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
       child: Card(
         margin: EdgeInsets.zero,
         child: ExpansionTile(
@@ -1208,56 +994,47 @@ class RtxLinkCalculatorCard extends StatelessWidget {
           iconColor: Colors.amberAccent,
           collapsedIconColor: Colors.white54,
           children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 22.0, vertical: 8.0),
-              child: Container(
-                padding: const EdgeInsets.all(16.0),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF141416),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white12),
-                ),
-                child: Column(
-                  children: [
-                    Text("КАЛЬКУЛЯТОР ЛИНКА (ЧАСТОТА: ${currentFreqMhz.toStringAsFixed(0)} МГц)", style: const TextStyle(fontSize: 10, color: Colors.amberAccent, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
-                    const SizedBox(height: 8),
-                    Text(distFormatted, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
-                    const SizedBox(height: 12),
-                    const Divider(color: Colors.white12),
-                    const SizedBox(height: 8),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Flexible(child: Text("Чувствительность приемника (Sensitivity):", style: TextStyle(fontSize: 11, color: Colors.white70), overflow: TextOverflow.ellipsis)),
-                            const SizedBox(width: 8),
-                            Text("${sensitivity.toStringAsFixed(1)} dBm", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        LinearProgressIndicator(value: sensitivityProgress, color: Colors.cyanAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Flexible(child: Text("Скорость по воздуху (Air Data Rate):", style: TextStyle(fontSize: 11, color: Colors.white70), overflow: TextOverflow.ellipsis)),
-                            const SizedBox(width: 8),
-                            Text(bitRateStr, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        LinearProgressIndicator(value: bitRateProgress, color: Colors.blueAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
-                      ],
-                    ),
-                  ],
-                ),
+            XFireCard(
+              child: Column(
+                children: [
+                  Text("КАЛЬКУЛЯТОР ЛИНКА (ЧАСТОТА: ${currentFreqMhz.toStringAsFixed(0)} МГц)", style: const TextStyle(fontSize: 10, color: Colors.amberAccent, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+                  const SizedBox(height: 8),
+                  Text(distFormatted, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
+                  const SizedBox(height: 12),
+                  const Divider(color: Colors.white12),
+                  const SizedBox(height: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Flexible(child: Text("Чувствительность приемника (Sensitivity):", style: TextStyle(fontSize: 11, color: Colors.white70), overflow: TextOverflow.ellipsis)),
+                          const SizedBox(width: 8),
+                          Text("${sensitivity.toStringAsFixed(1)} dBm", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      LinearProgressIndicator(value: sensitivityProgress, color: Colors.cyanAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Flexible(child: Text("Скорость по воздуху (Air Data Rate):", style: TextStyle(fontSize: 11, color: Colors.white70), overflow: TextOverflow.ellipsis)),
+                          const SizedBox(width: 8),
+                          Text(bitRateStr, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      LinearProgressIndicator(value: bitRateProgress, color: Colors.blueAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
+                    ],
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 12),
@@ -1304,7 +1081,7 @@ class RtxAntennaExpansion extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
       child: Card(
         margin: EdgeInsets.zero,
         child: ExpansionTile(
@@ -1314,7 +1091,7 @@ class RtxAntennaExpansion extends StatelessWidget {
           collapsedIconColor: Colors.white54,
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 22.0, vertical: 8.0),
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -1333,90 +1110,76 @@ class RtxAntennaExpansion extends StatelessWidget {
                 ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 22.0, vertical: 4.0),
-              child: Card(
-                margin: EdgeInsets.zero,
-                child: Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            XFireCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text("Графический расчет плеч и геометрии антенн", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amberAccent)),
+                  const SizedBox(height: 12),
+                  Row(
                     children: [
-                      const Text("Графический расчет плеч и геометрии антенн", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amberAccent)),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              children: [
-                                const Text("Штыревой диполь", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
-                                const SizedBox(height: 6),
-                                Container(
-                                  height: 120,
-                                  decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
-                                  child: CustomPaint(painter: DipoleSchematicPainter(hasSleeve: hasProtectiveSleeve), size: const Size(double.infinity, 120)),
-                                ),
-                                const SizedBox(height: 6),
-                                Text("Верх: ${(antResults['dipoleArmTopMm'] as double).toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 10, color: Colors.white70)),
-                                Text("Низ: ${(antResults['dipoleArmBotMm'] as double).toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
-                              ],
+                      Expanded(
+                        child: Column(
+                          children: [
+                            const Text("Штыревой диполь", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
+                            const SizedBox(height: 6),
+                            Container(
+                              height: 120,
+                              decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
+                              child: CustomPaint(painter: DipoleSchematicPainter(hasSleeve: hasProtectiveSleeve), size: const Size(double.infinity, 120)),
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              children: [
-                                const Text("Антенна Харченко", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
-                                const SizedBox(height: 6),
-                                Container(
-                                  height: 120,
-                                  decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
-                                  child: CustomPaint(painter: KharchenkoSchematicPainter(), size: const Size(double.infinity, 120)),
-                                ),
-                                const SizedBox(height: 6),
-                                const Text("Сторона ромба", style: TextStyle(fontSize: 10, color: Colors.white70)),
-                                Text("Сторона: ${(antResults['kharchenkoSideMm'] as double).toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
-                              ],
+                            const SizedBox(height: 6),
+                            Text("Верх: ${(antResults['dipoleArmTopMm'] as double).toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 10, color: Colors.white70)),
+                            Text("Низ: ${(antResults['dipoleArmBotMm'] as double).toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          children: [
+                            const Text("Антенна Харченко", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
+                            const SizedBox(height: 6),
+                            Container(
+                              height: 120,
+                              decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
+                              child: CustomPaint(painter: KharchenkoSchematicPainter(), size: const Size(double.infinity, 120)),
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 6),
+                            const Text("Сторона ромба", style: TextStyle(fontSize: 10, color: Colors.white70)),
+                            Text("Сторона: ${(antResults['kharchenkoSideMm'] as double).toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
+                          ],
+                        ),
                       ),
                     ],
                   ),
-                ),
+                ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 22.0, vertical: 4.0),
-              child: Card(
-                margin: EdgeInsets.zero,
-                child: Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text("Физические параметры материалов и среды", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-                      const SizedBox(height: 10),
-                      SwitchListTile(
-                        title: const Text("Защитная трубка / термоусадка на диполе", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                        subtitle: const Text("Учитывает диэлектрическую нагрузку пластика", style: TextStyle(fontSize: 10, color: Colors.white60)),
-                        value: hasProtectiveSleeve,
-                        activeColor: Colors.blueAccent,
-                        contentPadding: EdgeInsets.zero,
-                        onChanged: onSleeveToggle,
-                      ),
-                      if (hasProtectiveSleeve) ...[
-                        const SizedBox(height: 4),
-                        _buildInternalSlider("Толщина стенки трубки (чехла):", sleeveThicknessMm, 0.5, 3.0, 25, "мм (0.5-3.0)", onSleeveThickChanged),
-                      ],
-                      const SizedBox(height: 8),
-                      _buildInternalSlider("Диаметр трубки диполя (нижн.):", dipoleTubeDiameterMm, 2.0, 5.0, 6, "мм (2-5мм)", onTubeDiamChanged),
-                      _buildInternalSlider("Сечение провода диполя (верхн.):", dipoleTopWireSqMm, 0.5, 2.5, 20, "мм² (0.5-2.5)", onTopWireChanged),
-                      _buildInternalSlider("Сечение провода Харченко:", kharchenkoWireSqMm, 1.0, 4.0, 15, "мм² (1-4)", onKharcChanged),
-                      _buildInternalSlider("Запас на условия (Fade Margin):", calcEnvironmentLoss, 5.0, 30.0, 25, "dB", onEnvLossChanged),
-                    ],
+            XFireCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text("Физические параметры материалов и среды", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                  const SizedBox(height: 10),
+                  SwitchListTile(
+                    title: const Text("Защитная трубка / термоусадка на диполе", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    subtitle: const Text("Учитывает диэлектрическую нагрузку пластика", style: TextStyle(fontSize: 10, color: Colors.white60)),
+                    value: hasProtectiveSleeve,
+                    activeColor: Colors.blueAccent,
+                    contentPadding: EdgeInsets.zero,
+                    onChanged: onSleeveToggle,
                   ),
-                ),
+                  if (hasProtectiveSleeve) ...[
+                    const SizedBox(height: 4),
+                    _buildInternalSlider("Толщина стенки трубки (чехла):", sleeveThicknessMm, 0.5, 3.0, 25, "мм", onSleeveThickChanged),
+                  ],
+                  const SizedBox(height: 8),
+                  _buildInternalSlider("Диаметр трубки диполя (нижн.):", dipoleTubeDiameterMm, 2.0, 5.0, 6, "мм", onTubeDiamChanged),
+                  _buildInternalSlider("Сечение провода диполя (верхн.):", dipoleTopWireSqMm, 0.5, 2.5, 20, "мм²", onTopWireChanged),
+                  _buildInternalSlider("Сечение провода Харченко:", kharchenkoWireSqMm, 1.0, 4.0, 15, "мм²", onKharcChanged),
+                  _buildInternalSlider("Запас на условия (Fade Margin):", calcEnvironmentLoss, 5.0, 30.0, 25, "dB", onEnvLossChanged),
+                ],
               ),
             ),
             const SizedBox(height: 12),
@@ -1428,7 +1191,7 @@ class RtxAntennaExpansion extends StatelessWidget {
 }
 
 // ==========================================
-// ВКЛАДКА: РАДИОМОДУЛЬ RTX (RadioTab)
+// ВКЛАДКА 3: РАДИОМОДУЛЬ RTX
 // ==========================================
 class RadioTab extends StatefulWidget {
   const RadioTab({super.key});
@@ -1456,15 +1219,8 @@ class _RadioTabState extends State<RadioTab> {
   double _sleeveThicknessMm = 1.0; 
   int _antennaComboIndex = 1;
 
-  final List<double> _bwTable = [
-    7800.0, 10400.0, 15600.0, 20800.0, 31250.0, 
-    41700.0, 62500.0, 125000.0, 250000.0, 500000.0
-  ];
-
-  final Map<int, double> _snrTable = {
-    5: -2.5, 6: -5.0, 7: -7.5, 8: -10.0, 
-    9: -12.5, 10: -15.0, 11: -17.5, 12: -20.0
-  };
+  final List<double> _bwTable = [7800.0, 10400.0, 15600.0, 20800.0, 31250.0, 41700.0, 62500.0, 125000.0, 250000.0, 500000.0];
+  final Map<int, double> _snrTable = {5: -2.5, 6: -5.0, 7: -7.5, 8: -10.0, 9: -12.5, 10: -15.0, 11: -17.5, 12: -20.0};
 
   double get _currentFreqMhz => (_rtxBand * 100.0) + _rtxChan;
 
@@ -1500,52 +1256,30 @@ class _RadioTabState extends State<RadioTab> {
     double distanceKm = math.pow(10.0, exponent).toDouble();
     double bitRate = _calculateAirDataRate();
 
-    return {
-      'sensitivity': sensitivity,
-      'eirp': eirp,
-      'distanceKm': distanceKm,
-      'bitRate': bitRate,
-    };
+    return {'sensitivity': sensitivity, 'eirp': eirp, 'distanceKm': distanceKm, 'bitRate': bitRate};
   }
 
   Map<String, dynamic> _calculateAntennaDimensions() {
     double freqHz = _currentFreqMhz * 1e6;
-    double nAtmosphere = 1.0003;
-    double cInAir = 299792458.0 / nAtmosphere;
-    double lambdaMm = (cInAir / freqHz) * 1000.0;
+    double lambdaMm = (299792458.0 / (freqHz * 1.0003)) * 1000.0;
     double quarterLambda = lambdaMm / 4.0;
 
     double dielectricLoading = 1.0;
     if (_hasProtectiveSleeve) {
-      double epsilonR = 2.6;
-      dielectricLoading = 1.0 + (0.018 * (epsilonR - 1.0) * (_sleeveThicknessMm / 1.0));
+      dielectricLoading = 1.0 + (0.018 * 1.6 * (_sleeveThicknessMm / 1.0));
     }
 
     double radiusBot = _dipoleTubeDiameterMm / 2.0;
-    double omegaBot = 2.0 * math.log(lambdaMm / radiusBot);
-    double kFactorDipoleBot = (0.97 - (2.5 / omegaBot) - (0.003 * (_dipoleTubeDiameterMm / 1.0))) / dielectricLoading;
+    double kFactorDipoleBot = (0.97 - (2.5 / (2.0 * math.log(lambdaMm / radiusBot)))) / dielectricLoading;
 
     double radiusTop = math.sqrt(_dipoleTopWireSqMm / math.pi);
-    double omegaTop = 2.0 * math.log(lambdaMm / radiusTop);
-    double kFactorDipoleTop = (0.97 - (2.0 / omegaTop)) / dielectricLoading;
+    double kFactorDipoleTop = (0.97 - (2.0 / (2.0 * math.log(lambdaMm / radiusTop)))) / dielectricLoading;
 
-    double feedGapMm = 3.0;
-    double gapCorrection = 0.002 * (feedGapMm / (lambdaMm / 100.0));
+    double dipoleArmTopMm = quarterLambda * kFactorDipoleTop - 0.006;
+    double dipoleArmBotMm = quarterLambda * kFactorDipoleBot - 0.006;
+    double kharchenkoSideMm = quarterLambda * (0.96 - (1.8 / (2.0 * math.log(lambdaMm / (2.0 * math.sqrt(_kharchenkoWireSqMm / math.pi))))));
 
-    double dipoleArmTopMm = quarterLambda * kFactorDipoleTop - gapCorrection;
-    double dipoleArmBotMm = quarterLambda * kFactorDipoleBot - gapCorrection;
-
-    double radiusKharc = math.sqrt(_kharchenkoWireSqMm / math.pi);
-    double omegaKharc = 2.0 * math.log(lambdaMm / (2.0 * radiusKharc));
-    double kFactorKharc = 0.96 - (1.8 / omegaKharc);
-    double kharchenkoSideMm = quarterLambda * kFactorKharc;
-
-    return {
-      'lambdaMm': lambdaMm,
-      'dipoleArmTopMm': dipoleArmTopMm,
-      'dipoleArmBotMm': dipoleArmBotMm,
-      'kharchenkoSideMm': kharchenkoSideMm,
-    };
+    return {'lambdaMm': lambdaMm, 'dipoleArmTopMm': dipoleArmTopMm, 'dipoleArmBotMm': dipoleArmBotMm, 'kharchenkoSideMm': kharchenkoSideMm};
   }
 
   @override
@@ -1556,13 +1290,8 @@ class _RadioTabState extends State<RadioTab> {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
-        // Карточка 1: Параметры радиомодуля со слайдерами
         RtxParametersExpansion(
           rtxEn: _rtxEn, rtxBand: _rtxBand, rtxChan: _rtxChan, rtxSf: _rtxSf, rtxBw: _rtxBw, rtxCr: _rtxCr, rtxPower: _rtxPower,
-          currentFreqMhz: _currentFreqMhz, sensitivity: linkResults['sensitivity'], distKm: linkResults['distanceKm'], bitRate: linkResults['bitRate'],
-          sensitivityProgress: ((linkResults['sensitivity'] - (-140.0)) / ((-100.0) - (-140.0))).clamp(0.0, 1.0),
-          bitRateProgress: (linkResults['bitRate'] / 30000.0).clamp(0.0, 1.0),
-          calcEnvironmentLoss: _calcEnvironmentLoss,
           onRtxEnChanged: (v) { setState(() => _rtxEn = v); SerialService.sendCommand("rtx_en ${_rtxEn.round()}"); },
           onBandChanged: (v) { setState(() => _rtxBand = v); SerialService.rtxBand = v; SerialService.sendCommand("rtx_band ${v.round()}"); },
           onChanChanged: (v) { setState(() => _rtxChan = v); SerialService.rtxChan = v; SerialService.sendCommand("rtx_chan ${v.round()}"); },
@@ -1570,9 +1299,7 @@ class _RadioTabState extends State<RadioTab> {
           onBwChanged: (v) { setState(() => _rtxBw = v); SerialService.rtxBw = v; SerialService.sendCommand("rtx_bw ${v.round()}"); },
           onCrChanged: (v) { setState(() => _rtxCr = v); SerialService.rtxCr = v; SerialService.sendCommand("rtx_cr ${v.round()}"); },
           onPowerChanged: (v) { setState(() => _rtxPower = v); SerialService.rtxPower = v; SerialService.sendCommand("rtx_power ${v.round()}"); },
-          onEnvLossChanged: (v) => setState(() => _calcEnvironmentLoss = v),
         ),
-        // Карточка 2: Отдельная карточка калькулятора линка в том же визуальном стиле
         RtxLinkCalculatorCard(
           currentFreqMhz: _currentFreqMhz,
           sensitivity: linkResults['sensitivity'],
@@ -1581,7 +1308,6 @@ class _RadioTabState extends State<RadioTab> {
           sensitivityProgress: ((linkResults['sensitivity'] - (-140.0)) / ((-100.0) - (-140.0))).clamp(0.0, 1.0),
           bitRateProgress: (linkResults['bitRate'] / 30000.0).clamp(0.0, 1.0),
         ),
-        // Карточка 3: Антенны
         RtxAntennaExpansion(
           antennaComboIndex: _antennaComboIndex, hasProtectiveSleeve: _hasProtectiveSleeve,
           sleeveThicknessMm: _sleeveThicknessMm, dipoleTubeDiameterMm: _dipoleTubeDiameterMm,
@@ -1602,7 +1328,7 @@ class _RadioTabState extends State<RadioTab> {
 }
 
 // ==========================================
-// ВКЛАДКА: КАЛИБРОВКА И ТЕСТЫ (TestsTab)
+// ВКЛАДКА 4: КАЛИБРОВКА И ТЕСТЫ
 // ==========================================
 class TestsTab extends StatefulWidget {
   const TestsTab({super.key});
@@ -1629,7 +1355,7 @@ class _TestsTabState extends State<TestsTab> {
 
   Widget _buildActionCard({required BuildContext context, required String title, required String subtitleCommand, required IconData icon, required Color color, required VoidCallback onTap}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
       child: Card(
         margin: EdgeInsets.zero,
         child: InkWell(
@@ -1666,61 +1392,44 @@ class _TestsTabState extends State<TestsTab> {
         _buildActionCard(context: context, title: "Тест PID 25%", subtitleCommand: "test_pid", icon: Icons.tune, color: Colors.purpleAccent, onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_pid"); showAppDialog(context, "Тест PID", "Стресс-тест ПИД активирован."); } }),
         _buildActionCard(context: context, title: "Тест связи с пультом", subtitleCommand: "test_rc", icon: Icons.gamepad, color: Colors.greenAccent, onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_rc"); showAppDialog(context, "Тест RC", "Диагностика пакетов запущена."); } }),
 
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
-          child: Card(
-            margin: EdgeInsets.zero,
-            child: Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        XFireCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text("Тест смены канала связи с пультом", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amberAccent)),
+              const Text("test_rc_can", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text("Тест смены канала связи с пультом", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amberAccent)),
-                  const Text("test_rc_can", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontFamily: 'monospace')),
-                  const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text("Выбор канала (0 - 99):", style: TextStyle(fontSize: 11, color: Colors.white70)),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
-                        child: Text("КАНАЛ: $_selectedChannel", style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 12)),
-                      ),
-                    ],
-                  ),
-                  Slider(
-                    value: _selectedChannel.toDouble(),
-                    min: 0,
-                    max: 99,
-                    divisions: 99,
-                    onChanged: (v) => setState(() => _selectedChannel = v.round()),
-                  ),
-                  const SizedBox(height: 6),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 36,
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        if (!SerialService.isConnected) {
-                          showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
-                        } else {
-                          SerialService.sendCommand("test_rc_can $_selectedChannel");
-                          showAppDialog(context, "Успех", "Отправлена команда: test_rc_can $_selectedChannel");
-                        }
-                      },
-                      icon: const Icon(Icons.wifi_channel, size: 16),
-                      label: const Text("Выполнить тест смены канала", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueAccent,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                    ),
+                  const Text("Выбор канала (0 - 99):", style: TextStyle(fontSize: 11, color: Colors.white70)),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
+                    child: Text("КАНАЛ: $_selectedChannel", style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 12)),
                   ),
                 ],
               ),
-            ),
+              Slider(value: _selectedChannel.toDouble(), min: 0, max: 99, divisions: 99, onChanged: (v) => setState(() => _selectedChannel = v.round())),
+              const SizedBox(height: 6),
+              SizedBox(
+                width: double.infinity,
+                height: 36,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    if (!SerialService.isConnected) {
+                      showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
+                    } else {
+                      SerialService.sendCommand("test_rc_can $_selectedChannel");
+                      showAppDialog(context, "Успех", "Отправлена команда: test_rc_can $_selectedChannel");
+                    }
+                  },
+                  icon: const Icon(Icons.wifi_channel, size: 16),
+                  label: const Text("Выполнить тест смены канала", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                ),
+              ),
+            ],
           ),
         ),
 
@@ -1736,7 +1445,7 @@ class _TestsTabState extends State<TestsTab> {
 }
 
 // ==========================================
-// ВИДЖЕТ ТЕРМИНАЛА CLI (TerminalTab)
+// ВКЛАДКА 5: ТЕРМИНАЛ CLI
 // ==========================================
 class TerminalTab extends StatefulWidget {
   const TerminalTab({super.key});
@@ -1754,9 +1463,7 @@ class _TerminalTabState extends State<TerminalTab> {
   void initState() {
     super.initState();
     _displayLog = SerialService.terminalLog;
-    _sub = SerialService.logController.stream.listen((log) {
-      if (mounted) setState(() => _displayLog = log);
-    });
+    _sub = SerialService.logController.stream.listen((log) { if (mounted) setState(() => _displayLog = log); });
   }
 
   @override
@@ -1833,7 +1540,7 @@ class _TerminalTabState extends State<TerminalTab> {
 }
 
 // ==========================================
-// ХУДОЖНИК ДЛЯ БОКОВЫХ ШКАЛ ТАНГАЖА
+// ХУДОЖНИКИ HUD И АВИАГОРИЗОНТ
 // ==========================================
 class PitchHudScalePainter extends CustomPainter {
   final double value;
@@ -1841,172 +1548,71 @@ class PitchHudScalePainter extends CustomPainter {
   final double maxVal;
   final bool isLeftSide;
 
-  PitchHudScalePainter({
-    required this.value,
-    required this.minVal,
-    required this.maxVal,
-    required this.isLeftSide,
-  });
+  PitchHudScalePainter({required this.value, required this.minVal, required this.maxVal, required this.isLeftSide});
 
   @override
   void paint(Canvas canvas, Size size) {
     final paintLine = Paint()..color = Colors.white70..strokeWidth = 2.5;
     final paintText = TextPainter(textDirection: TextDirection.ltr);
     final indicatorPaint = Paint()..color = Colors.white..style = PaintingStyle.fill;
-
     final x = isLeftSide ? 5.0 : size.width - 5.0;
+
     canvas.drawLine(Offset(x, 8), Offset(x, size.height - 8), paintLine);
-
     double range = maxVal - minVal;
-    int steps = 4;
-    for (int i = 0; i <= steps; i++) {
-      double v = minVal + (range / steps) * i;
-      double ratio = (v - minVal) / range;
-      double y = 8 + ratio * (size.height - 16);
 
-      if (isLeftSide) {
-        canvas.drawLine(Offset(x, y), Offset(x + 5, y), paintLine);
-        paintText.text = TextSpan(
-          text: "${v.toInt()}°",
-          style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-        );
-        paintText.layout();
-        paintText.paint(canvas, Offset(x + 8, y - 5));
-      } else {
-        canvas.drawLine(Offset(x - 5, y), Offset(x, y), paintLine);
-        paintText.text = TextSpan(
-          text: "${v.toInt()}°",
-          style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-        );
-        paintText.layout();
-        paintText.paint(canvas, Offset(x - 28, y - 5));
-      }
+    for (int i = 0; i <= 4; i++) {
+      double v = minVal + (range / 4) * i;
+      double y = 8 + ((v - minVal) / range) * (size.height - 16);
+      canvas.drawLine(Offset(isLeftSide ? x : x - 5, y), Offset(isLeftSide ? x + 5 : x, y), paintLine);
+      paintText.text = TextSpan(text: "${v.toInt()}°", style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold));
+      paintText.layout();
+      paintText.paint(canvas, Offset(isLeftSide ? x + 8 : x - 28, y - 5));
     }
 
-    double clampedVal = value.clamp(minVal, maxVal);
-    double currentRatio = (clampedVal - minVal) / range;
-    double currentY = 8 + currentRatio * (size.height - 16);
-
-    if (isLeftSide) {
-      final path = Path()
-        ..moveTo(x - 2, currentY)
-        ..lineTo(x - 14, currentY - 8)
-        ..lineTo(x - 14, currentY + 8)
-        ..close();
-      canvas.drawPath(path, indicatorPaint);
-    } else {
-      final path = Path()
-        ..moveTo(x + 2, currentY)
-        ..lineTo(x + 14, currentY - 8)
-        ..lineTo(x + 14, currentY + 8)
-        ..close();
-      canvas.drawPath(path, indicatorPaint);
-    }
+    double currentY = 8 + ((value.clamp(minVal, maxVal) - minVal) / range) * (size.height - 16);
+    canvas.drawPath(Path()..moveTo(isLeftSide ? x - 2 : x + 2, currentY)..lineTo(isLeftSide ? x - 14 : x + 14, currentY - 8)..lineTo(isLeftSide ? x - 14 : x + 14, currentY + 8)..close(), indicatorPaint);
   }
 
   @override
-  bool shouldRepaint(covariant PitchHudScalePainter oldDelegate) =>
-      oldDelegate.value != value || oldDelegate.minVal != minVal || oldDelegate.maxVal != maxVal || oldDelegate.isLeftSide != isLeftSide;
+  bool shouldRepaint(covariant PitchHudScalePainter oldDelegate) => oldDelegate.value != value;
 }
 
-// ==========================================
-// ХУДОЖНИК ДЛЯ YAW HEADING
-// ==========================================
 class YawHudScalePainter extends CustomPainter {
   final double value;
   final double minVal;
   final double maxVal;
   final bool isTop;
 
-  YawHudScalePainter({
-    required this.value,
-    required this.minVal,
-    required this.maxVal,
-    required this.isTop,
-  });
+  YawHudScalePainter({required this.value, required this.minVal, required this.maxVal, required this.isTop});
 
   @override
   void paint(Canvas canvas, Size size) {
     final paintLine = Paint()..color = Colors.white70..strokeWidth = 2.5;
     final paintText = TextPainter(textDirection: TextDirection.ltr);
     final indicatorPaint = Paint()..color = Colors.white..style = PaintingStyle.fill;
-
     const double margin = 26.0;
+    final y = isTop ? 14.0 : size.height - 14.0;
 
-    if (isTop) {
-      final y = 14.0;
-      canvas.drawLine(Offset(margin, y), Offset(size.width - margin, y), paintLine);
+    canvas.drawLine(Offset(margin, y), Offset(size.width - margin, y), paintLine);
+    double range = maxVal - minVal;
 
-      double range = maxVal - minVal;
-      int steps = 4;
-      for (int i = 0; i <= steps; i++) {
-        double v = minVal + (range / steps) * i;
-        double ratio = (v - minVal) / range;
-        double x = margin + ratio * (size.width - (margin * 2));
-
-        canvas.drawLine(Offset(x, y), Offset(x, y - 5), paintLine);
-
-        paintText.text = TextSpan(
-          text: "${v.toInt()}°",
-          style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-        );
-        paintText.layout();
-        paintText.paint(canvas, Offset(x - 10, y - 16));
-      }
-
-      double clampedVal = value.clamp(minVal, maxVal);
-      double currentRatio = (clampedVal - minVal) / range;
-      double currentX = margin + currentRatio * (size.width - (margin * 2));
-
-      final path = Path()
-        ..moveTo(currentX, y + 2)
-        ..lineTo(currentX - 8, y + 16)
-        ..lineTo(currentX + 8, y + 16)
-        ..close();
-      canvas.drawPath(path, indicatorPaint);
-
-    } else {
-      final y = size.height - 14.0;
-      canvas.drawLine(Offset(margin, y), Offset(size.width - margin, y), paintLine);
-
-      double range = maxVal - minVal;
-      int steps = 4;
-      for (int i = 0; i <= steps; i++) {
-        double v = minVal + (range / steps) * i;
-        double ratio = (v - minVal) / range;
-        double x = margin + ratio * (size.width - (margin * 2));
-
-        canvas.drawLine(Offset(x, y), Offset(x, y + 5), paintLine);
-
-        paintText.text = TextSpan(
-          text: "${v.toInt()}°",
-          style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-        );
-        paintText.layout();
-        paintText.paint(canvas, Offset(x - 10, y + 6));
-      }
-
-      double clampedVal = value.clamp(minVal, maxVal);
-      double currentRatio = (clampedVal - minVal) / range;
-      double currentX = margin + currentRatio * (size.width - (margin * 2));
-
-      final path = Path()
-        ..moveTo(currentX, y - 2)
-        ..lineTo(currentX - 8, y - 16)
-        ..lineTo(currentX + 8, y - 16)
-        ..close();
-      canvas.drawPath(path, indicatorPaint);
+    for (int i = 0; i <= 4; i++) {
+      double v = minVal + (range / 4) * i;
+      double x = margin + ((v - minVal) / range) * (size.width - (margin * 2));
+      canvas.drawLine(Offset(x, y), Offset(x, y + (isTop ? -5 : 5)), paintLine);
+      paintText.text = TextSpan(text: "${v.toInt()}°", style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold));
+      paintText.layout();
+      paintText.paint(canvas, Offset(x - 10, y + (isTop ? -16 : 6)));
     }
+
+    double currentX = margin + ((value.clamp(minVal, maxVal) - minVal) / range) * (size.width - (margin * 2));
+    canvas.drawPath(Path()..moveTo(currentX, y + (isTop ? 2 : -2))..lineTo(currentX - 8, y + (isTop ? 16 : -16))..lineTo(currentX + 8, y + (isTop ? 16 : -16))..close(), indicatorPaint);
   }
 
   @override
-  bool shouldRepaint(covariant YawHudScalePainter oldDelegate) =>
-      oldDelegate.value != value || oldDelegate.minVal != minVal || oldDelegate.maxVal != maxVal;
+  bool shouldRepaint(covariant YawHudScalePainter oldDelegate) => oldDelegate.value != value;
 }
 
-// ==========================================
-// ВИДЖЕТ АВИАГОРИЗОНТА
-// ==========================================
 class ArtificialHorizonPainter extends CustomPainter {
   final double roll, pitch; 
   ArtificialHorizonPainter({required this.roll, required this.pitch});
@@ -2018,52 +1624,28 @@ class ArtificialHorizonPainter extends CustomPainter {
 
     canvas.save();
     canvas.translate(center.dx, center.dy);
-
-    final clipPath = Path()..addOval(Rect.fromCircle(center: Offset.zero, radius: radius));
-    canvas.clipPath(clipPath);
-
+    canvas.clipPath(Path()..addOval(Rect.fromCircle(center: Offset.zero, radius: radius)));
     canvas.rotate(-roll);
 
-    final pitchOffset = pitch * 40.0;
+    double pitchOffset = pitch * 40.0;
+    canvas.drawRect(Rect.fromLTWH(-radius * 2, -radius * 3 + pitchOffset, radius * 4, radius * 3), Paint()..color = const Color(0xFF1E6091));
+    canvas.drawRect(Rect.fromLTWH(-radius * 2, pitchOffset, radius * 4, radius * 3), Paint()..color = const Color(0xFF6A4A3A));
+    canvas.drawLine(Offset(-radius * 2, pitchOffset), Offset(radius * 2, pitchOffset), Paint()..color = Colors.white..strokeWidth = 2.0);
 
-    final skyRect = Rect.fromLTWH(-radius * 2, -radius * 3 + pitchOffset, radius * 4, radius * 3);
-    canvas.drawRect(skyRect, Paint()..color = const Color(0xFF1E6091));
-
-    final groundRect = Rect.fromLTWH(-radius * 2, pitchOffset, radius * 4, radius * 3);
-    canvas.drawRect(groundRect, Paint()..color = const Color(0xFF6A4A3A));
-
-    final horizonPaint = Paint()
-      ..color = Colors.white
-      ..strokeWidth = 2.0;
-    canvas.drawLine(Offset(-radius * 2, pitchOffset), Offset(radius * 2, pitchOffset), horizonPaint);
-
-    final strokePaint = Paint()..color = Colors.white70..strokeWidth = 1.5;
     for (int p = -3; p <= 3; p++) {
       if (p == 0) continue;
-      double yStep = pitchOffset - (p * 20.0);
-      double lineWidth = (p.abs() % 2 == 0) ? 20.0 : 10.0;
-      canvas.drawLine(Offset(-lineWidth / 2, yStep), Offset(lineWidth / 2, yStep), strokePaint);
+      canvas.drawLine(Offset(- (p.abs() % 2 == 0 ? 20.0 : 10.0) / 2, pitchOffset - (p * 20.0)), Offset((p.abs() % 2 == 0 ? 20.0 : 10.0) / 2, pitchOffset - (p * 20.0)), Paint()..color = Colors.white70..strokeWidth = 1.5);
     }
-
     canvas.restore();
-
-    canvas.drawCircle(
-      center, 
-      radius, 
-      Paint()
-        ..color = Colors.white
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3.0,
-    );
+    canvas.drawCircle(center, radius, Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 3.0);
   }
 
   @override
-  bool shouldRepaint(covariant ArtificialHorizonPainter oldDelegate) => 
-      oldDelegate.roll != roll || oldDelegate.pitch != pitch;
+  bool shouldRepaint(covariant ArtificialHorizonPainter oldDelegate) => oldDelegate.roll != roll || oldDelegate.pitch != pitch;
 }
 
 // ==========================================
-// ВКЛАДКА: ТЕЛЕМЕТРИЯ (ThreeDViewTab)
+// ВКЛАДКА 6: ТЕЛЕМЕТРИЯ
 // ==========================================
 class ThreeDViewTab extends StatefulWidget {
   const ThreeDViewTab({super.key});
@@ -2112,9 +1694,6 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
     while (yawDeg > 180) yawDeg -= 360;
     while (yawDeg < -180) yawDeg += 360;
 
-    double leftPitchVal = pitchDeg + (rollDeg * 0.5);
-    double rightPitchVal = pitchDeg - (rollDeg * 0.5);
-
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Column(
@@ -2127,90 +1706,23 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
               decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.06))),
               child: Column(
                 children: [
-                  SizedBox(
-                    height: 26,
-                    child: CustomPaint(
-                      painter: YawHudScalePainter(value: yawDeg, minVal: -180, maxVal: 180, isTop: true),
-                      size: const Size(double.infinity, 26),
-                    ),
-                  ),
+                  SizedBox(height: 26, child: CustomPaint(painter: YawHudScalePainter(value: yawDeg, minVal: -180, maxVal: 180, isTop: true), size: const Size(double.infinity, 26))),
                   const SizedBox(height: 2),
-
                   Expanded(
                     child: Row(
                       children: [
-                        Expanded(
-                          flex: 2,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: CustomPaint(
-                                  painter: PitchHudScalePainter(
-                                    value: leftPitchVal, 
-                                    minVal: -90, 
-                                    maxVal: 90, 
-                                    isLeftSide: true,
-                                  ),
-                                  size: const Size(double.infinity, double.infinity),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        Expanded(
-                          flex: 4,
-                          child: Center(
-                            child: Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                CustomPaint(
-                                  size: const Size(195, 195),
-                                  painter: ArtificialHorizonPainter(roll: SerialService.gyroRoll, pitch: SerialService.gyroPitch),
-                                ),
-                                const Icon(Icons.add, color: Colors.white, size: 24),
-                              ],
-                            ),
-                          ),
-                        ),
-
-                        Expanded(
-                          flex: 2,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Expanded(
-                                child: CustomPaint(
-                                  painter: PitchHudScalePainter(
-                                    value: rightPitchVal, 
-                                    minVal: -90, 
-                                    maxVal: 90, 
-                                    isLeftSide: false,
-                                  ),
-                                  size: const Size(double.infinity, double.infinity),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                        Expanded(flex: 2, child: CustomPaint(painter: PitchHudScalePainter(value: pitchDeg + (rollDeg * 0.5), minVal: -90, maxVal: 90, isLeftSide: true), size: const Size(double.infinity, double.infinity))),
+                        Expanded(flex: 4, child: Center(child: Stack(alignment: Alignment.center, children: [CustomPaint(size: const Size(195, 195), painter: ArtificialHorizonPainter(roll: SerialService.gyroRoll, pitch: SerialService.gyroPitch)), const Icon(Icons.add, color: Colors.white, size: 24)]))),
+                        Expanded(flex: 2, child: CustomPaint(painter: PitchHudScalePainter(value: pitchDeg - (rollDeg * 0.5), minVal: -90, maxVal: 90, isLeftSide: false), size: const Size(double.infinity, double.infinity))),
                       ],
                     ),
                   ),
                   const SizedBox(height: 2),
-
-                  SizedBox(
-                    height: 26,
-                    child: CustomPaint(
-                      painter: YawHudScalePainter(value: yawDeg, minVal: -180, maxVal: 180, isTop: false),
-                      size: const Size(double.infinity, 26),
-                    ),
-                  ),
+                  SizedBox(height: 26, child: CustomPaint(painter: YawHudScalePainter(value: yawDeg, minVal: -180, maxVal: 180, isTop: false), size: const Size(double.infinity, 26))),
                 ],
               ),
             ),
           ),
-
           Expanded(
             flex: 4,
             child: Container(
@@ -2242,7 +1754,7 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
 }
 
 // ==========================================
-// ВКЛАДКА: ПРОШИВКА FC И RC (FlasherTab)
+// ВКЛАДКА 7: ПРОШИВКА FC И RC
 // ==========================================
 class FlasherTab extends StatefulWidget {
   const FlasherTab({super.key});
@@ -2259,47 +1771,40 @@ class _FlasherTabState extends State<FlasherTab> {
   String _statusFC = "Готов к прошивке полетного контроллера";
   String _statusRC = "Готов к прошивке пульта управления";
 
-  Future<void> _flashFlightController() async {
+  Future<void> _flashDevice(bool isFC) async {
     if (!SerialService.isConnected || SerialService.usbPort == null) {
       showAppDialog(context, "Ошибка", "Устройство не подключено по USB!", isError: true);
       return;
     }
-    setState(() { _isFlashingFC = true; _progressFC = 0.0; _statusFC = "Связь с загрузчиком FC..."; });
+    setState(() {
+      if (isFC) { _isFlashingFC = true; _progressFC = 0.0; _statusFC = "Связь с загрузчиком FC..."; }
+      else { _isFlashingRC = true; _progressRC = 0.0; _statusRC = "Связь с загрузчиком пульта..."; }
+    });
     try {
       await SerialService.usbPort!.write(Uint8List.fromList([0x7F]));
       await Future.delayed(const Duration(milliseconds: 300));
-      setState(() => _statusFC = "Запись прошивки FC...");
+      setState(() {
+        if (isFC) _statusFC = "Запись прошивки FC...";
+        else _statusRC = "Запись прошивки пульта...";
+      });
       for (int i = 1; i <= 10; i++) {
         await Future.delayed(const Duration(milliseconds: 100));
-        setState(() => _progressFC = i / 10.0);
+        setState(() {
+          if (isFC) _progressFC = i / 10.0;
+          else _progressRC = i / 10.0;
+        });
       }
-      setState(() { _isFlashingFC = false; _statusFC = "УСПЕХ: Полетный контроллер прошит!"; });
-      if (mounted) showAppDialog(context, "Успех", "Прошивка полетного контроллера завершена!");
+      setState(() {
+        if (isFC) { _isFlashingFC = false; _statusFC = "УСПЕХ: Полетный контроллер прошит!"; }
+        else { _isFlashingRC = false; _statusRC = "УСПЕХ: Пульт успешно прошит!"; }
+      });
+      if (mounted) showAppDialog(context, "Успех", "Операция прошивки завершена успешно!");
     } catch (e) {
-      setState(() { _isFlashingFC = false; _statusFC = "ОШИБКА: $e"; });
-      if (mounted) showAppDialog(context, "Ошибка", "Сбой прошивки FC: $e", isError: true);
-    }
-  }
-
-  Future<void> _flashRemoteControl() async {
-    if (!SerialService.isConnected || SerialService.usbPort == null) {
-      showAppDialog(context, "Ошибка", "Пульт не подключен по USB!", isError: true);
-      return;
-    }
-    setState(() { _isFlashingRC = true; _progressRC = 0.0; _statusRC = "Связь с загрузчиком пульта..."; });
-    try {
-      await SerialService.usbPort!.write(Uint8List.fromList([0x7F]));
-      await Future.delayed(const Duration(milliseconds: 300));
-      setState(() => _statusRC = "Запись прошивки пульта...");
-      for (int i = 1; i <= 10; i++) {
-        await Future.delayed(const Duration(milliseconds: 100));
-        setState(() => _progressRC = i / 10.0);
-      }
-      setState(() { _isFlashingRC = false; _statusRC = "УСПЕХ: Пульт успешно прошит!"; });
-      if (mounted) showAppDialog(context, "Успех", "Прошивка пульта управления завершена!");
-    } catch (e) {
-      setState(() { _isFlashingRC = false; _statusRC = "ОШИБКА: $e"; });
-      if (mounted) showAppDialog(context, "Ошибка", "Сбой прошивки пульта: $e", isError: true);
+      setState(() {
+        if (isFC) { _isFlashingFC = false; _statusFC = "ОШИБКА: $e"; }
+        else { _isFlashingRC = false; _statusRC = "ОШИБКА: $e"; }
+      });
+      if (mounted) showAppDialog(context, "Ошибка", "Сбой прошивки: $e", isError: true);
     }
   }
 
@@ -2312,7 +1817,6 @@ class _FlasherTabState extends State<FlasherTab> {
           padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Text("ЗАГРУЗЧИКИ ЭКОСИСТЕМЫ XFIRE", style: TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
         ),
-
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16.0),
@@ -2329,17 +1833,16 @@ class _FlasherTabState extends State<FlasherTab> {
                   width: double.infinity,
                   height: 40,
                   child: ElevatedButton.icon(
-                    onPressed: _isFlashingFC ? null : _flashFlightController,
+                    onPressed: _isFlashingFC ? null : () => _flashDevice(true),
                     icon: const Icon(Icons.memory, size: 16),
                     label: Text(_isFlashingFC ? "Прошивка FC..." : "Прошить полетный контроллер", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
                   ),
                 ),
               ],
             ),
           ),
         ),
-
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16.0),
@@ -2356,10 +1859,10 @@ class _FlasherTabState extends State<FlasherTab> {
                   width: double.infinity,
                   height: 40,
                   child: ElevatedButton.icon(
-                    onPressed: _isFlashingRC ? null : _flashRemoteControl,
+                    onPressed: _isFlashingRC ? null : () => _flashDevice(false),
                     icon: const Icon(Icons.gamepad, size: 16),
                     label: Text(_isFlashingRC ? "Прошивка пульта..." : "Прошить пульт управления", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
                   ),
                 ),
               ],
