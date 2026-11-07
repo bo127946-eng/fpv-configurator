@@ -1,4 +1,4 @@
-// XFire Ecosystem (Финальная версия с единым стилем и отступами слайдеров)
+// XFire Ecosystem (Финальный вариант с единым виджетом и исправленными отступами слайдеров)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -47,7 +47,7 @@ class MyApp extends StatelessWidget {
 }
 
 // ==========================================
-// СТАРТОВАЯ ЗАСТАВКА (С задержкой 0.5с)
+// СТАРТОВАЯ ЗАСТАВКА
 // ==========================================
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -1032,7 +1032,7 @@ class KharchenkoSchematicPainter extends CustomPainter {
 }
 
 // ==========================================
-// ВИДЖЕТЫ ДЛЯ ВКЛАДКИ RTX С ЕДИНЫМ СТИЛЕМ СЛАЙДЕРОВ
+// ЕДИНЫЙ ВИДЖЕТ СЛАЙДЕРА ДЛЯ ВКЛАДКИ RTX
 // ==========================================
 class RtxParametersExpansion extends StatelessWidget {
   final double rtxEn, rtxBand, rtxChan, rtxSf, rtxBw, rtxCr, rtxPower;
@@ -1046,24 +1046,65 @@ class RtxParametersExpansion extends StatelessWidget {
     required this.onRtxEnChanged, required this.onBandChanged, required this.onChanChanged, required this.onSfChanged, required this.onBwChanged, required this.onCrChanged, required this.onPowerChanged, required this.onEnvLossChanged,
   });
 
-  Widget _buildSlider(String title, String cmd, double val, double min, double max, int div, String unit, ValueChanged<double> onChanged, ValueChanged<double> onChangeEnd) {
+  // ЕДИНЫЙ МЕТОД ДЛЯ ВСЕХ СЛАЙДЕРОВ С СИММЕТРИЧНЫМИ ОТСТУПАМИ И ЕДИНОЙ ТИПОГРАФИКОЙ
+  Widget _buildUniformSliderCard({
+    required String title,
+    required String commandName,
+    required double value,
+    required double min,
+    required double max,
+    required int divisions,
+    required String unit,
+    required ValueChanged<double> onChanged,
+    required ValueChanged<double> onChangeEnd,
+  }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+      padding: const EdgeInsets.symmetric(horizontal: 22.0, vertical: 5.0), // Шире на ~10мм по бокам
       child: Card(
         margin: EdgeInsets.zero,
         child: Padding(
-          padding: const EdgeInsets.all(12.0),
+          padding: const EdgeInsets.all(14.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)), Text(cmd, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace'))])),
-                  Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: Text("${val.toStringAsFixed(val.truncate() == val ? 0 : 2)} $unit", style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 11))),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title, 
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          commandName, 
+                          style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                    decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+                    child: Text(
+                      "${value.toStringAsFixed(value.truncate() == value ? 0 : 2)} $unit",
+                      style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 11),
+                    ),
+                  ),
                 ],
               ),
-              Slider(value: val, min: min, max: max, divisions: div, onChanged: onChanged, onChangeEnd: onChangeEnd),
+              const SizedBox(height: 6),
+              Slider(
+                value: value,
+                min: min,
+                max: max,
+                divisions: divisions,
+                onChanged: onChanged,
+                onChangeEnd: onChangeEnd,
+              ),
             ],
           ),
         ),
@@ -1071,18 +1112,30 @@ class RtxParametersExpansion extends StatelessWidget {
     );
   }
 
-  Widget _buildSwitch(String title, String cmd, bool val, ValueChanged<bool> onChanged) {
+  Widget _buildUniformSwitchCard({
+    required String title,
+    required String commandName,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+      padding: const EdgeInsets.symmetric(horizontal: 22.0, vertical: 5.0),
       child: Card(
         margin: EdgeInsets.zero,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+          padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8.0),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)), Text(cmd, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace'))]),
-              Switch(value: val, onChanged: onChanged, activeColor: Colors.blueAccent),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                  const SizedBox(height: 2),
+                  Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
+                ],
+              ),
+              Switch(value: value, onChanged: onChanged, activeColor: Colors.blueAccent),
             ],
           ),
         ),
@@ -1105,17 +1158,18 @@ class RtxParametersExpansion extends StatelessWidget {
           iconColor: Colors.amberAccent,
           collapsedIconColor: Colors.white54,
           children: [
-            _buildSwitch("Включить RTX модуль", "rtx_en", rtxEn == 1, (v) => onRtxEnChanged(v ? 1.0 : 0.0)),
-            _buildSlider("Частотный диапазон (x100 МГц)", "rtx_band", rtxBand, 1, 9, 8, "", onRtxEnChanged, onBandChanged),
-            _buildSlider("Сетевой адрес устройства", "rtx_addr", 1234, 0, 65535, 100, "", (v) {}, (v) {}),
-            _buildSlider("Рабочий канал связи (1 МГц шаг)", "rtx_chan", rtxChan, 0, 99, 99, "МГц", onRtxEnChanged, onChanChanged),
-            _buildSlider("Spreading Factor (SF)", "rtx_sf", rtxSf, 5, 12, 7, "", onRtxEnChanged, onSfChanged),
-            _buildSlider("Полоса пропускания (Bandwidth)", "rtx_bw", rtxBw, 0, 9, 9, "", onRtxEnChanged, onBwChanged),
-            _buildSlider("Коэффициент кодирования (Coding Rate)", "rtx_cr", rtxCr, 1, 4, 3, "", onRtxEnChanged, onCrChanged),
-            _buildSlider("Мощность передатчика", "rtx_power", rtxPower, -9, 22, 31, "dBm", onRtxEnChanged, onPowerChanged),
+            const SizedBox(height: 6),
+            _buildUniformSwitchCard(title: "Включить RTX модуль", commandName: "rtx_en", value: rtxEn == 1, onChanged: (v) => onRtxEnChanged(v ? 1.0 : 0.0)),
+            _buildUniformSliderCard(title: "Частотный диапазон (x100 МГц)", commandName: "rtx_band", value: rtxBand, min: 1, max: 9, divisions: 8, unit: "", onChanged: onRtxEnChanged, onChangeEnd: onBandChanged),
+            _buildUniformSliderCard(title: "Сетевой адрес устройства", commandName: "rtx_addr", value: 1234, min: 0, max: 65535, divisions: 100, unit: "", onChanged: (v) {}, onChangeEnd: (v) {}),
+            _buildUniformSliderCard(title: "Рабочий канал связи (1 МГц шаг)", commandName: "rtx_chan", value: rtxChan, min: 0, max: 99, divisions: 99, unit: "МГц", onChanged: onRtxEnChanged, onChangeEnd: onChanChanged),
+            _buildUniformSliderCard(title: "Spreading Factor (SF)", commandName: "rtx_sf", value: rtxSf, min: 5, max: 12, divisions: 7, unit: "", onChanged: onRtxEnChanged, onChangeEnd: onSfChanged),
+            _buildUniformSliderCard(title: "Полоса пропускания (Bandwidth)", commandName: "rtx_bw", value: rtxBw, min: 0, max: 9, divisions: 9, unit: "", onChanged: onRtxEnChanged, onChangeEnd: onBwChanged),
+            _buildUniformSliderCard(title: "Коэффициент кодирования (Coding Rate)", commandName: "rtx_cr", value: rtxCr, min: 1, max: 4, divisions: 3, unit: "", onChanged: onRtxEnChanged, onChangeEnd: onCrChanged),
+            _buildUniformSliderCard(title: "Мощность передатчика", commandName: "rtx_power", value: rtxPower, min: -9, max: 22, divisions: 31, unit: "dBm", onChanged: onRtxEnChanged, onChangeEnd: onPowerChanged),
             const SizedBox(height: 8),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+              padding: const EdgeInsets.symmetric(horizontal: 22.0, vertical: 4.0),
               child: Card(
                 margin: EdgeInsets.zero,
                 color: const Color(0xFF1E222B),
@@ -1165,7 +1219,7 @@ class RtxParametersExpansion extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
           ],
         ),
       ),
@@ -1197,7 +1251,7 @@ class RtxAntennaExpansion extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(title, style: const TextStyle(fontSize: 11, color: Colors.white70)),
+            Text(title, style: const TextStyle(fontSize: 11, color: Colors.white70, fontWeight: FontWeight.w600)),
             Text("${val.toStringAsFixed(val.truncate() == val ? 0 : 1)} $unit", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
           ],
         ),
@@ -1219,7 +1273,7 @@ class RtxAntennaExpansion extends StatelessWidget {
           collapsedIconColor: Colors.white54,
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+              padding: const EdgeInsets.symmetric(horizontal: 22.0, vertical: 8.0),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -1239,7 +1293,7 @@ class RtxAntennaExpansion extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+              padding: const EdgeInsets.symmetric(horizontal: 22.0, vertical: 4.0),
               child: Card(
                 margin: EdgeInsets.zero,
                 child: Padding(
@@ -1292,7 +1346,7 @@ class RtxAntennaExpansion extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+              padding: const EdgeInsets.symmetric(horizontal: 22.0, vertical: 4.0),
               child: Card(
                 margin: EdgeInsets.zero,
                 child: Padding(
@@ -1300,7 +1354,7 @@ class RtxAntennaExpansion extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text("Физические параметры материалов и среды", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      const Text("Физические параметры материалов и среды", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
                       const SizedBox(height: 10),
                       SwitchListTile(
                         title: const Text("Защитная трубка / термоусадка на диполе", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
@@ -1324,7 +1378,7 @@ class RtxAntennaExpansion extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
           ],
         ),
       ),
@@ -2187,7 +2241,7 @@ class _FlasherTabState extends State<FlasherTab> {
       setState(() => _statusRC = "Запись прошивки пульта...");
       for (int i = 1; i <= 10; i++) {
         await Future.delayed(const Duration(milliseconds: 100));
-        setState(() => _progressRC = i / 10.0);
+        setState(() => _progressRC = _progressRC = i / 10.0);
       }
       setState(() { _isFlashingRC = false; _statusRC = "УСПЕХ: Пульт успешно прошит!"; });
       if (mounted) showAppDialog(context, "Успех", "Прошивка пульта управления завершена!");
