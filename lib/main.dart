@@ -1,4 +1,4 @@
-// XFire Ecosystem (Элементы расширены за счет уменьшения отступов от краев)
+// XFire Ecosystem (Слайдеры расширены с отступом 3 мм от краев карточки)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -30,7 +30,7 @@ class MyApp extends StatelessWidget {
         cardTheme: CardTheme(
           color: const Color(0xFF1C1C1E),
           elevation: 2,
-          margin: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 8), // Карточки шире (отступы уменьшены)
+          margin: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 8),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
         inputDecorationTheme: InputDecorationTheme(
@@ -57,7 +57,7 @@ class XFireCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 4.0), // Уменьшенный отступ = шире элементы
+      padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 4.0),
       child: Container(
         padding: const EdgeInsets.all(14.0),
         decoration: BoxDecoration(
@@ -98,8 +98,7 @@ class XFireSliderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      // Слайдеры шире карточек еще на 8мм (отступ 9.0)
-      padding: const EdgeInsets.symmetric(horizontal: 9.0, vertical: 4.0),
+      padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 4.0),
       child: Container(
         padding: const EdgeInsets.all(14.0),
         decoration: BoxDecoration(
@@ -134,7 +133,11 @@ class XFireSliderCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            Slider(value: value, min: min, max: max, divisions: divisions, onChanged: onChanged, onChangeEnd: onChangeEnd),
+            // Аккуратный отступ 3 мм от внутренних краев карточки
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 3.0),
+              child: Slider(value: value, min: min, max: max, divisions: divisions, onChanged: onChanged, onChangeEnd: onChangeEnd),
+            ),
           ],
         ),
       ),
@@ -589,7 +592,6 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
           const Center(child: Padding(padding: EdgeInsets.all(20.0), child: CircularProgressIndicator(color: Colors.blueAccent)))
         else
           ..._sections.map((sec) => Padding(
-            // Выпадающие блоки шире на 4мм (отступ 11.0)
             padding: const EdgeInsets.symmetric(horizontal: 11.0, vertical: 4.0),
             child: Card(
               margin: EdgeInsets.zero,
@@ -944,7 +946,6 @@ class RtxParametersExpansion extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      // Выпадающий блок шире
       padding: const EdgeInsets.symmetric(horizontal: 11.0, vertical: 4.0),
       child: Card(
         margin: EdgeInsets.zero,
@@ -993,7 +994,6 @@ class RtxLinkCalculatorCard extends StatelessWidget {
     String bitRateStr = bitRate >= 1000 ? "${(bitRate / 1000).toStringAsFixed(1)} kbps" : "${bitRate.toStringAsFixed(0)} bps";
 
     return Padding(
-      // Выпадающий блок шире
       padding: const EdgeInsets.symmetric(horizontal: 11.0, vertical: 4.0),
       child: Card(
         margin: EdgeInsets.zero,
@@ -1074,7 +1074,6 @@ class RtxAntennaExpansion extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      // Выпадающий блок шире
       padding: const EdgeInsets.symmetric(horizontal: 11.0, vertical: 4.0),
       child: Card(
         margin: EdgeInsets.zero,
@@ -1178,7 +1177,10 @@ class RtxAntennaExpansion extends StatelessWidget {
                               Text("${sleeveThicknessMm.toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
                             ],
                           ),
-                          Slider(value: sleeveThicknessMm, min: 0.5, max: 3.0, divisions: 25, onChanged: onSleeveThickChanged),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 3.0),
+                            child: Slider(value: sleeveThicknessMm, min: 0.5, max: 3.0, divisions: 25, onChanged: onSleeveThickChanged),
+                          ),
                         ],
                       ),
                     ),
@@ -1196,7 +1198,10 @@ class RtxAntennaExpansion extends StatelessWidget {
                             Text("${dipoleTubeDiameterMm.toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
                           ],
                         ),
-                        Slider(value: dipoleTubeDiameterMm, min: 2.0, max: 5.0, divisions: 6, onChanged: onTubeDiamChanged),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 3.0),
+                          child: Slider(value: dipoleTubeDiameterMm, min: 2.0, max: 5.0, divisions: 6, onChanged: onTubeDiamChanged),
+                        ),
                       ],
                     ),
                   ),
@@ -1212,7 +1217,10 @@ class RtxAntennaExpansion extends StatelessWidget {
                             Text("${dipoleTopWireSqMm.toStringAsFixed(1)} мм²", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
                           ],
                         ),
-                        Slider(value: dipoleTopWireSqMm, min: 0.5, max: 2.5, divisions: 20, onChanged: onTopWireChanged),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 3.0),
+                          child: Slider(value: dipoleTopWireSqMm, min: 0.5, max: 2.5, divisions: 20, onChanged: onTopWireChanged),
+                        ),
                       ],
                     ),
                   ),
@@ -1228,7 +1236,10 @@ class RtxAntennaExpansion extends StatelessWidget {
                             Text("${kharchenkoWireSqMm.toStringAsFixed(1)} мм²", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
                           ],
                         ),
-                        Slider(value: kharchenkoWireSqMm, min: 1.0, max: 4.0, divisions: 15, onChanged: onKharcChanged),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 3.0),
+                          child: Slider(value: kharchenkoWireSqMm, min: 1.0, max: 4.0, divisions: 15, onChanged: onKharcChanged),
+                        ),
                       ],
                     ),
                   ),
@@ -1244,7 +1255,10 @@ class RtxAntennaExpansion extends StatelessWidget {
                             Text("${calcEnvironmentLoss.toStringAsFixed(1)} dB", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
                           ],
                         ),
-                        Slider(value: calcEnvironmentLoss, min: 5.0, max: 30.0, divisions: 25, onChanged: onEnvLossChanged),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 3.0),
+                          child: Slider(value: calcEnvironmentLoss, min: 5.0, max: 30.0, divisions: 25, onChanged: onEnvLossChanged),
+                        ),
                       ],
                     ),
                   ),
@@ -1479,7 +1493,10 @@ class _TestsTabState extends State<TestsTab> {
                   ),
                 ],
               ),
-              Slider(value: _selectedChannel.toDouble(), min: 0, max: 99, divisions: 99, onChanged: (v) => setState(() => _selectedChannel = v.round())),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 3.0),
+                child: Slider(value: _selectedChannel.toDouble(), min: 0, max: 99, divisions: 99, onChanged: (v) => setState(() => _selectedChannel = v.round())),
+              ),
               const SizedBox(height: 6),
               SizedBox(
                 width: double.infinity,
