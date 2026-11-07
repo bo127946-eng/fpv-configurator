@@ -1,4 +1,4 @@
-// XFire Ecosystem (Финальная версия: разворачиваемые блоки на вкладке RTX, обновленный гироскоп и шкалы)
+// XFire Ecosystem (Финальная исправленная версия: разворачиваемые блоки на вкладке RTX)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -1427,7 +1427,7 @@ class _RadioTabState extends State<RadioTab> {
                     ),
                   ],
                 ),
-              ],
+              ),
             ],
           ),
         ),
