@@ -1,4 +1,4 @@
-// XFire Ecosystem (Финальная исправленная версия: разворачиваемые блоки на вкладке RTX)
+// XFire Ecosystem (Финальная версия с выровненными отступами и шириной слайдеров)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -1120,37 +1120,47 @@ class _RadioTabState extends State<RadioTab> {
     };
   }
 
+  // Единый шаблон карточки со слайдером (отступы 12px со всех сторон)
   Widget _buildSliderCard({required String title, required String commandName, required double value, required double min, required double max, required int divisions, required String unit, required ValueChanged<double> onChanged, required ValueChanged<double> onChangeEnd}) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)), Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace'))])),
-                Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: Text("${value.toStringAsFixed(value.truncate() == value ? 0 : 2)} $unit", style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 11))),
-              ],
-            ),
-            Slider(value: value, min: min, max: max, divisions: divisions, onChanged: onChanged, onChangeEnd: onChangeEnd),
-          ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+      child: Card(
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)), Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace'))])),
+                  Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: Text("${value.toStringAsFixed(value.truncate() == value ? 0 : 2)} $unit", style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 11))),
+                ],
+              ),
+              Slider(value: value, min: min, max: max, divisions: divisions, onChanged: onChanged, onChangeEnd: onChangeEnd),
+            ],
+          ),
         ),
       ),
     );
   }
 
+  // Единый шаблон карточки с переключателем
   Widget _buildSwitchCard({required String title, required String commandName, required bool value, required ValueChanged<bool> onChanged}) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)), Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace'))]),
-            Switch(value: value, onChanged: onChanged, activeColor: Colors.blueAccent),
-          ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+      child: Card(
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)), Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace'))]),
+              Switch(value: value, onChanged: onChanged, activeColor: Colors.blueAccent),
+            ],
+          ),
         ),
       ),
     );
@@ -1220,62 +1230,66 @@ class _RadioTabState extends State<RadioTab> {
                     const SizedBox(height: 8),
 
                     // Встроенный калькулятор линка
-                    Card(
-                      color: const Color(0xFF1E222B),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          children: [
-                            Text("КАЛЬКУЛЯТОР ЛИНКА (ЧАСТОТА: ${_currentFreqMhz.toStringAsFixed(0)} МГц)", style: const TextStyle(fontSize: 10, color: Colors.amberAccent, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
-                            const SizedBox(height: 8),
-                            Text(distFormatted, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
-                            const SizedBox(height: 12),
-                            const Divider(color: Colors.white12),
-                            const SizedBox(height: 8),
-                            
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    const Flexible(child: Text("Чувствительность приемника (Sensitivity):", style: TextStyle(fontSize: 11, color: Colors.white70), overflow: TextOverflow.ellipsis)),
-                                    const SizedBox(width: 8),
-                                    Text("${sensitivity.toStringAsFixed(1)} dBm", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                LinearProgressIndicator(value: sensitivityProgress, color: Colors.cyanAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+                      child: Card(
+                        margin: EdgeInsets.zero,
+                        color: const Color(0xFF1E222B),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Column(
+                            children: [
+                              Text("КАЛЬКУЛЯТОР ЛИНКА (ЧАСТОТА: ${_currentFreqMhz.toStringAsFixed(0)} МГц)", style: const TextStyle(fontSize: 10, color: Colors.amberAccent, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+                              const SizedBox(height: 8),
+                              Text(distFormatted, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
+                              const SizedBox(height: 12),
+                              const Divider(color: Colors.white12),
+                              const SizedBox(height: 8),
+                              
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Flexible(child: Text("Чувствительность приемника (Sensitivity):", style: TextStyle(fontSize: 11, color: Colors.white70), overflow: TextOverflow.ellipsis)),
+                                      const SizedBox(width: 8),
+                                      Text("${sensitivity.toStringAsFixed(1)} dBm", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  LinearProgressIndicator(value: sensitivityProgress, color: Colors.cyanAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
 
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    const Flexible(child: Text("Скорость по воздуху (Air Data Rate):", style: TextStyle(fontSize: 11, color: Colors.white70), overflow: TextOverflow.ellipsis)),
-                                    const SizedBox(width: 8),
-                                    Text(bitRateStr, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                LinearProgressIndicator(value: bitRateProgress, color: Colors.blueAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Flexible(child: Text("Скорость по воздуху (Air Data Rate):", style: TextStyle(fontSize: 11, color: Colors.white70), overflow: TextOverflow.ellipsis)),
+                                      const SizedBox(width: 8),
+                                      Text(bitRateStr, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  LinearProgressIndicator(value: bitRateProgress, color: Colors.blueAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
 
-                            Wrap(
-                              alignment: WrapAlignment.center,
-                              spacing: 12,
-                              children: [
-                                Text("EIRP Пульта: ${(linkResults['eirp'] as double).toStringAsFixed(1)} dBm", style: const TextStyle(fontSize: 11, color: Colors.white60)),
-                                Text("Запас: ${_calcEnvironmentLoss.toStringAsFixed(0)} dB", style: const TextStyle(fontSize: 11, color: Colors.white60)),
-                              ],
-                            ),
-                          ],
+                              Wrap(
+                                alignment: WrapAlignment.center,
+                                spacing: 12,
+                                children: [
+                                  Text("EIRP Пульта: ${(linkResults['eirp'] as double).toStringAsFixed(1)} dBm", style: const TextStyle(fontSize: 11, color: Colors.white60)),
+                                  Text("Запас: ${_calcEnvironmentLoss.toStringAsFixed(0)} dB", style: const TextStyle(fontSize: 11, color: Colors.white60)),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -1299,7 +1313,7 @@ class _RadioTabState extends State<RadioTab> {
                 child: Column(
                   children: [
                     Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -1321,113 +1335,121 @@ class _RadioTabState extends State<RadioTab> {
                       ),
                     ),
 
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(12.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text("Графический расчет плеч и геометрии антенн", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amberAccent)),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    children: [
-                                      const Text("Штыревой диполь", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
-                                      const SizedBox(height: 6),
-                                      Container(
-                                        height: 120,
-                                        decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
-                                        child: CustomPaint(painter: DipoleSchematicPainter(hasSleeve: _hasProtectiveSleeve), size: const Size(double.infinity, 120)),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text("Верх: ${(antResults['dipoleArmTopMm'] as double).toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 10, color: Colors.white70)),
-                                      Text("Низ: ${(antResults['dipoleArmBotMm'] as double).toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
-                                    ],
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+                      child: Card(
+                        margin: EdgeInsets.zero,
+                        child: Padding(
+                          padding: const EdgeInsets.all(12.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text("Графический расчет плеч и геометрии антенн", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amberAccent)),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      children: [
+                                        const Text("Штыревой диполь", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
+                                        const SizedBox(height: 6),
+                                        Container(
+                                          height: 120,
+                                          decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
+                                          child: CustomPaint(painter: DipoleSchematicPainter(hasSleeve: _hasProtectiveSleeve), size: const Size(double.infinity, 120)),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text("Верх: ${(antResults['dipoleArmTopMm'] as double).toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 10, color: Colors.white70)),
+                                        Text("Низ: ${(antResults['dipoleArmBotMm'] as double).toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    children: [
-                                      const Text("Антенна Харченко", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
-                                      const SizedBox(height: 6),
-                                      Container(
-                                        height: 120,
-                                        decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
-                                        child: CustomPaint(painter: KharchenkoSchematicPainter(), size: const Size(double.infinity, 120)),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      const Text("Сторона ромба", style: TextStyle(fontSize: 10, color: Colors.white70)),
-                                      Text("Сторона: ${(antResults['kharchenkoSideMm'] as double).toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
-                                    ],
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      children: [
+                                        const Text("Антенна Харченко", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
+                                        const SizedBox(height: 6),
+                                        Container(
+                                          height: 120,
+                                          decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
+                                          child: CustomPaint(painter: KharchenkoSchematicPainter(), size: const Size(double.infinity, 120)),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        const Text("Сторона ромба", style: TextStyle(fontSize: 10, color: Colors.white70)),
+                                        Text("Сторона: ${(antResults['kharchenkoSideMm'] as double).toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                              ],
-                            ),
-                          ],
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
 
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(12.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text("Физические параметры материалов и среды", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                            const SizedBox(height: 10),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+                      child: Card(
+                        margin: EdgeInsets.zero,
+                        child: Padding(
+                          padding: const EdgeInsets.all(12.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text("Физические параметры материалов и среды", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                              const SizedBox(height: 10),
 
-                            SwitchListTile(
-                              title: const Text("Защитная трубка / термоусадка на диполе", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                              subtitle: const Text("Учитывает диэлектрическую нагрузку пластика", style: TextStyle(fontSize: 10, color: Colors.white60)),
-                              value: _hasProtectiveSleeve,
-                              activeColor: Colors.blueAccent,
-                              contentPadding: EdgeInsets.zero,
-                              onChanged: (v) => setState(() => _hasProtectiveSleeve = v),
-                            ),
-                            if (_hasProtectiveSleeve) ...[
-                              const SizedBox(height: 4),
+                              SwitchListTile(
+                                title: const Text("Защитная трубка / термоусадка на диполе", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                                subtitle: const Text("Учитывает диэлектрическую нагрузку пластика", style: TextStyle(fontSize: 10, color: Colors.white60)),
+                                value: _hasProtectiveSleeve,
+                                activeColor: Colors.blueAccent,
+                                contentPadding: EdgeInsets.zero,
+                                onChanged: (v) => setState(() => _hasProtectiveSleeve = v),
+                              ),
+                              if (_hasProtectiveSleeve) ...[
+                                const SizedBox(height: 4),
+                                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                                  const Text("Толщина стенки трубки (чехла):", style: TextStyle(fontSize: 11, color: Colors.white70)),
+                                  Text("${_sleeveThicknessMm.toStringAsFixed(1)} мм (0.5-3.0)", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                                ]),
+                                Slider(value: _sleeveThicknessMm, min: 0.5, max: 3.0, divisions: 25, onChanged: (v) => setState(() => _sleeveThicknessMm = v)),
+                              ],
+
+                              const SizedBox(height: 8),
                               Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                                const Text("Толщина стенки трубки (чехла):", style: TextStyle(fontSize: 11, color: Colors.white70)),
-                                Text("${_sleeveThicknessMm.toStringAsFixed(1)} мм (0.5-3.0)", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                                const Text("Диаметр трубки диполя (нижн.):", style: TextStyle(fontSize: 11, color: Colors.white70)),
+                                Text("${_dipoleTubeDiameterMm.toStringAsFixed(1)} мм (2-5мм)", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
                               ]),
-                              Slider(value: _sleeveThicknessMm, min: 0.5, max: 3.0, divisions: 25, onChanged: (v) => setState(() => _sleeveThicknessMm = v)),
+                              Slider(value: _dipoleTubeDiameterMm, min: 2.0, max: 5.0, divisions: 6, onChanged: (v) => setState(() => _dipoleTubeDiameterMm = v)),
+
+                              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                                const Text("Сечение провода диполя (верхн.):", style: TextStyle(fontSize: 11, color: Colors.white70)),
+                                Text("${_dipoleTopWireSqMm.toStringAsFixed(2)} мм² (0.5-2.5)", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                              ]),
+                              Slider(value: _dipoleTopWireSqMm, min: 0.5, max: 2.5, divisions: 20, onChanged: (v) => setState(() => _dipoleTopWireSqMm = v)),
+
+                              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                                const Text("Сечение провода Харченко:", style: TextStyle(fontSize: 11, color: Colors.white70)),
+                                Text("${_kharchenkoWireSqMm.toStringAsFixed(1)} мм² (1-4)", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                              ]),
+                              Slider(value: _kharchenkoWireSqMm, min: 1.0, max: 4.0, divisions: 15, onChanged: (v) => setState(() => _kharchenkoWireSqMm = v)),
+
+                              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                                const Text("Запас на условия (Fade Margin):", style: TextStyle(fontSize: 11, color: Colors.white70)),
+                                Text("${_calcEnvironmentLoss.toStringAsFixed(0)} dB", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                              ]),
+                              Slider(value: _calcEnvironmentLoss, min: 5.0, max: 30.0, divisions: 25, onChanged: (v) => setState(() => _calcEnvironmentLoss = v)),
                             ],
-
-                            const SizedBox(height: 8),
-                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                              const Text("Диаметр трубки диполя (нижн.):", style: TextStyle(fontSize: 11, color: Colors.white70)),
-                              Text("${_dipoleTubeDiameterMm.toStringAsFixed(1)} мм (2-5мм)", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
-                            ]),
-                            Slider(value: _dipoleTubeDiameterMm, min: 2.0, max: 5.0, divisions: 6, onChanged: (v) => setState(() => _dipoleTubeDiameterMm = v)),
-
-                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                              const Text("Сечение провода диполя (верхн.):", style: TextStyle(fontSize: 11, color: Colors.white70)),
-                              Text("${_dipoleTopWireSqMm.toStringAsFixed(2)} мм² (0.5-2.5)", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
-                            ]),
-                            Slider(value: _dipoleTopWireSqMm, min: 0.5, max: 2.5, divisions: 20, onChanged: (v) => setState(() => _dipoleTopWireSqMm = v)),
-
-                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                              const Text("Сечение провода Харченко:", style: TextStyle(fontSize: 11, color: Colors.white70)),
-                              Text("${_kharchenkoWireSqMm.toStringAsFixed(1)} мм² (1-4)", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
-                            ]),
-                            Slider(value: _kharchenkoWireSqMm, min: 1.0, max: 4.0, divisions: 15, onChanged: (v) => setState(() => _kharchenkoWireSqMm = v)),
-
-                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                              const Text("Запас на условия (Fade Margin):", style: TextStyle(fontSize: 11, color: Colors.white70)),
-                              Text("${_calcEnvironmentLoss.toStringAsFixed(0)} dB", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
-                            ]),
-                            Slider(value: _calcEnvironmentLoss, min: 5.0, max: 30.0, divisions: 25, onChanged: (v) => setState(() => _calcEnvironmentLoss = v)),
-                          ],
+                          ),
                         ),
                       ),
                     ),
                   ],
                 ),
-              ),
+              ],
             ],
           ),
         ),
