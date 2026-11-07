@@ -1,4 +1,4 @@
-// XFire Ecosystem (Финальный вариант: слайдеры с отступом 3 мм, треком 6.0, бегунком 10.0 и черной полоской)
+// XFire Ecosystem (Финальный монолитный вариант)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -60,14 +60,13 @@ class XFireSliderTrackShape extends RectangularSliderTrackShape {
     required TextDirection textDirection,
     required Offset thumbCenter,
     Offset? secondaryOffset,
-    bool isEnabled = true,
     bool isDiscrete = true,
+    double additionalActiveTrackHeight = 2.0,
   }) {
     final Rect trackRect = getPreferredRect(
       parentBox: parentBox,
       offset: offset,
       sliderTheme: sliderTheme,
-      enabled: isEnabled,
     );
 
     final Paint activePaint = Paint()
