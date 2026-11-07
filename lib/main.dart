@@ -2005,7 +2005,7 @@ class _FlasherTabState extends State<FlasherTab> {
     } catch (e) {
       setState(() {
         if (isFC) { _isFlashingFC = false; _statusFC = "ОШИБКА: $e"; }
-        else { _isFlishingRC = false; _statusRC = "ОШИБКА: $e"; }
+        else { _isFlashingRC = false; _statusRC = "ОШИБКА: $e"; }
       });
       if (mounted) showAppDialog(context, "Ошибка", "Сбой прошивки: $e", isError: true);
     }
