@@ -1,4 +1,4 @@
-// XFire Ecosystem (Финальная версия со шкалами навыворот, жирными цифрами и увеличенным гироскопом)
+// XFire Ecosystem (Финальная версия: боковые шкалы тангажа с учетом крена, развернутые и увеличенные указатели)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -1641,74 +1641,19 @@ class _TerminalTabState extends State<TerminalTab> {
 }
 
 // ==========================================
-// ХУДОЖНИК ДЛЯ ROLL (Шкала справа, жирная линия и цифры, белый указатель слева на шкалу)
-// ==========================================
-class RollHudScalePainter extends CustomPainter {
-  final double value;
-  final double minVal;
-  final double maxVal;
-
-  RollHudScalePainter({
-    required this.value,
-    required this.minVal,
-    required this.maxVal,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paintLine = Paint()..color = Colors.white70..strokeWidth = 2.5;
-    final paintText = TextPainter(textDirection: TextDirection.ltr);
-    final indicatorPaint = Paint()..color = Colors.white..style = PaintingStyle.fill;
-
-    final x = size.width - 12.0; 
-    canvas.drawLine(Offset(x, 8), Offset(x, size.height - 8), paintLine);
-
-    double range = maxVal - minVal;
-    int steps = 4;
-    for (int i = 0; i <= steps; i++) {
-      double v = minVal + (range / steps) * i;
-      double ratio = (v - minVal) / range;
-      double y = size.height - 8 - ratio * (size.height - 16);
-
-      canvas.drawLine(Offset(x - 5, y), Offset(x, y), paintLine);
-
-      paintText.text = TextSpan(
-        text: "${v.toInt()}°",
-        style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-      );
-      paintText.layout();
-      paintText.paint(canvas, Offset(x - 30, y - 5));
-    }
-
-    double clampedVal = value.clamp(minVal, maxVal);
-    double currentRatio = (clampedVal - minVal) / range;
-    double currentY = size.height - 8 - currentRatio * (size.height - 16);
-
-    final path = Path()
-      ..moveTo(x - 2, currentY)
-      ..lineTo(x - 10, currentY - 4)
-      ..lineTo(x - 10, currentY + 4)
-      ..close();
-    canvas.drawPath(path, indicatorPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant RollHudScalePainter oldDelegate) =>
-      oldDelegate.value != value || oldDelegate.minVal != minVal || oldDelegate.maxVal != maxVal;
-}
-
-// ==========================================
-// ХУДОЖНИК ДЛЯ PITCH (Шкала слева, жирная линия и цифры, белый указатель справа на шкалу)
+// ХУДОЖНИК ДЛЯ БОКОВЫХ ШКАЛ ТАНГАЖА (Левая/Правая с учетом крена, указатель вдвое больше, развернут наружу)
 // ==========================================
 class PitchHudScalePainter extends CustomPainter {
   final double value;
   final double minVal;
   final double maxVal;
+  final bool isLeftSide;
 
   PitchHudScalePainter({
     required this.value,
     required this.minVal,
     required this.maxVal,
+    required this.isLeftSide,
   });
 
   @override
@@ -1717,7 +1662,8 @@ class PitchHudScalePainter extends CustomPainter {
     final paintText = TextPainter(textDirection: TextDirection.ltr);
     final indicatorPaint = Paint()..color = Colors.white..style = PaintingStyle.fill;
 
-    final x = 12.0;
+    // Смещаем шкалу ближе к краю (на 5мм / ~15пк шире к границе)
+    final x = isLeftSide ? 5.0 : size.width - 5.0;
     canvas.drawLine(Offset(x, 8), Offset(x, size.height - 8), paintLine);
 
     double range = maxVal - minVal;
@@ -1727,35 +1673,54 @@ class PitchHudScalePainter extends CustomPainter {
       double ratio = (v - minVal) / range;
       double y = 8 + ratio * (size.height - 16);
 
-      canvas.drawLine(Offset(x, y), Offset(x + 5, y), paintLine);
-
-      paintText.text = TextSpan(
-        text: "${v.toInt()}°",
-        style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-      );
-      paintText.layout();
-      paintText.paint(canvas, Offset(x + 8, y - 5));
+      if (isLeftSide) {
+        canvas.drawLine(Offset(x, y), Offset(x + 5, y), paintLine);
+        paintText.text = TextSpan(
+          text: "${v.toInt()}°",
+          style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+        );
+        paintText.layout();
+        paintText.paint(canvas, Offset(x + 8, y - 5));
+      } else {
+        canvas.drawLine(Offset(x - 5, y), Offset(x, y), paintLine);
+        paintText.text = TextSpan(
+          text: "${v.toInt()}°",
+          style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+        );
+        paintText.layout();
+        paintText.paint(canvas, Offset(x - 28, y - 5));
+      }
     }
 
     double clampedVal = value.clamp(minVal, maxVal);
     double currentRatio = (clampedVal - minVal) / range;
     double currentY = 8 + currentRatio * (size.height - 16);
 
-    final path = Path()
-      ..moveTo(x + 2, currentY)
-      ..lineTo(x + 10, currentY - 4)
-      ..lineTo(x + 10, currentY + 4)
-      ..close();
-    canvas.drawPath(path, indicatorPaint);
+    // Указатели в два раза больше (высота 16, ширина 12) и развернуты наружу
+    if (isLeftSide) {
+      final path = Path()
+        ..moveTo(x - 2, currentY)
+        ..lineTo(x - 14, currentY - 8)
+        ..lineTo(x - 14, currentY + 8)
+        ..close();
+      canvas.drawPath(path, indicatorPaint);
+    } else {
+      final path = Path()
+        ..moveTo(x + 2, currentY)
+        ..lineTo(x + 14, currentY - 8)
+        ..lineTo(x + 14, currentY + 8)
+        ..close();
+      canvas.drawPath(path, indicatorPaint);
+    }
   }
 
   @override
   bool shouldRepaint(covariant PitchHudScalePainter oldDelegate) =>
-      oldDelegate.value != value || oldDelegate.minVal != minVal || oldDelegate.maxVal != maxVal;
+      oldDelegate.value != value || oldDelegate.minVal != minVal || oldDelegate.maxVal != maxVal || oldDelegate.isLeftSide != isLeftSide;
 }
 
 // ==========================================
-// ХУДОЖНИК ДЛЯ YAW HEADING (Шкала навыворот: верх снизу, низ сверху, жирные цифры и линии)
+// ХУДОЖНИК ДЛЯ YAW HEADING (Верхняя/Нижняя шкалы короче на 5мм, указатели вдвое больше)
 // ==========================================
 class YawHudScalePainter extends CustomPainter {
   final double value;
@@ -1776,17 +1741,19 @@ class YawHudScalePainter extends CustomPainter {
     final paintText = TextPainter(textDirection: TextDirection.ltr);
     final indicatorPaint = Paint()..color = Colors.white..style = PaintingStyle.fill;
 
+    // Увеличили отступы по бокам с 8 до 26, чтобы шкала стала короче примерно на 5 мм с каждой стороны
+    const double margin = 26.0;
+
     if (isTop) {
-      // Верхняя шкала теперь перенесена вниз контейнера шкалы, указатель смотрит вверх на шкалу
       final y = 14.0;
-      canvas.drawLine(Offset(8, y), Offset(size.width - 8, y), paintLine);
+      canvas.drawLine(Offset(margin, y), Offset(size.width - margin, y), paintLine);
 
       double range = maxVal - minVal;
       int steps = 4;
       for (int i = 0; i <= steps; i++) {
         double v = minVal + (range / steps) * i;
         double ratio = (v - minVal) / range;
-        double x = 8 + ratio * (size.width - 16);
+        double x = margin + ratio * (size.width - (margin * 2));
 
         canvas.drawLine(Offset(x, y), Offset(x, y - 5), paintLine);
 
@@ -1800,26 +1767,26 @@ class YawHudScalePainter extends CustomPainter {
 
       double clampedVal = value.clamp(minVal, maxVal);
       double currentRatio = (clampedVal - minVal) / range;
-      double currentX = 8 + currentRatio * (size.width - 16);
+      double currentX = margin + currentRatio * (size.width - (margin * 2));
 
+      // Указатель верхний вдвое больше
       final path = Path()
         ..moveTo(currentX, y + 2)
-        ..lineTo(currentX - 4, y + 8)
-        ..lineTo(currentX + 4, y + 8)
+        ..lineTo(currentX - 8, y + 16)
+        ..lineTo(currentX + 8, y + 16)
         ..close();
       canvas.drawPath(path, indicatorPaint);
 
     } else {
-      // Нижняя шкала перенесена вверх контейнера шкалы, указатель смотрит вниз на шкалу
       final y = size.height - 14.0;
-      canvas.drawLine(Offset(8, y), Offset(size.width - 8, y), paintLine);
+      canvas.drawLine(Offset(margin, y), Offset(size.width - margin, y), paintLine);
 
       double range = maxVal - minVal;
       int steps = 4;
       for (int i = 0; i <= steps; i++) {
         double v = minVal + (range / steps) * i;
         double ratio = (v - minVal) / range;
-        double x = 8 + ratio * (size.width - 16);
+        double x = margin + ratio * (size.width - (margin * 2));
 
         canvas.drawLine(Offset(x, y), Offset(x, y + 5), paintLine);
 
@@ -1833,12 +1800,13 @@ class YawHudScalePainter extends CustomPainter {
 
       double clampedVal = value.clamp(minVal, maxVal);
       double currentRatio = (clampedVal - minVal) / range;
-      double currentX = 8 + currentRatio * (size.width - 16);
+      double currentX = margin + currentRatio * (size.width - (margin * 2));
 
+      // Указатель нижний вдвое больше
       final path = Path()
         ..moveTo(currentX, y - 2)
-        ..lineTo(currentX - 4, y - 8)
-        ..lineTo(currentX + 4, y - 8)
+        ..lineTo(currentX - 8, y - 16)
+        ..lineTo(currentX + 8, y - 16)
         ..close();
       canvas.drawPath(path, indicatorPaint);
     }
@@ -1850,7 +1818,7 @@ class YawHudScalePainter extends CustomPainter {
 }
 
 // ==========================================
-// ВИДЖЕТ АВИАГОРИЗОНТА (Увеличенный еще на 5мм размер, белая окантовка)
+// ВИДЖЕТ АВИАГОРИЗОНТА (Увеличенный размер, белая окантовка)
 // ==========================================
 class ArtificialHorizonPainter extends CustomPainter {
   final double roll, pitch; 
@@ -1859,7 +1827,6 @@ class ArtificialHorizonPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    // Увеличен радиус еще на ~14 пикселей (~5мм)
     final radius = math.min(size.width, size.height) / 2 - 1;
 
     canvas.save();
@@ -1958,6 +1925,10 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
     while (yawDeg > 180) yawDeg -= 360;
     while (yawDeg < -180) yawDeg += 360;
 
+    // Боковые шкалы отображают тангаж с учетом крена (разница между сторонами)
+    double leftPitchVal = pitchDeg + (rollDeg * 0.5);
+    double rightPitchVal = pitchDeg - (rollDeg * 0.5);
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Column(
@@ -1989,7 +1960,12 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
                             children: [
                               Expanded(
                                 child: CustomPaint(
-                                  painter: RollHudScalePainter(value: rollDeg, minVal: -180, maxVal: 180),
+                                  painter: PitchHudScalePainter(
+                                    value: leftPitchVal, 
+                                    minVal: -90, 
+                                    maxVal: 90, 
+                                    isLeftSide: true,
+                                  ),
                                   size: const Size(double.infinity, double.infinity),
                                 ),
                               ),
@@ -2020,7 +1996,12 @@ class _ThreeDViewTabState extends State<ThreeDViewTab> {
                             children: [
                               Expanded(
                                 child: CustomPaint(
-                                  painter: PitchHudScalePainter(value: pitchDeg, minVal: -90, maxVal: 90),
+                                  painter: PitchHudScalePainter(
+                                    value: rightPitchVal, 
+                                    minVal: -90, 
+                                    maxVal: 90, 
+                                    isLeftSide: false,
+                                  ),
                                   size: const Size(double.infinity, double.infinity),
                                 ),
                               ),
