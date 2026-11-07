@@ -1,4 +1,4 @@
-// XFire Ecosystem (Финальная версия с вынесенными виджетами без проблем со скобками)
+// XFire Ecosystem (Финальная версия с единым стилем и отступами слайдеров)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -1032,7 +1032,7 @@ class KharchenkoSchematicPainter extends CustomPainter {
 }
 
 // ==========================================
-// ВЫПИСАННЫЕ ВИДЖЕТЫ ДЛЯ ВКЛАДКИ RTX (Без проблем со скобками)
+// ВИДЖЕТЫ ДЛЯ ВКЛАДКИ RTX С ЕДИНЫМ СТИЛЕМ СЛАЙДЕРОВ
 // ==========================================
 class RtxParametersExpansion extends StatelessWidget {
   final double rtxEn, rtxBand, rtxChan, rtxSf, rtxBw, rtxCr, rtxPower;
@@ -1095,75 +1095,79 @@ class RtxParametersExpansion extends StatelessWidget {
     String distFormatted = distKm >= 1.0 ? "${distKm.toStringAsFixed(2)} км" : "${(distKm * 1000).toStringAsFixed(0)} м";
     String bitRateStr = bitRate >= 1000 ? "${(bitRate / 1000).toStringAsFixed(1)} kbps" : "${bitRate.toStringAsFixed(0)} bps";
 
-    return Card(
-      child: ExpansionTile(
-        title: const Text("Параметры радиомодуля RTX (SPI)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amberAccent)),
-        subtitle: const Text("Настройки каналов, мощности и калькулятор линка", style: TextStyle(fontSize: 10, color: Colors.white70)),
-        iconColor: Colors.amberAccent,
-        collapsedIconColor: Colors.white54,
-        children: [
-          _buildSwitch("Включить RTX модуль", "rtx_en", rtxEn == 1, (v) => onRtxEnChanged(v ? 1.0 : 0.0)),
-          _buildSlider("Частотный диапазон (x100 МГц)", "rtx_band", rtxBand, 1, 9, 8, "", onRtxEnChanged, onBandChanged),
-          _buildSlider("Сетевой адрес устройства", "rtx_addr", 1234, 0, 65535, 100, "", (v) {}, (v) {}),
-          _buildSlider("Рабочий канал связи (1 МГц шаг)", "rtx_chan", rtxChan, 0, 99, 99, "МГц", onRtxEnChanged, onChanChanged),
-          _buildSlider("Spreading Factor (SF)", "rtx_sf", rtxSf, 5, 12, 7, "", onRtxEnChanged, onSfChanged),
-          _buildSlider("Полоса пропускания (Bandwidth)", "rtx_bw", rtxBw, 0, 9, 9, "", onRtxEnChanged, onBwChanged),
-          _buildSlider("Коэффициент кодирования (Coding Rate)", "rtx_cr", rtxCr, 1, 4, 3, "", onRtxEnChanged, onCrChanged),
-          _buildSlider("Мощность передатчика", "rtx_power", rtxPower, -9, 22, 31, "dBm", onRtxEnChanged, onPowerChanged),
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
-            child: Card(
-              margin: EdgeInsets.zero,
-              color: const Color(0xFF1E222B),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  children: [
-                    Text("КАЛЬКУЛЯТОР ЛИНКА (ЧАСТОТА: ${currentFreqMhz.toStringAsFixed(0)} МГц)", style: const TextStyle(fontSize: 10, color: Colors.amberAccent, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
-                    const SizedBox(height: 8),
-                    Text(distFormatted, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
-                    const SizedBox(height: 12),
-                    const Divider(color: Colors.white12),
-                    const SizedBox(height: 8),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Flexible(child: Text("Чувствительность приемника (Sensitivity):", style: TextStyle(fontSize: 11, color: Colors.white70), overflow: TextOverflow.ellipsis)),
-                            const SizedBox(width: 8),
-                            Text("${sensitivity.toStringAsFixed(1)} dBm", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        LinearProgressIndicator(value: sensitivityProgress, color: Colors.cyanAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Flexible(child: Text("Скорость по воздуху (Air Data Rate):", style: TextStyle(fontSize: 11, color: Colors.white70), overflow: TextOverflow.ellipsis)),
-                            const SizedBox(width: 8),
-                            Text(bitRateStr, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        LinearProgressIndicator(value: bitRateProgress, color: Colors.blueAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
-                      ],
-                    ),
-                  ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+      child: Card(
+        margin: EdgeInsets.zero,
+        child: ExpansionTile(
+          title: const Text("Параметры радиомодуля RTX (SPI)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amberAccent)),
+          subtitle: const Text("Настройки каналов, мощности и калькулятор линка", style: TextStyle(fontSize: 10, color: Colors.white70)),
+          iconColor: Colors.amberAccent,
+          collapsedIconColor: Colors.white54,
+          children: [
+            _buildSwitch("Включить RTX модуль", "rtx_en", rtxEn == 1, (v) => onRtxEnChanged(v ? 1.0 : 0.0)),
+            _buildSlider("Частотный диапазон (x100 МГц)", "rtx_band", rtxBand, 1, 9, 8, "", onRtxEnChanged, onBandChanged),
+            _buildSlider("Сетевой адрес устройства", "rtx_addr", 1234, 0, 65535, 100, "", (v) {}, (v) {}),
+            _buildSlider("Рабочий канал связи (1 МГц шаг)", "rtx_chan", rtxChan, 0, 99, 99, "МГц", onRtxEnChanged, onChanChanged),
+            _buildSlider("Spreading Factor (SF)", "rtx_sf", rtxSf, 5, 12, 7, "", onRtxEnChanged, onSfChanged),
+            _buildSlider("Полоса пропускания (Bandwidth)", "rtx_bw", rtxBw, 0, 9, 9, "", onRtxEnChanged, onBwChanged),
+            _buildSlider("Коэффициент кодирования (Coding Rate)", "rtx_cr", rtxCr, 1, 4, 3, "", onRtxEnChanged, onCrChanged),
+            _buildSlider("Мощность передатчика", "rtx_power", rtxPower, -9, 22, 31, "dBm", onRtxEnChanged, onPowerChanged),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+              child: Card(
+                margin: EdgeInsets.zero,
+                color: const Color(0xFF1E222B),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    children: [
+                      Text("КАЛЬКУЛЯТОР ЛИНКА (ЧАСТОТА: ${currentFreqMhz.toStringAsFixed(0)} МГц)", style: const TextStyle(fontSize: 10, color: Colors.amberAccent, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+                      const SizedBox(height: 8),
+                      Text(distFormatted, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
+                      const SizedBox(height: 12),
+                      const Divider(color: Colors.white12),
+                      const SizedBox(height: 8),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Flexible(child: Text("Чувствительность приемника (Sensitivity):", style: TextStyle(fontSize: 11, color: Colors.white70), overflow: TextOverflow.ellipsis)),
+                              const SizedBox(width: 8),
+                              Text("${sensitivity.toStringAsFixed(1)} dBm", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          LinearProgressIndicator(value: sensitivityProgress, color: Colors.cyanAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Flexible(child: Text("Скорость по воздуху (Air Data Rate):", style: TextStyle(fontSize: 11, color: Colors.white70), overflow: TextOverflow.ellipsis)),
+                              const SizedBox(width: 8),
+                              Text(bitRateStr, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          LinearProgressIndicator(value: bitRateProgress, color: Colors.blueAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 8),
-        ],
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }
@@ -1186,143 +1190,143 @@ class RtxAntennaExpansion extends StatelessWidget {
     required this.onComboChanged, required this.onSleeveToggle, required this.onSleeveThickChanged, required this.onTubeDiamChanged, required this.onTopWireChanged, required this.onKharcChanged, required this.onEnvLossChanged,
   });
 
+  Widget _buildInternalSlider(String title, double val, double min, double max, int div, String unit, ValueChanged<double> onChanged) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(title, style: const TextStyle(fontSize: 11, color: Colors.white70)),
+            Text("${val.toStringAsFixed(val.truncate() == val ? 0 : 1)} $unit", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+          ],
+        ),
+        Slider(value: val, min: min, max: max, divisions: div, onChanged: onChanged),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: ExpansionTile(
-        title: const Text("Калькулятор и геометрия антенн", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amberAccent)),
-        subtitle: const Text("Расчет плеч диполя и антенны Харченко", style: TextStyle(fontSize: 10, color: Colors.white70)),
-        iconColor: Colors.amberAccent,
-        collapsedIconColor: Colors.white54,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text("Комбинация антенн:", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
-                DropdownButton<int>(
-                  value: antennaComboIndex,
-                  dropdownColor: const Color(0xFF1C1C1E),
-                  underline: const SizedBox(),
-                  style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold),
-                  items: const [
-                    DropdownMenuItem(value: 0, child: Text("Штырь + Штырь (2.15 dBi)")),
-                    DropdownMenuItem(value: 1, child: Text("Харченко + Штырь (5.5 dBi)")),
-                  ],
-                  onChanged: onComboChanged,
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
-            child: Card(
-              margin: EdgeInsets.zero,
-              child: Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text("Графический расчет плеч и геометрии антенн", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amberAccent)),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            children: [
-                              const Text("Штыревой диполь", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
-                              const SizedBox(height: 6),
-                              Container(
-                                height: 120,
-                                decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
-                                child: CustomPaint(painter: DipoleSchematicPainter(hasSleeve: hasProtectiveSleeve), size: const Size(double.infinity, 120)),
-                              ),
-                              const SizedBox(height: 6),
-                              Text("Верх: ${(antResults['dipoleArmTopMm'] as double).toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 10, color: Colors.white70)),
-                              Text("Низ: ${(antResults['dipoleArmBotMm'] as double).toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            children: [
-                              const Text("Антенна Харченко", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
-                              const SizedBox(height: 6),
-                              Container(
-                                height: 120,
-                                decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
-                                child: CustomPaint(painter: KharchenkoSchematicPainter(), size: const Size(double.infinity, 120)),
-                              ),
-                              const SizedBox(height: 6),
-                              const Text("Сторона ромба", style: TextStyle(fontSize: 10, color: Colors.white70)),
-                              Text("Сторона: ${(antResults['kharchenkoSideMm'] as double).toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
-            child: Card(
-              margin: EdgeInsets.zero,
-              child: Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text("Физические параметры материалов и среды", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                    const SizedBox(height: 10),
-                    SwitchListTile(
-                      title: const Text("Защитная трубка / термоусадка на диполе", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                      subtitle: const Text("Учитывает диэлектрическую нагрузку пластика", style: TextStyle(fontSize: 10, color: Colors.white60)),
-                      value: hasProtectiveSleeve,
-                      activeColor: Colors.blueAccent,
-                      contentPadding: EdgeInsets.zero,
-                      onChanged: onSleeveToggle,
-                    ),
-                    if (hasProtectiveSleeve) ...[
-                      const SizedBox(height: 4),
-                      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                        const Text("Толщина стенки трубки (чехла):", style: TextStyle(fontSize: 11, color: Colors.white70)),
-                        Text("${sleeveThicknessMm.toStringAsFixed(1)} мм (0.5-3.0)", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
-                      ]),
-                      Slider(value: sleeveThicknessMm, min: 0.5, max: 3.0, divisions: 25, onChanged: onSleeveThickChanged),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+      child: Card(
+        margin: EdgeInsets.zero,
+        child: ExpansionTile(
+          title: const Text("Калькулятор и геометрия антенн", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amberAccent)),
+          subtitle: const Text("Расчет плеч диполя и антенны Харченко", style: TextStyle(fontSize: 10, color: Colors.white70)),
+          iconColor: Colors.amberAccent,
+          collapsedIconColor: Colors.white54,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text("Комбинация антенн:", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
+                  DropdownButton<int>(
+                    value: antennaComboIndex,
+                    dropdownColor: const Color(0xFF1C1C1E),
+                    underline: const SizedBox(),
+                    style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold),
+                    items: const [
+                      DropdownMenuItem(value: 0, child: Text("Штырь + Штырь (2.15 dBi)")),
+                      DropdownMenuItem(value: 1, child: Text("Харченко + Штырь (5.5 dBi)")),
                     ],
-                    const SizedBox(height: 8),
-                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                      const Text("Диаметр трубки диполя (нижн.):", style: TextStyle(fontSize: 11, color: Colors.white70)),
-                      Text("${dipoleTubeDiameterMm.toStringAsFixed(1)} мм (2-5мм)", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
-                    ]),
-                    Slider(value: dipoleTubeDiameterMm, min: 2.0, max: 5.0, divisions: 6, onChanged: onTubeDiamChanged),
-                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                      const Text("Сечение провода диполя (верхн.):", style: TextStyle(fontSize: 11, color: Colors.white70)),
-                      Text("${dipoleTopWireSqMm.toStringAsFixed(2)} мм² (0.5-2.5)", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
-                    ]),
-                    Slider(value: dipoleTopWireSqMm, min: 0.5, max: 2.5, divisions: 20, onChanged: onTopWireChanged),
-                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                      const Text("Сечение провода Харченко:", style: TextStyle(fontSize: 11, color: Colors.white70)),
-                      Text("${kharchenkoWireSqMm.toStringAsFixed(1)} мм² (1-4)", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
-                    ]),
-                    Slider(value: kharchenkoWireSqMm, min: 1.0, max: 4.0, divisions: 15, onChanged: onKharcChanged),
-                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                      const Text("Запас на условия (Fade Margin):", style: TextStyle(fontSize: 11, color: Colors.white70)),
-                      Text("${calcEnvironmentLoss.toStringAsFixed(0)} dB", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
-                    ]),
-                    Slider(value: calcEnvironmentLoss, min: 5.0, max: 30.0, divisions: 25, onChanged: onEnvLossChanged),
-                  ],
+                    onChanged: onComboChanged,
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+              child: Card(
+                margin: EdgeInsets.zero,
+                child: Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text("Графический расчет плеч и геометрии антенн", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amberAccent)),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              children: [
+                                const Text("Штыревой диполь", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
+                                const SizedBox(height: 6),
+                                Container(
+                                  height: 120,
+                                  decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
+                                  child: CustomPaint(painter: DipoleSchematicPainter(hasSleeve: hasProtectiveSleeve), size: const Size(double.infinity, 120)),
+                                ),
+                                const SizedBox(height: 6),
+                                Text("Верх: ${(antResults['dipoleArmTopMm'] as double).toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 10, color: Colors.white70)),
+                                Text("Низ: ${(antResults['dipoleArmBotMm'] as double).toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              children: [
+                                const Text("Антенна Харченко", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
+                                const SizedBox(height: 6),
+                                Container(
+                                  height: 120,
+                                  decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
+                                  child: CustomPaint(painter: KharchenkoSchematicPainter(), size: const Size(double.infinity, 120)),
+                                ),
+                                const SizedBox(height: 6),
+                                const Text("Сторона ромба", style: TextStyle(fontSize: 10, color: Colors.white70)),
+                                Text("Сторона: ${(antResults['kharchenkoSideMm'] as double).toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 8),
-        ],
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+              child: Card(
+                margin: EdgeInsets.zero,
+                child: Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text("Физические параметры материалов и среды", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      const SizedBox(height: 10),
+                      SwitchListTile(
+                        title: const Text("Защитная трубка / термоусадка на диполе", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                        subtitle: const Text("Учитывает диэлектрическую нагрузку пластика", style: TextStyle(fontSize: 10, color: Colors.white60)),
+                        value: hasProtectiveSleeve,
+                        activeColor: Colors.blueAccent,
+                        contentPadding: EdgeInsets.zero,
+                        onChanged: onSleeveToggle,
+                      ),
+                      if (hasProtectiveSleeve) ...[
+                        const SizedBox(height: 4),
+                        _buildInternalSlider("Толщина стенки трубки (чехла):", sleeveThicknessMm, 0.5, 3.0, 25, "мм (0.5-3.0)", onSleeveThickChanged),
+                      ],
+                      const SizedBox(height: 8),
+                      _buildInternalSlider("Диаметр трубки диполя (нижн.):", dipoleTubeDiameterMm, 2.0, 5.0, 6, "мм (2-5мм)", onTubeDiamChanged),
+                      _buildInternalSlider("Сечение провода диполя (верхн.):", dipoleTopWireSqMm, 0.5, 2.5, 20, "мм² (0.5-2.5)", onTopWireChanged),
+                      _buildInternalSlider("Сечение провода Харченко:", kharchenkoWireSqMm, 1.0, 4.0, 15, "мм² (1-4)", onKharcChanged),
+                      _buildInternalSlider("Запас на условия (Fade Margin):", calcEnvironmentLoss, 5.0, 30.0, 25, "dB", onEnvLossChanged),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }
@@ -2183,7 +2187,7 @@ class _FlasherTabState extends State<FlasherTab> {
       setState(() => _statusRC = "Запись прошивки пульта...");
       for (int i = 1; i <= 10; i++) {
         await Future.delayed(const Duration(milliseconds: 100));
-        setState(() => _progressRC = _progressRC = i / 10.0);
+        setState(() => _progressRC = i / 10.0);
       }
       setState(() { _isFlashingRC = false; _statusRC = "УСПЕХ: Пульт успешно прошит!"; });
       if (mounted) showAppDialog(context, "Успех", "Прошивка пульта управления завершена!");
@@ -2238,7 +2242,7 @@ class _FlasherTabState extends State<FlasherTab> {
               children: [
                 const Text("2. Загрузчик пульта управления", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                 const SizedBox(height: 6),
-                Text(_statusRC, style: const TextStyle(fontFamily: 'monospace', fontSize: 11, color: Colors.greenAccent)),
+                Text(_statusRC, style: constTextStyle(fontFamily: 'monospace', fontSize: 11, color: Colors.greenAccent)),
                 const SizedBox(height: 10),
                 LinearProgressIndicator(value: _progressRC, color: Colors.blueAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
                 const SizedBox(height: 14),
