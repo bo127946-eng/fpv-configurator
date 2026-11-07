@@ -2242,7 +2242,7 @@ class _FlasherTabState extends State<FlasherTab> {
               children: [
                 const Text("2. Загрузчик пульта управления", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                 const SizedBox(height: 6),
-                Text(_statusRC, style: constTextStyle(fontFamily: 'monospace', fontSize: 11, color: Colors.greenAccent)),
+                Text(_statusRC, style: const TextStyle(fontFamily: 'monospace', fontSize: 11, color: Colors.greenAccent)),
                 const SizedBox(height: 10),
                 LinearProgressIndicator(value: _progressRC, color: Colors.blueAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
                 const SizedBox(height: 14),
