@@ -1,4 +1,4 @@
-// XFire Ecosystem (Слайдеры расширены с отступом 3 мм от краев карточки)
+// XFire Ecosystem (Финальный вариант: слайдеры расширены с отступом 3 мм от краев)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -133,10 +133,28 @@ class XFireSliderCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            // Аккуратный отступ 3 мм от внутренних краев карточки
+            // Растянутый слайдер с отступом ровно 3 мм от краев карточки
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 3.0),
-              child: Slider(value: value, min: min, max: max, divisions: divisions, onChanged: onChanged, onChangeEnd: onChangeEnd),
+              child: SizedBox(
+                width: double.infinity,
+                child: SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackShape: const RectangularSliderTrackShape(),
+                    trackHeight: 4.0,
+                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 14.0),
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7.0),
+                  ),
+                  child: Slider(
+                    value: value,
+                    min: min,
+                    max: max,
+                    divisions: divisions,
+                    onChanged: onChanged,
+                    onChangeEnd: onChangeEnd,
+                  ),
+                ),
+              ),
             ),
           ],
         ),
@@ -1179,7 +1197,15 @@ class RtxAntennaExpansion extends StatelessWidget {
                           ),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 3.0),
-                            child: Slider(value: sleeveThicknessMm, min: 0.5, max: 3.0, divisions: 25, onChanged: onSleeveThickChanged),
+                            child: SliderTheme(
+                              data: SliderTheme.of(context).copyWith(
+                                trackShape: const RectangularSliderTrackShape(),
+                                trackHeight: 4.0,
+                                overlayShape: const RoundSliderOverlayShape(overlayRadius: 14.0),
+                                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7.0),
+                              ),
+                              child: Slider(value: sleeveThicknessMm, min: 0.5, max: 3.0, divisions: 25, onChanged: onSleeveThickChanged),
+                            ),
                           ),
                         ],
                       ),
@@ -1200,7 +1226,15 @@ class RtxAntennaExpansion extends StatelessWidget {
                         ),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 3.0),
-                          child: Slider(value: dipoleTubeDiameterMm, min: 2.0, max: 5.0, divisions: 6, onChanged: onTubeDiamChanged),
+                          child: SliderTheme(
+                            data: SliderTheme.of(context).copyWith(
+                              trackShape: const RectangularSliderTrackShape(),
+                              trackHeight: 4.0,
+                              overlayShape: const RoundSliderOverlayShape(overlayRadius: 14.0),
+                              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7.0),
+                            ),
+                            child: Slider(value: dipoleTubeDiameterMm, min: 2.0, max: 5.0, divisions: 6, onChanged: onTubeDiamChanged),
+                          ),
                         ),
                       ],
                     ),
@@ -1219,7 +1253,15 @@ class RtxAntennaExpansion extends StatelessWidget {
                         ),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 3.0),
-                          child: Slider(value: dipoleTopWireSqMm, min: 0.5, max: 2.5, divisions: 20, onChanged: onTopWireChanged),
+                          child: SliderTheme(
+                            data: SliderTheme.of(context).copyWith(
+                              trackShape: const RectangularSliderTrackShape(),
+                              trackHeight: 4.0,
+                              overlayShape: const RoundSliderOverlayShape(overlayRadius: 14.0),
+                              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7.0),
+                            ),
+                            child: Slider(value: dipoleTopWireSqMm, min: 0.5, max: 2.5, divisions: 20, onChanged: onTopWireChanged),
+                          ),
                         ),
                       ],
                     ),
@@ -1238,7 +1280,15 @@ class RtxAntennaExpansion extends StatelessWidget {
                         ),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 3.0),
-                          child: Slider(value: kharchenkoWireSqMm, min: 1.0, max: 4.0, divisions: 15, onChanged: onKharcChanged),
+                          child: SliderTheme(
+                            data: SliderTheme.of(context).copyWith(
+                              trackShape: const RectangularSliderTrackShape(),
+                              trackHeight: 4.0,
+                              overlayShape: const RoundSliderOverlayShape(overlayRadius: 14.0),
+                              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7.0),
+                            ),
+                            child: Slider(value: kharchenkoWireSqMm, min: 1.0, max: 4.0, divisions: 15, onChanged: onKharcChanged),
+                          ),
                         ),
                       ],
                     ),
@@ -1257,7 +1307,15 @@ class RtxAntennaExpansion extends StatelessWidget {
                         ),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 3.0),
-                          child: Slider(value: calcEnvironmentLoss, min: 5.0, max: 30.0, divisions: 25, onChanged: onEnvLossChanged),
+                          child: SliderTheme(
+                            data: SliderTheme.of(context).copyWith(
+                              trackShape: const RectangularSliderTrackShape(),
+                              trackHeight: 4.0,
+                              overlayShape: const RoundSliderOverlayShape(overlayRadius: 14.0),
+                              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7.0),
+                            ),
+                            child: Slider(value: calcEnvironmentLoss, min: 5.0, max: 30.0, divisions: 25, onChanged: onEnvLossChanged),
+                          ),
                         ),
                       ],
                     ),
@@ -1495,7 +1553,15 @@ class _TestsTabState extends State<TestsTab> {
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 3.0),
-                child: Slider(value: _selectedChannel.toDouble(), min: 0, max: 99, divisions: 99, onChanged: (v) => setState(() => _selectedChannel = v.round())),
+                child: SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackShape: const RectangularSliderTrackShape(),
+                    trackHeight: 4.0,
+                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 14.0),
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7.0),
+                  ),
+                  child: Slider(value: _selectedChannel.toDouble(), min: 0, max: 99, divisions: 99, onChanged: (v) => setState(() => _selectedChannel = v.round())),
+                ),
               ),
               const SizedBox(height: 6),
               SizedBox(
