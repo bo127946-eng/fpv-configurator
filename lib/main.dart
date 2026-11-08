@@ -1,4 +1,4 @@
-// XFire Ecosystem (Оптимизированный вариант с универсальным виджетом действий)
+// XFire Ecosystem (Финальный вариант с раздвинутыми шкалами)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -891,9 +891,27 @@ class _SettingsTabState extends State<SettingsTab> {
                     Expanded(
                       child: Row(
                         children: [
-                          Expanded(flex: 2, child: CustomPaint(painter: PitchHudScalePainter(value: pitchDeg + (rollDeg * 0.5), minVal: -90, maxVal: 90, isLeftSide: true), size: const Size(double.infinity, double.infinity))),
+                          Expanded(
+                            flex: 2,
+                            child: Transform.translate(
+                              offset: const Offset(-8, 0), // Левая шкала сдвинута влево на 8px
+                              child: CustomPaint(
+                                painter: PitchHudScalePainter(value: pitchDeg + (rollDeg * 0.5), minVal: -90, maxVal: 90, isLeftSide: true),
+                                size: const Size(double.infinity, double.infinity),
+                              ),
+                            ),
+                          ),
                           Expanded(flex: 4, child: Center(child: Stack(alignment: Alignment.center, children: [CustomPaint(size: const Size(155, 155), painter: ArtificialHorizonPainter(roll: SerialService.gyroRoll, pitch: SerialService.gyroPitch)), const Icon(Icons.add, color: Colors.white, size: 24)]))),
-                          Expanded(flex: 2, child: CustomPaint(painter: PitchHudScalePainter(value: pitchDeg - (rollDeg * 0.5), minVal: -90, maxVal: 90, isLeftSide: false), size: const Size(double.infinity, double.infinity))),
+                          Expanded(
+                            flex: 2,
+                            child: Transform.translate(
+                              offset: const Offset(8, 0), // Правая шкала сдвинута вправо на 8px
+                              child: CustomPaint(
+                                painter: PitchHudScalePainter(value: pitchDeg - (rollDeg * 0.5), minVal: -90, maxVal: 90, isLeftSide: false),
+                                size: const Size(double.infinity, double.infinity),
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -959,45 +977,7 @@ class _SettingsTabState extends State<SettingsTab> {
               XFireActionCard(title: "Тест моторов 25%", commandName: "test_motor", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_motor"); showAppDialog(context, "Внимание", "Тест моторов (25%) активирован!", isError: true); } }),
               XFireActionCard(title: "Тест PID 25%", commandName: "test_pid", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_pid"); showAppDialog(context, "Тест PID", "Стресс-тест ПИД активирован."); } }),
               XFireActionCard(title: "Тест связи с пультом", commandName: "test_rc", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_rc"); showAppDialog(context, "Тест RC", "Диагностика пакетов запущена."); } }),
-              XFireCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text("Тест смены канала связи с пультом", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-                    const SizedBox(height: 2),
-                    const Text("test_rc_can", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 10),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text("Текущий канал автопоиска:", style: TextStyle(fontSize: 11, color: Colors.white70)),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
-                          child: const Text("ПОИСК КОНТРОЛЛЕРА", style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 11)),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 36,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          if (!SerialService.isConnected) {
-                            showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
-                          } else {
-                            SerialService.sendCommand("test_rc_can");
-                            showAppDialog(context, "Успех", "Отправлена команда: test_rc_can (контроллер определит канал автоматически)");
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                        child: const Text("Запустить автопоиск канала", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              XFireActionCard(title: "Тест смены канала связи с пультом", commandName: "test_rc_can", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_rc_can"); showAppDialog(context, "Автопоиск канала", "Команда отправлена. Новый номер канала придет в сообщении лога."); } }),
             ]),
 
             _buildExpansionCard("Калибровки датчиков", "Калибровка гироскопа, акселерометра и лидара", Icons.tune, [
@@ -1857,7 +1837,8 @@ class PitchHudScalePainter extends CustomPainter {
     final paintLine = Paint()..color = Colors.white70..strokeWidth = 2.5;
     final paintText = TextPainter(textDirection: TextDirection.ltr);
     final indicatorPaint = Paint()..color = Colors.white..style = PaintingStyle.fill;
-    final x = isLeftSide ? size.width - 5.0 : 5.0;
+    
+    final x = isLeftSide ? 5.0 : size.width - 5.0;
 
     canvas.drawLine(Offset(x, 8), Offset(x, size.height - 8), paintLine);
     double range = maxVal - minVal;
@@ -1865,14 +1846,19 @@ class PitchHudScalePainter extends CustomPainter {
     for (int i = 0; i <= 4; i++) {
       double v = minVal + (range / 4) * i;
       double y = 8 + ((v - minVal) / range) * (size.height - 16);
-      canvas.drawLine(Offset(isLeftSide ? x - 5 : x, y), Offset(isLeftSide ? x : x + 5, y), paintLine);
+      canvas.drawLine(Offset(isLeftSide ? x : x - 5, y), Offset(isLeftSide ? x + 5 : x, y), paintLine);
       paintText.text = TextSpan(text: "${v.toInt()}°", style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold));
       paintText.layout();
-      paintText.paint(canvas, Offset(isLeftSide ? x - 28 : x + 8, y - 5));
+      paintText.paint(canvas, Offset(isLeftSide ? x + 8 : x - 28, y - 5));
     }
 
     double currentY = 8 + ((value.clamp(minVal, maxVal) - minVal) / range) * (size.height - 16);
-    canvas.drawPath(Path()..moveTo(isLeftSide ? x + 2 : x - 2, currentY)..lineTo(isLeftSide ? x + 14 : x - 14, currentY - 8)..lineTo(isLeftSide ? x + 14 : x - 14, currentY + 8)..close(), indicatorPaint);
+    
+    if (isLeftSide) {
+      canvas.drawPath(Path()..moveTo(x + 2, currentY)..lineTo(x + 14, currentY - 8)..lineTo(x + 14, currentY + 8)..close(), indicatorPaint);
+    } else {
+      canvas.drawPath(Path()..moveTo(x - 2, currentY)..lineTo(x - 14, currentY - 8)..lineTo(x - 14, currentY + 8)..close(), indicatorPaint);
+    }
   }
 
   @override
@@ -1892,7 +1878,7 @@ class YawHudScalePainter extends CustomPainter {
     final paintLine = Paint()..color = Colors.white70..strokeWidth = 2.5;
     final paintText = TextPainter(textDirection: TextDirection.ltr);
     final indicatorPaint = Paint()..color = Colors.white..style = PaintingStyle.fill;
-    const double margin = 26.0;
+    const double margin = 34.0;
     final y = isTop ? 14.0 : size.height - 14.0;
 
     canvas.drawLine(Offset(margin, y), Offset(size.width - margin, y), paintLine);
