@@ -1,4 +1,4 @@
-// XFire Ecosystem (Финальный монолитный вариант с перенесенными блоками телеметрии и прошивок)
+// XFire Ecosystem (Финальный вариант с фиксацией ExpansionTile и унифицированными антеннами)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -397,7 +397,7 @@ class _MainContainerState extends State<MainContainer> {
         ),
       ),
       body: Center(
-        child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 600), child: _tabs[_currentIndex]),
+        child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 600), child: KeyedSubtree(key: ValueKey(_currentIndex), child: _tabs[_currentIndex])),
       ),
     );
   }
@@ -585,6 +585,7 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
   @override
   Widget build(BuildContext context) {
     return ListView(
+      key: const PageStorageKey('info_tab'),
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
         Card(
@@ -720,7 +721,6 @@ class _SettingsTabState extends State<SettingsTab> {
   double _yawKp = 0.65, _yawKi = 0.010, _yawKd = 0.0;
   double _vzKp = 7.5, _vzKi = 1.3, _vzKd = 0.35;
 
-  // Переменные прошивки FC
   bool _isFlashingFC = false;
   double _progressFC = 0.0;
   String _statusFC = "Готов к прошивке полетного контроллера";
@@ -817,6 +817,7 @@ class _SettingsTabState extends State<SettingsTab> {
       stream: SerialService.telemetryController.stream,
       builder: (context, snapshot) {
         return ListView(
+          key: const PageStorageKey('settings_tab'),
           padding: const EdgeInsets.symmetric(vertical: 8.0),
           children: [
             _buildExpansionCard("Телеметрия", "Авиогоризонт, HUD и датчики в реальном времени", Icons.radar, [
@@ -996,7 +997,6 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
   double _rcProtocol = 1.0; 
   double _txPowerW = 100.0;
 
-  // Переменные прошивки пульта
   bool _isFlashingRC = false;
   double _progressRC = 0.0;
   String _statusRC = "Готов к прошивке пульта управления";
@@ -1070,6 +1070,7 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
   @override
   Widget build(BuildContext context) {
     return ListView(
+      key: const PageStorageKey('rc_tab'),
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
         _buildExpansionCard("Прошивка пульта", "Обновление микропрограммы пульта управления", Icons.gamepad, [
@@ -1364,6 +1365,9 @@ class RtxLinkCalculatorCard extends StatelessWidget {
   }
 }
 
+// ==========================================
+// УНИФИЦИРОВАННЫЙ ВИДЖЕТ АНТЕНН
+// ==========================================
 class RtxAntennaExpansion extends StatelessWidget {
   final int antennaComboIndex;
   final bool hasProtectiveSleeve;
@@ -1393,22 +1397,34 @@ class RtxAntennaExpansion extends StatelessWidget {
           iconColor: Colors.amberAccent,
           collapsedIconColor: Colors.white54,
           children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 8.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            XFireCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text("Комбинация антенн:", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
-                  DropdownButton<int>(
-                    value: antennaComboIndex,
-                    dropdownColor: const Color(0xFF1C1C1E),
-                    underline: const SizedBox(),
-                    style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold),
-                    items: const [
-                      DropdownMenuItem(value: 0, child: Text("Штырь + Штырь (2.15 dBi)")),
-                      DropdownMenuItem(value: 1, child: Text("Харченко + Штырь (5.5 dBi)")),
-                    ],
-                    onChanged: onComboChanged,
+                  const Text("Комбинация антенн", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                  const SizedBox(height: 2),
+                  const Text("ant_combo_config", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF242428),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<int>(
+                        value: antennaComboIndex,
+                        dropdownColor: const Color(0xFF242428),
+                        isExpanded: true,
+                        icon: const Icon(Icons.arrow_drop_down, color: Colors.amberAccent),
+                        style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold),
+                        items: const [
+                          DropdownMenuItem(value: 0, child: Text("Штырь + Штырь (2.15 dBi)")),
+                          DropdownMenuItem(value: 1, child: Text("Харченко + Штырь (5.5 dBi)")),
+                        ],
+                        onChanged: onComboChanged,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -1459,161 +1475,67 @@ class RtxAntennaExpansion extends StatelessWidget {
                 ],
               ),
             ),
-            XFireCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text("Физические параметры материалов и среды", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-                  const SizedBox(height: 10),
-                  SwitchListTile(
-                    title: const Text("Защитная трубка / термоусадка на диполе", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                    subtitle: const Text("Учитывает диэлектрическую нагрузку пластика", style: TextStyle(fontSize: 10, color: Colors.white60)),
-                    value: hasProtectiveSleeve,
-                    activeColor: Colors.blueAccent,
-                    contentPadding: EdgeInsets.zero,
-                    onChanged: onSleeveToggle,
-                  ),
-                  if (hasProtectiveSleeve) ...[
-                    const SizedBox(height: 4),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 4.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text("Толщина стенки трубки (чехла):", style: TextStyle(fontSize: 11, color: Colors.white70, fontWeight: FontWeight.w600)),
-                              Text("${sleeveThicknessMm.toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
-                            ],
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 3.0),
-                            child: SliderTheme(
-                              data: SliderTheme.of(context).copyWith(
-                                trackShape: XFireSliderTrackShape(),
-                                trackHeight: 6.0,
-                                overlayShape: const RoundSliderOverlayShape(overlayRadius: 20.0),
-                                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10.0),
-                              ),
-                              child: Slider(value: sleeveThicknessMm, min: 0.5, max: 3.0, divisions: 25, onChanged: onSleeveThickChanged),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 8),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 4.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text("Диаметр трубки диполя (нижн.):", style: TextStyle(fontSize: 11, color: Colors.white70, fontWeight: FontWeight.w600)),
-                            Text("${dipoleTubeDiameterMm.toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
-                          ],
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 3.0),
-                          child: SliderTheme(
-                            data: SliderTheme.of(context).copyWith(
-                              trackShape: XFireSliderTrackShape(),
-                              trackHeight: 6.0,
-                              overlayShape: const RoundSliderOverlayShape(overlayRadius: 20.0),
-                              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10.0),
-                            ),
-                            child: Slider(value: dipoleTubeDiameterMm, min: 2.0, max: 5.0, divisions: 6, onChanged: onTubeDiamChanged),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 4.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text("Сечение провода диполя (верхн.):", style: TextStyle(fontSize: 11, color: Colors.white70, fontWeight: FontWeight.w600)),
-                            Text("${dipoleTopWireSqMm.toStringAsFixed(1)} мм²", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
-                          ],
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 3.0),
-                          child: SliderTheme(
-                            data: SliderTheme.of(context).copyWith(
-                              trackShape: XFireSliderTrackShape(),
-                              trackHeight: 6.0,
-                              overlayShape: const RoundSliderOverlayShape(overlayRadius: 20.0),
-                              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10.0),
-                            ),
-                            child: Slider(value: dipoleTopWireSqMm, min: 0.5, max: 2.5, divisions: 20, onChanged: onTopWireChanged),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 4.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text("Сечение провода Харченко:", style: TextStyle(fontSize: 11, color: Colors.white70, fontWeight: FontWeight.w600)),
-                            Text("${kharchenkoWireSqMm.toStringAsFixed(1)} мм²", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
-                          ],
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 3.0),
-                          child: SliderTheme(
-                            data: SliderTheme.of(context).copyWith(
-                              trackShape: XFireSliderTrackShape(),
-                              trackHeight: 6.0,
-                              overlayShape: const RoundSliderOverlayShape(overlayRadius: 20.0),
-                              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10.0),
-                            ),
-                            child: Slider(value: kharchenkoWireSqMm, min: 1.0, max: 4.0, divisions: 15, onChanged: onKharcChanged),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 4.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text("Запас на условия (Fade Margin):", style: TextStyle(fontSize: 11, color: Colors.white70, fontWeight: FontWeight.w600)),
-                            Text("${calcEnvironmentLoss.toStringAsFixed(1)} dB", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
-                          ],
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 3.0),
-                          child: SliderTheme(
-                            data: SliderTheme.of(context).copyWith(
-                              trackShape: XFireSliderTrackShape(),
-                              trackHeight: 6.0,
-                              overlayShape: const RoundSliderOverlayShape(overlayRadius: 20.0),
-                              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10.0),
-                            ),
-                            child: Slider(value: calcEnvironmentLoss, min: 5.0, max: 30.0, divisions: 25, onChanged: onEnvLossChanged),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+            XFireSwitchCard(
+              title: "Защитная трубка / термоусадка на диполе",
+              commandName: "ant_sleeve_en",
+              value: hasProtectiveSleeve,
+              onChanged: onSleeveToggle,
+            ),
+            if (hasProtectiveSleeve)
+              XFireSliderCard(
+                title: "Толщина стенки трубки (чехла)",
+                commandName: "ant_sleeve_thick",
+                value: sleeveThicknessMm,
+                min: 0.5,
+                max: 3.0,
+                divisions: 25,
+                unit: "мм",
+                onChanged: onSleeveThickChanged,
+                onChangeEnd: (_) {},
               ),
+            XFireSliderCard(
+              title: "Диаметр трубки диполя (нижн.)",
+              commandName: "ant_tube_diam",
+              value: dipoleTubeDiameterMm,
+              min: 2.0,
+              max: 5.0,
+              divisions: 6,
+              unit: "мм",
+              onChanged: onTubeDiamChanged,
+              onChangeEnd: (_) {},
+            ),
+            XFireSliderCard(
+              title: "Сечение провода диполя (верхн.)",
+              commandName: "ant_top_wire",
+              value: dipoleTopWireSqMm,
+              min: 0.5,
+              max: 2.5,
+              divisions: 20,
+              unit: "мм²",
+              onChanged: onTopWireChanged,
+              onChangeEnd: (_) {},
+            ),
+            XFireSliderCard(
+              title: "Сечение провода Харченко",
+              commandName: "ant_kharc_wire",
+              value: kharchenkoWireSqMm,
+              min: 1.0,
+              max: 4.0,
+              divisions: 15,
+              unit: "мм²",
+              onChanged: onKharcChanged,
+              onChangeEnd: (_) {},
+            ),
+            XFireSliderCard(
+              title: "Запас на условия (Fade Margin)",
+              commandName: "ant_fade_margin",
+              value: calcEnvironmentLoss,
+              min: 5.0,
+              max: 30.0,
+              divisions: 25,
+              unit: "dB",
+              onChanged: onEnvLossChanged,
+              onChangeEnd: (_) {},
             ),
             const SizedBox(height: 12),
           ],
@@ -1721,6 +1643,7 @@ class _RadioTabState extends State<RadioTab> {
     var antResults = _calculateAntennaDimensions();
 
     return ListView(
+      key: const PageStorageKey('radio_tab'),
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
         RtxParametersExpansion(
@@ -1813,6 +1736,7 @@ class _TestsTabState extends State<TestsTab> {
   @override
   Widget build(BuildContext context) {
     return ListView(
+      key: const PageStorageKey('tests_tab'),
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
         _buildSectionHeader("АППАРАТНЫЕ ТЕСТЫ ОБОРУДОВАНИЯ", Icons.memory),
