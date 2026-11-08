@@ -1,4 +1,4 @@
-// XFire Ecosystem (Финальный оптимизированный вариант)
+// XFire Ecosystem (Оптимизированный вариант с универсальным виджетом действий)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -105,6 +105,45 @@ class XFireCard extends StatelessWidget {
           border: Border.all(color: Colors.white12),
         ),
         child: child,
+      ),
+    );
+  }
+}
+
+class XFireActionCard extends StatelessWidget {
+  final String title;
+  final String commandName;
+  final VoidCallback onTap;
+
+  const XFireActionCard({
+    super.key,
+    required this.title,
+    required this.commandName,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return XFireCard(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                  const SizedBox(height: 2),
+                  Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.white54),
+          ],
+        ),
       ),
     );
   }
@@ -825,37 +864,6 @@ class _SettingsTabState extends State<SettingsTab> {
     );
   }
 
-  Widget _buildActionCard({required BuildContext context, required String title, required String subtitleCommand, required VoidCallback onTap}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 4.0),
-      child: Card(
-        margin: EdgeInsets.zero,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: Padding(
-            padding: const EdgeInsets.all(14.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-                      const SizedBox(height: 2),
-                      Text(subtitleCommand, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
-                    ],
-                  ),
-                ),
-                const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.white54),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     double rollDeg = SerialService.gyroRoll * 57.2958;
@@ -945,12 +953,12 @@ class _SettingsTabState extends State<SettingsTab> {
             ]),
 
             _buildExpansionCard("Тесты оборудования", "Аппаратные, исполнительные и системные тесты", Icons.rule, [
-              _buildActionCard(context: context, title: "Тест подключения MPU6050", subtitleCommand: "test_mpu", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_mpu"); showAppDialog(context, "Тест MPU6050", "Команда отправлена."); } }),
-              _buildActionCard(context: context, title: "Тест подключения SX126x", subtitleCommand: "test_sx", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_sx"); showAppDialog(context, "Тест SX126x", "Проверка SPI запущена!"); } }),
-              _buildActionCard(context: context, title: "Тест подключения лидара", subtitleCommand: "test_lidar", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_lidar"); showAppDialog(context, "Тест лидара", "Запрос отправлен!"); } }),
-              _buildActionCard(context: context, title: "Тест моторов 25%", subtitleCommand: "test_motor", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_motor"); showAppDialog(context, "Внимание", "Тест моторов (25%) активирован!", isError: true); } }),
-              _buildActionCard(context: context, title: "Тест PID 25%", subtitleCommand: "test_pid", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_pid"); showAppDialog(context, "Тест PID", "Стресс-тест ПИД активирован."); } }),
-              _buildActionCard(context: context, title: "Тест связи с пультом", subtitleCommand: "test_rc", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_rc"); showAppDialog(context, "Тест RC", "Диагностика пакетов запущена."); } }),
+              XFireActionCard(title: "Тест подключения MPU6050", commandName: "test_mpu", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_mpu"); showAppDialog(context, "Тест MPU6050", "Команда отправлена."); } }),
+              XFireActionCard(title: "Тест подключения SX126x", commandName: "test_sx", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_sx"); showAppDialog(context, "Тест SX126x", "Проверка SPI запущена!"); } }),
+              XFireActionCard(title: "Тест подключения лидара", commandName: "test_lidar", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_lidar"); showAppDialog(context, "Тест лидара", "Запрос отправлен!"); } }),
+              XFireActionCard(title: "Тест моторов 25%", commandName: "test_motor", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_motor"); showAppDialog(context, "Внимание", "Тест моторов (25%) активирован!", isError: true); } }),
+              XFireActionCard(title: "Тест PID 25%", commandName: "test_pid", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_pid"); showAppDialog(context, "Тест PID", "Стресс-тест ПИД активирован."); } }),
+              XFireActionCard(title: "Тест связи с пультом", commandName: "test_rc", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_rc"); showAppDialog(context, "Тест RC", "Диагностика пакетов запущена."); } }),
               XFireCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -993,10 +1001,10 @@ class _SettingsTabState extends State<SettingsTab> {
             ]),
 
             _buildExpansionCard("Калибровки датчиков", "Калибровка гироскопа, акселерометра и лидара", Icons.tune, [
-              _buildActionCard(context: context, title: "Калибровка гироскопа", subtitleCommand: "cal_gyro", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("cal_gyro"); showAppDialog(context, "Успех", "Калибровка гироскопа запущена!"); } }),
-              _buildActionCard(context: context, title: "Калибровка акселерометра", subtitleCommand: "cal_acc", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("cal_acc"); showAppDialog(context, "Успех", "Калибровка акселерометра запущена!"); } }),
-              _buildActionCard(context: context, title: "Калибровка лидара (Xtalk)", subtitleCommand: "cal_lidar", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("cal_lidar"); showAppDialog(context, "Успех", "Калибровка лидара запущена!"); } }),
-              _buildActionCard(context: context, title: "Применить настройки RTX", subtitleCommand: "rtx_write", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("rtx_write"); showAppDialog(context, "Успех", "Настройки радиомодуля применены!"); } }),
+              XFireActionCard(title: "Калибровка гироскопа", commandName: "cal_gyro", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("cal_gyro"); showAppDialog(context, "Успех", "Калибровка гироскопа запущена!"); } }),
+              XFireActionCard(title: "Калибровка акселерометра", commandName: "cal_acc", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("cal_acc"); showAppDialog(context, "Успех", "Калибровка акселерометра запущена!"); } }),
+              XFireActionCard(title: "Калибровка лидара (Xtalk)", commandName: "cal_lidar", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("cal_lidar"); showAppDialog(context, "Успех", "Калибровка лидара запущена!"); } }),
+              XFireActionCard(title: "Применить настройки RTX", commandName: "rtx_write", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("rtx_write"); showAppDialog(context, "Успех", "Настройки радиомодуля применены!"); } }),
             ]),
 
             _buildExpansionCard("Полетные режимы и ограничения", "Режимы, углы крена, тангажа и лимиты высоты", Icons.flight, [
@@ -1170,32 +1178,17 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
         ]),
 
         _buildSectionHeader("КАЛИБРОВКА СТИКОВ ПУЛЬТА", Icons.gamepad),
-        XFireCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text("Калибровка нейтрали стиков", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-              const Text("rc_cal_sticks", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                height: 38,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    if (!SerialService.isConnected) {
-                      showAppDialog(context, "Ошибка", "Устройство пульта не подключено!", isError: true);
-                    } else {
-                      SerialService.sendCommand("rc_cal_sticks");
-                      showAppDialog(context, "Калибровка", "Команда калибровки нейтрали отправлена в пульт.");
-                    }
-                  },
-                  icon: const Icon(Icons.tune, size: 16),
-                  label: const Text("Запустить калибровку стиков", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                ),
-              ),
-            ],
-          ),
+        XFireActionCard(
+          title: "Калибровка нейтрали стиков",
+          commandName: "rc_cal_sticks",
+          onTap: () {
+            if (!SerialService.isConnected) {
+              showAppDialog(context, "Ошибка", "Устройство пульта не подключено!", isError: true);
+            } else {
+              SerialService.sendCommand("rc_cal_sticks");
+              showAppDialog(context, "Калибровка", "Команда калибровки нейтрали отправлена в пульт.");
+            }
+          },
         ),
 
         XFireSliderCard(title: "Мертвая зона стиков (Deadband)", commandName: "rc_tx_deadband", value: _stickDeadband, min: 0, max: 50, divisions: 50, unit: "PWM", onChanged: (v) => setState(() => _stickDeadband = v), onChangeEnd: (v) => SerialService.sendCommand("rc_tx_deadband ${v.round()}")),
@@ -1864,7 +1857,7 @@ class PitchHudScalePainter extends CustomPainter {
     final paintLine = Paint()..color = Colors.white70..strokeWidth = 2.5;
     final paintText = TextPainter(textDirection: TextDirection.ltr);
     final indicatorPaint = Paint()..color = Colors.white..style = PaintingStyle.fill;
-    final x = isLeftSide ? 5.0 : size.width - 5.0;
+    final x = isLeftSide ? size.width - 5.0 : 5.0;
 
     canvas.drawLine(Offset(x, 8), Offset(x, size.height - 8), paintLine);
     double range = maxVal - minVal;
@@ -1872,14 +1865,14 @@ class PitchHudScalePainter extends CustomPainter {
     for (int i = 0; i <= 4; i++) {
       double v = minVal + (range / 4) * i;
       double y = 8 + ((v - minVal) / range) * (size.height - 16);
-      canvas.drawLine(Offset(isLeftSide ? x : x - 5, y), Offset(isLeftSide ? x + 5 : x, y), paintLine);
+      canvas.drawLine(Offset(isLeftSide ? x - 5 : x, y), Offset(isLeftSide ? x : x + 5, y), paintLine);
       paintText.text = TextSpan(text: "${v.toInt()}°", style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold));
       paintText.layout();
-      paintText.paint(canvas, Offset(isLeftSide ? x + 8 : x - 28, y - 5));
+      paintText.paint(canvas, Offset(isLeftSide ? x - 28 : x + 8, y - 5));
     }
 
     double currentY = 8 + ((value.clamp(minVal, maxVal) - minVal) / range) * (size.height - 16);
-    canvas.drawPath(Path()..moveTo(isLeftSide ? x - 2 : x + 2, currentY)..lineTo(isLeftSide ? x - 14 : x + 14, currentY - 8)..lineTo(isLeftSide ? x - 14 : x + 14, currentY + 8)..close(), indicatorPaint);
+    canvas.drawPath(Path()..moveTo(isLeftSide ? x + 2 : x - 2, currentY)..lineTo(isLeftSide ? x + 14 : x - 14, currentY - 8)..lineTo(isLeftSide ? x + 14 : x - 14, currentY + 8)..close(), indicatorPaint);
   }
 
   @override
