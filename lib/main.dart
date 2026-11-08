@@ -1,4 +1,4 @@
-// XFire Ecosystem (Финальный вариант с фиксацией ExpansionTile и унифицированными антеннами)
+// XFire Ecosystem (Оптимизированный и чистый вариант)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -69,18 +69,9 @@ class XFireSliderTrackShape extends RectangularSliderTrackShape {
       sliderTheme: sliderTheme,
     );
 
-    final Paint activePaint = Paint()
-      ..color = sliderTheme.activeTrackColor ?? Colors.blueAccent
-      ..style = PaintingStyle.fill;
-
-    final Paint inactivePaint = Paint()
-      ..color = sliderTheme.inactiveTrackColor ?? Colors.white12
-      ..style = PaintingStyle.fill;
-
-    final Paint dividerPaint = Paint()
-      ..color = Colors.black
-      ..style = PaintingStyle.fill;
-
+    final Paint activePaint = Paint()..color = sliderTheme.activeTrackColor ?? Colors.blueAccent..style = PaintingStyle.fill;
+    final Paint inactivePaint = Paint()..color = sliderTheme.inactiveTrackColor ?? Colors.white12..style = PaintingStyle.fill;
+    final Paint dividerPaint = Paint()..color = Colors.black..style = PaintingStyle.fill;
     final Radius radius = Radius.circular(trackRect.height / 2);
 
     final Rect inactiveRect = Rect.fromLTRB(thumbCenter.dx, trackRect.top, trackRect.right, trackRect.bottom);
@@ -96,9 +87,8 @@ class XFireSliderTrackShape extends RectangularSliderTrackShape {
 }
 
 // ==========================================
-// УНИВЕРСАЛЬНЫЕ КОМПОНЕНТЫ
+// ОБЩИЕ УНИВЕРСАЛЬНЫЕ КОМПОНЕНТЫ СТИЛЯ
 // ==========================================
-
 class XFireCard extends StatelessWidget {
   final Widget child;
   const XFireCard({super.key, required this.child});
@@ -292,6 +282,39 @@ class XFireSegmentedCard extends StatelessWidget {
   }
 }
 
+class PidAxisCardWidget extends StatelessWidget {
+  final String axisName;
+  final String kpCmd, kiCmd, kdCmd;
+  final double kp, ki, kd;
+  final Function(double, double, double) onUpdate;
+
+  const PidAxisCardWidget({super.key, required this.axisName, required this.kpCmd, required this.kiCmd, required this.kdCmd, required this.kp, required this.ki, required this.kd, required this.onUpdate});
+
+  @override
+  Widget build(BuildContext context) {
+    return XFireCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(axisName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+          const SizedBox(height: 2),
+          Text("$kpCmd / $kiCmd / $kdCmd", style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 9, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(child: TextField(decoration: const InputDecoration(labelText: 'Kp', isDense: true), keyboardType: TextInputType.number, controller: TextEditingController(text: kp.toString())..selection = TextSelection.fromPosition(TextPosition(offset: kp.toString().length)), onSubmitted: (val) { double? np = double.tryParse(val); if (np != null) onUpdate(np, ki, kd); })),
+              const SizedBox(width: 8),
+              Expanded(child: TextField(decoration: const InputDecoration(labelText: 'Ki', isDense: true), keyboardType: TextInputType.number, controller: TextEditingController(text: ki.toString())..selection = TextSelection.fromPosition(TextPosition(offset: ki.toString().length)), onSubmitted: (val) { double? ni = double.tryParse(val); if (ni != null) onUpdate(kp, ni, kd); })),
+              const SizedBox(width: 8),
+              Expanded(child: TextField(decoration: const InputDecoration(labelText: 'Kd', isDense: true), keyboardType: TextInputType.number, controller: TextEditingController(text: kd.toString())..selection = TextSelection.fromPosition(TextPosition(offset: kd.toString().length)), onSubmitted: (val) { double? nd = double.tryParse(val); if (nd != null) onUpdate(kp, ki, nd); })),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ==========================================
 // СТАРТОВАЯ ЗАСТАВКА
 // ==========================================
@@ -397,7 +420,7 @@ class _MainContainerState extends State<MainContainer> {
         ),
       ),
       body: Center(
-        child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 600), child: KeyedSubtree(key: ValueKey(_currentIndex), child: _tabs[_currentIndex])),
+        child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 600), child: _tabs[_currentIndex]),
       ),
     );
   }
@@ -585,7 +608,6 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      key: const PageStorageKey('info_tab'),
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
         Card(
@@ -817,7 +839,6 @@ class _SettingsTabState extends State<SettingsTab> {
       stream: SerialService.telemetryController.stream,
       builder: (context, snapshot) {
         return ListView(
-          key: const PageStorageKey('settings_tab'),
           padding: const EdgeInsets.symmetric(vertical: 8.0),
           children: [
             _buildExpansionCard("Телеметрия", "Авиогоризонт, HUD и датчики в реальном времени", Icons.radar, [
@@ -949,39 +970,6 @@ class _SettingsTabState extends State<SettingsTab> {
   }
 }
 
-class PidAxisCardWidget extends StatelessWidget {
-  final String axisName;
-  final String kpCmd, kiCmd, kdCmd;
-  final double kp, ki, kd;
-  final Function(double, double, double) onUpdate;
-
-  const PidAxisCardWidget({super.key, required this.axisName, required this.kpCmd, required this.kiCmd, required this.kdCmd, required this.kp, required this.ki, required this.kd, required this.onUpdate});
-
-  @override
-  Widget build(BuildContext context) {
-    return XFireCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(axisName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-          const SizedBox(height: 2),
-          Text("$kpCmd / $kiCmd / $kdCmd", style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 9, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(child: TextField(decoration: const InputDecoration(labelText: 'Kp', isDense: true), keyboardType: TextInputType.number, controller: TextEditingController(text: kp.toString())..selection = TextSelection.fromPosition(TextPosition(offset: kp.toString().length)), onSubmitted: (val) { double? np = double.tryParse(val); if (np != null) onUpdate(np, ki, kd); })),
-              const SizedBox(width: 8),
-              Expanded(child: TextField(decoration: const InputDecoration(labelText: 'Ki', isDense: true), keyboardType: TextInputType.number, controller: TextEditingController(text: ki.toString())..selection = TextSelection.fromPosition(TextPosition(offset: ki.toString().length)), onSubmitted: (val) { double? ni = double.tryParse(val); if (ni != null) onUpdate(kp, ni, kd); })),
-              const SizedBox(width: 8),
-              Expanded(child: TextField(decoration: const InputDecoration(labelText: 'Kd', isDense: true), keyboardType: TextInputType.number, controller: TextEditingController(text: kd.toString())..selection = TextSelection.fromPosition(TextPosition(offset: kd.toString().length)), onSubmitted: (val) { double? nd = double.tryParse(val); if (nd != null) onUpdate(kp, ki, nd); })),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 // ==========================================
 // ВКЛАДКА 2: ПУЛЬТ RC
 // ==========================================
@@ -1070,7 +1058,6 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      key: const PageStorageKey('rc_tab'),
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
         _buildExpansionCard("Прошивка пульта", "Обновление микропрограммы пульта управления", Icons.gamepad, [
@@ -1643,7 +1630,6 @@ class _RadioTabState extends State<RadioTab> {
     var antResults = _calculateAntennaDimensions();
 
     return ListView(
-      key: const PageStorageKey('radio_tab'),
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
         RtxParametersExpansion(
@@ -1736,7 +1722,6 @@ class _TestsTabState extends State<TestsTab> {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      key: const PageStorageKey('tests_tab'),
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
         _buildSectionHeader("АППАРАТНЫЕ ТЕСТЫ ОБОРУДОВАНИЯ", Icons.memory),
