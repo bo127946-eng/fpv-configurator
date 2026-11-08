@@ -1599,4 +1599,371 @@ class RadioTab extends StatefulWidget {
   State<RadioTab> createState() => _RadioTabState();
 }
 
-class _RadioTabState extends State<RadioTab>
+class _RadioTabState extends State<RadioTab> {
+  double _rtxEn = 1;
+  double _rtxBand = SerialService.rtxBand;
+  double _rtxChan = SerialService.rtxChan;
+  double _rtxSf = SerialService.rtxSf;
+  double _rtxBw = SerialService.rtxBw; 
+  double _rtxCr = SerialService.rtxCr;
+  double _rtxPower = SerialService.rtxPower;
+  
+  double _calcEnvironmentLoss = 15.0; 
+
+  double _dipoleTubeDiameterMm = 3.0; 
+  double _dipoleTopWireSqMm = 1.0;    
+  double _kharchenkoWireSqMm = 2.0;   
+
+  bool _hasProtectiveSleeve = true;
+  double _sleeveThicknessMm = 1.0; 
+  int _antennaComboIndex = 1;
+
+  final List<double> _bwTable = [7800.0, 10400.0, 15600.0, 20800.0, 31250.0, 41700.0, 62500.0, 125000.0, 250000.0, 500000.0];
+  final Map<int, double> _snrTable = {5: -2.5, 6: -5.0, 7: -7.5, 8: -10.0, 9: -12.5, 10: -15.0, 11: -17.5, 12: -20.0};
+
+  double get _currentFreqMhz => (_rtxBand * 100.0) + _rtxChan;
+
+  double _calculateSensitivity() {
+    int bwIdx = _rtxBw.round().clamp(0, _bwTable.length - 1);
+    double bwHz = _bwTable[bwIdx];
+    int sfInt = _rtxSf.round().clamp(5, 12);
+    double snr = _snrTable[sfInt] ?? -7.5;
+    return -174.0 + (10.0 * (math.log(bwHz) / math.ln10)) + 6.0 + snr;
+  }
+
+  double _calculateAirDataRate() {
+    int bwIdx = _rtxBw.round().clamp(0, _bwTable.length - 1);
+    double bwHz = _bwTable[bwIdx];
+    int sfInt = _rtxSf.round().clamp(5, 12);
+    int crInt = _rtxCr.round().clamp(1, 4);
+    double symbolRate = bwHz / math.pow(2, sfInt);
+    return sfInt * symbolRate * (4.0 / (4.0 + crInt));
+  }
+
+  Map<String, dynamic> _calculateLinkBudget() {
+    double sensitivity = _calculateSensitivity();
+    double gTx = (_antennaComboIndex == 1) ? 5.5 : 2.15;
+    double gRx = 2.15;
+    double cableLoss = 1.0;
+
+    double eirp = _rtxPower + gTx - cableLoss;
+    double maxPathLoss = eirp + gRx - sensitivity - _calcEnvironmentLoss;
+    if (maxPathLoss < 0) maxPathLoss = 0;
+
+    double freqLog = 20 * (math.log(_currentFreqMhz) / math.ln10);
+    double exponent = (maxPathLoss - 32.44 - freqLog) / 20.0;
+    double distanceKm = math.pow(10.0, exponent).toDouble();
+    double bitRate = _calculateAirDataRate();
+
+    return {'sensitivity': sensitivity, 'eirp': eirp, 'distanceKm': distanceKm, 'bitRate': bitRate};
+  }
+
+  Map<String, dynamic> _calculateAntennaDimensions() {
+    double freqHz = _currentFreqMhz * 1e6;
+    double lambdaMm = (299792458.0 / (freqHz * 1.0003)) * 1000.0;
+    double quarterLambda = lambdaMm / 4.0;
+
+    double dielectricLoading = 1.0;
+    if (_hasProtectiveSleeve) {
+      dielectricLoading = 1.0 + (0.018 * 1.6 * (_sleeveThicknessMm / 1.0));
+    }
+
+    double radiusBot = _dipoleTubeDiameterMm / 2.0;
+    double kFactorDipoleBot = (0.97 - (2.5 / (2.0 * math.log(lambdaMm / radiusBot)))) / dielectricLoading;
+
+    double radiusTop = math.sqrt(_dipoleTopWireSqMm / math.pi);
+    double kFactorDipoleTop = (0.97 - (2.0 / (2.0 * math.log(lambdaMm / radiusTop)))) / dielectricLoading;
+
+    double dipoleArmTopMm = quarterLambda * kFactorDipoleTop - 0.006;
+    double dipoleArmBotMm = quarterLambda * kFactorDipoleBot - 0.006;
+    double kharchenkoSideMm = quarterLambda * (0.96 - (1.8 / (2.0 * math.log(lambdaMm / (2.0 * math.sqrt(_kharchenkoWireSqMm / math.pi))))));
+
+    return {'lambdaMm': lambdaMm, 'dipoleArmTopMm': dipoleArmTopMm, 'dipoleArmBotMm': dipoleArmBotMm, 'kharchenkoSideMm': kharchenkoSideMm};
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    var linkResults = _calculateLinkBudget();
+    var antResults = _calculateAntennaDimensions();
+
+    return ListView(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      children: [
+        RtxParametersExpansion(
+          rtxEn: _rtxEn, rtxBand: _rtxBand, rtxChan: _rtxChan, rtxSf: _rtxSf, rtxBw: _rtxBw, rtxCr: _rtxCr, rtxPower: _rtxPower,
+          onRtxEnChanged: (v) { setState(() => _rtxEn = v); SerialService.sendCommand("rtx_en ${_rtxEn.round()}"); },
+          onBandChanged: (v) { setState(() => _rtxBand = v); SerialService.rtxBand = v; SerialService.sendCommand("rtx_band ${v.round()}"); },
+          onChanChanged: (v) { setState(() => _rtxChan = v); SerialService.rtxChan = v; SerialService.sendCommand("rtx_chan ${v.round()}"); },
+          onSfChanged: (v) { setState(() => _rtxSf = v); SerialService.rtxSf = v; SerialService.sendCommand("rtx_sf ${v.round()}"); },
+          onBwChanged: (v) { setState(() => _rtxBw = v); SerialService.rtxBw = v; SerialService.sendCommand("rtx_bw ${v.round()}"); },
+          onCrChanged: (v) { setState(() => _rtxCr = v); SerialService.rtxCr = v; SerialService.sendCommand("rtx_cr ${v.round()}"); },
+          onPowerChanged: (v) { setState(() => _rtxPower = v); SerialService.rtxPower = v; SerialService.sendCommand("rtx_power ${v.round()}"); },
+        ),
+        RtxLinkCalculatorCard(
+          currentFreqMhz: _currentFreqMhz,
+          sensitivity: linkResults['sensitivity'],
+          distKm: linkResults['distanceKm'],
+          bitRate: linkResults['bitRate'],
+          sensitivityProgress: ((linkResults['sensitivity'] - (-140.0)) / ((-100.0) - (-140.0))).clamp(0.0, 1.0),
+          bitRateProgress: (linkResults['bitRate'] / 30000.0).clamp(0.0, 1.0),
+        ),
+        RtxAntennaExpansion(
+          antennaComboIndex: _antennaComboIndex, hasProtectiveSleeve: _hasProtectiveSleeve,
+          sleeveThicknessMm: _sleeveThicknessMm, dipoleTubeDiameterMm: _dipoleTubeDiameterMm,
+          dipoleTopWireSqMm: _dipoleTopWireSqMm, kharchenkoWireSqMm: _kharchenkoWireSqMm,
+          calcEnvironmentLoss: _calcEnvironmentLoss, antResults: antResults,
+          onComboChanged: (val) { if (val != null) setState(() => _antennaComboIndex = val); },
+          onSleeveToggle: (v) => setState(() => _hasProtectiveSleeve = v),
+          onSleeveThickChanged: (v) => setState(() => _sleeveThicknessMm = v),
+          onTubeDiamChanged: (v) => setState(() => _dipoleTubeDiameterMm = v),
+          onTopWireChanged: (v) => setState(() => _dipoleTopWireSqMm = v),
+          onKharcChanged: (v) => setState(() => _kharchenkoWireSqMm = v),
+          onEnvLossChanged: (v) => setState(() => _calcEnvironmentLoss = v),
+        ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+}
+
+// ==========================================
+// ВКЛАДКА 4: ТЕРМИНАЛ CLI
+// ==========================================
+class TerminalTab extends StatefulWidget {
+  const TerminalTab({super.key});
+
+  @override
+  State<TerminalTab> createState() => _TerminalTabState();
+}
+
+class _TerminalTabState extends State<TerminalTab> {
+  final TextEditingController _cmdController = TextEditingController();
+  late StreamSubscription<String> _sub;
+  String _displayLog = "";
+
+  @override
+  void initState() {
+    super.initState();
+    _displayLog = SerialService.terminalLog;
+    _sub = SerialService.logController.stream.listen((log) { if (mounted) setState(() => _displayLog = log); });
+  }
+
+  @override
+  void dispose() {
+    _sub.cancel();
+    _cmdController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 4.0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () => SerialService.sendCommand("info"),
+                    icon: const Icon(Icons.info_outline, size: 16, color: Colors.white),
+                    label: const Text("Read Config Info", style: TextStyle(color: Colors.white)),
+                    style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  height: 44,
+                  child: IconButton.filledTonal(
+                    onPressed: () { SerialService.terminalLog = ""; SerialService.logController.add(""); },
+                    icon: const Icon(Icons.cleaning_services, size: 18),
+                    tooltip: "Clear Log",
+                    style: IconButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 13, vertical: 4),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.06))),
+              child: SingleChildScrollView(reverse: true, child: Text(_displayLog, style: const TextStyle(fontFamily: 'monospace', color: Colors.greenAccent, fontSize: 11))),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 8.0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _cmdController,
+                    style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
+                    decoration: const InputDecoration(hintText: "Enter CLI command..."),
+                    onSubmitted: (val) { if (val.isNotEmpty) { SerialService.sendCommand(val); _cmdController.clear(); } },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton.filled(
+                  icon: const Icon(Icons.send_rounded, size: 18, color: Colors.white),
+                  onPressed: () { if (_cmdController.text.isNotEmpty) { SerialService.sendCommand(_cmdController.text); _cmdController.clear(); } },
+                  style: IconButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.all(14)),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ==========================================
+// ХУДОЖНИКИ HUD И АВИАГОРИЗОНТ
+// ==========================================
+
+// ВЕРТИКАЛЬНАЯ ШКАЛА ТАНГАЖА (PITCH HUD)
+class PitchHudScalePainter extends CustomPainter {
+  final double value; // Тангаж в градусах
+  final double minVal; // Например, -90
+  final double maxVal; // Например, 90
+  final bool isLeftSide; // Левая или правая сторона
+
+  PitchHudScalePainter({
+    required this.value,
+    required this.minVal,
+    required this.maxVal,
+    required this.isLeftSide,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paintLine = Paint()
+      ..color = Colors.white70
+      ..strokeWidth = 2.0;
+    final paintText = TextPainter(textDirection: TextDirection.ltr);
+    final indicatorPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+
+    final double x = isLeftSide ? size.width - 10.0 : 10.0;
+
+    canvas.drawLine(Offset(x, 10), Offset(x, size.height - 10), paintLine);
+
+    double range = maxVal - minVal;
+
+    for (int i = 0; i <= 6; i++) {
+      double v = minVal + (range / 6) * i;
+      double y = size.height - 10 - ((v - minVal) / range) * (size.height - 20);
+
+      canvas.drawLine(
+        Offset(isLeftSide ? x : x - 5, y),
+        Offset(isLeftSide ? x + 5 : x, y),
+        paintLine,
+      );
+
+      paintText.text = TextSpan(
+        text: "${v.toInt()}°",
+        style: const TextStyle(color: Colors.white70, fontSize: 8, fontWeight: FontWeight.bold),
+      );
+      paintText.layout();
+
+      double textX = isLeftSide ? x - 26 : x + 8;
+      paintText.paint(canvas, Offset(textX, y - 5));
+    }
+
+    double clampedVal = value.clamp(minVal, maxVal);
+    double currentY = size.height - 10 - ((clampedVal - minVal) / range) * (size.height - 20);
+
+    final path = Path();
+    if (isLeftSide) {
+      path.moveTo(x + 2, currentY);
+      path.lineTo(x + 12, currentY - 5);
+      path.lineTo(x + 12, currentY + 5);
+    } else {
+      path.moveTo(x - 2, currentY);
+      path.lineTo(x - 12, currentY - 5);
+      path.lineTo(x - 12, currentY + 5);
+    }
+    path.close();
+    canvas.drawPath(path, indicatorPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant PitchHudScalePainter oldDelegate) {
+    return oldDelegate.value != value ||
+        oldDelegate.minVal != minVal ||
+        oldDelegate.maxVal != maxVal ||
+        oldDelegate.isLeftSide != isLeftSide;
+  }
+}
+
+class YawHudScalePainter extends CustomPainter {
+  final double value;
+  final double minVal;
+  final double maxVal;
+  final bool isTop;
+
+  YawHudScalePainter({required this.value, required this.minVal, required this.maxVal, required this.isTop});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paintLine = Paint()..color = Colors.white70..strokeWidth = 2.5;
+    final paintText = TextPainter(textDirection: TextDirection.ltr);
+    final indicatorPaint = Paint()..color = Colors.white..style = PaintingStyle.fill;
+    const double margin = 34.0;
+    final y = isTop ? 14.0 : size.height - 14.0;
+
+    canvas.drawLine(Offset(margin, y), Offset(size.width - margin, y), paintLine);
+    double range = maxVal - minVal;
+
+    for (int i = 0; i <= 4; i++) {
+      double v = minVal + (range / 4) * i;
+      double x = margin + ((v - minVal) / range) * (size.width - (margin * 2));
+      canvas.drawLine(Offset(x, y), Offset(x, y + (isTop ? -5 : 5)), paintLine);
+      paintText.text = TextSpan(text: "${v.toInt()}°", style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold));
+      paintText.layout();
+      paintText.paint(canvas, Offset(x - 10, y + (isTop ? -16 : 6)));
+    }
+
+    double currentX = margin + ((value.clamp(minVal, maxVal) - minVal) / range) * (size.width - (margin * 2));
+    canvas.drawPath(Path()..moveTo(currentX, y + (isTop ? 2 : -2))..lineTo(currentX - 8, y + (isTop ? 16 : -16))..lineTo(currentX + 8, y + (isTop ? 16 : -16))..close(), indicatorPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant YawHudScalePainter oldDelegate) => oldDelegate.value != value;
+}
+
+class ArtificialHorizonPainter extends CustomPainter {
+  final double roll, pitch; 
+  ArtificialHorizonPainter({required this.roll, required this.pitch});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = math.min(size.width, size.height) / 2 - 1;
+
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.clipPath(Path()..addOval(Rect.fromCircle(center: Offset.zero, radius: radius)));
+    canvas.rotate(-roll);
+
+    double pitchOffset = pitch * 40.0;
+    canvas.drawRect(Rect.fromLTWH(-radius * 2, -radius * 3 + pitchOffset, radius * 4, radius * 3), Paint()..color = const Color(0xFF1E6091));
+    canvas.drawRect(Rect.fromLTWH(-radius * 2, pitchOffset, radius * 4, radius * 3), Paint()..color = const Color(0xFF6A4A3A));
+    canvas.drawLine(Offset(-radius * 2, pitchOffset), Offset(radius * 2, pitchOffset), Paint()..color = Colors.white..strokeWidth = 2.0);
+
+    for (int p = -3; p <= 3; p++) {
+      if (p == 0) continue;
+      canvas.drawLine(Offset(- (p.abs() % 2 == 0 ? 20.0 : 10.0) / 2, pitchOffset - (p * 20.0)), Offset((p.abs() % 2 == 0 ? 20.0 : 10.0) / 2, pitchOffset - (p * 20.0)), Paint()..color = Colors.white70..strokeWidth = 1.5);
+    }
+    canvas.restore();
+    canvas.drawCircle(center, radius, Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 3.0);
+  }
+
+  @override
+  bool shouldRepaint(covariant ArtificialHorizonPainter oldDelegate) => oldDelegate.roll != roll || oldDelegate.pitch != pitch;
+}
