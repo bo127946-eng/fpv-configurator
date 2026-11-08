@@ -1,4 +1,4 @@
-// XFire Ecosystem (Финальный монолитный вариант с блоками в FC)
+// XFire Ecosystem (Финальный монолитный вариант с перенесенными блоками телеметрии и прошивок)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -83,16 +83,13 @@ class XFireSliderTrackShape extends RectangularSliderTrackShape {
 
     final Radius radius = Radius.circular(trackRect.height / 2);
 
-    // Неактивная часть (справа от бегунка)
     final Rect inactiveRect = Rect.fromLTRB(thumbCenter.dx, trackRect.top, trackRect.right, trackRect.bottom);
     context.canvas.drawRRect(RRect.fromRectAndRadius(inactiveRect, radius), inactivePaint);
 
-    // Активная часть (слева от бегунка)
     const double dividerWidth = 3.0;
     final Rect activeRect = Rect.fromLTRB(trackRect.left, trackRect.top, thumbCenter.dx - dividerWidth, trackRect.bottom);
     context.canvas.drawRRect(RRect.fromRectAndRadius(activeRect, radius), activePaint);
 
-    // Черная полоска перед бегунком
     final Rect dividerRect = Rect.fromLTRB(thumbCenter.dx - dividerWidth, trackRect.top, thumbCenter.dx, trackRect.bottom);
     context.canvas.drawRect(dividerRect, dividerPaint);
   }
@@ -353,14 +350,12 @@ class _MainContainerState extends State<MainContainer> {
     const RemoteControlTab(),
     const RadioTab(),
     const TestsTab(),
-    const ThreeDViewTab(),
     const TerminalTab(),
-    const FlasherTab(),
   ];
 
   final List<String> _tabNames = [
     "Инфо", "Полетный контроллер FC", "Пульт RC", "Радиомодуль RTX",
-    "Калибровка и тесты", "Телеметрия", "Терминал CLI", "Прошивка FC и RC",
+    "Калибровка и тесты", "Терминал CLI",
   ];
 
   @override
@@ -725,6 +720,55 @@ class _SettingsTabState extends State<SettingsTab> {
   double _yawKp = 0.65, _yawKi = 0.010, _yawKd = 0.0;
   double _vzKp = 7.5, _vzKi = 1.3, _vzKd = 0.35;
 
+  // Переменные прошивки FC
+  bool _isFlashingFC = false;
+  double _progressFC = 0.0;
+  String _statusFC = "Готов к прошивке полетного контроллера";
+
+  @override
+  void initState() {
+    super.initState();
+    SerialService.sendCommand("mon");
+  }
+
+  @override
+  void dispose() {
+    SerialService.sendCommand("stop");
+    super.dispose();
+  }
+
+  Future<void> _flashFC() async {
+    if (!SerialService.isConnected || SerialService.usbPort == null) {
+      showAppDialog(context, "Ошибка", "Устройство не подключено по USB!", isError: true);
+      return;
+    }
+    setState(() {
+      _isFlashingFC = true;
+      _progressFC = 0.0;
+      _statusFC = "Связь с загрузчиком FC...";
+    });
+    try {
+      await SerialService.usbPort!.write(Uint8List.fromList([0x7F]));
+      await Future.delayed(const Duration(milliseconds: 300));
+      setState(() => _statusFC = "Запись прошивки FC...");
+      for (int i = 1; i <= 10; i++) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        setState(() => _progressFC = i / 10.0);
+      }
+      setState(() {
+        _isFlashingFC = false;
+        _statusFC = "УСПЕХ: Полетный контроллер прошит!";
+      });
+      if (mounted) showAppDialog(context, "Успех", "Операция прошивки FC завершена успешно!");
+    } catch (e) {
+      setState(() {
+        _isFlashingFC = false;
+        _statusFC = "ОШИБКА: $e";
+      });
+      if (mounted) showAppDialog(context, "Ошибка", "Сбой прошивки FC: $e", isError: true);
+    }
+  }
+
   Widget _buildExpansionCard(String title, String subtitle, IconData icon, List<Widget> children) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 11.0, vertical: 4.0),
@@ -746,60 +790,160 @@ class _SettingsTabState extends State<SettingsTab> {
     );
   }
 
+  Widget _buildSensorBar(String label, double value, double min, double max, String unit, Color color) {
+    double percent = ((value - min) / (max - min)).clamp(0.0, 1.0);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(label, style: const TextStyle(fontSize: 11, color: Colors.white70)), Text("${value.toStringAsFixed(2)} $unit", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color))]),
+          const SizedBox(height: 2),
+          LinearProgressIndicator(value: percent, color: color, backgroundColor: Colors.white12, minHeight: 5, borderRadius: BorderRadius.circular(3)),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      children: [
-        _buildExpansionCard("Полетные режимы и ограничения", "Режимы, углы крена, тангажа и лимиты высоты", Icons.flight, [
-          XFireSegmentedCard(title: "Режим полета", commandName: "fl_mode", options: const ["Acro", "Angle", "Horizon"], selectedIndex: _flMode.round(), onSelected: (val) { setState(() => _flMode = val.toDouble()); SerialService.sendCommand("fl_mode $val"); }),
-          XFireSliderCard(title: "Максимальный угол крена", commandName: "fl_roll_max", value: _flRollMax, min: 10.0, max: 80.0, divisions: 14, unit: "°", onChanged: (v) => setState(() => _flRollMax = v), onChangeEnd: (v) => SerialService.sendCommand("fl_roll_max $v")),
-          XFireSliderCard(title: "Максимальный угол тангажа", commandName: "fl_pitch_max", value: _flPitchMax, min: 10.0, max: 80.0, divisions: 14, unit: "°", onChanged: (v) => setState(() => _flPitchMax = v), onChangeEnd: (v) => SerialService.sendCommand("fl_pitch_max $v")),
-          XFireSliderCard(title: "Максимальная вертикальная скорость", commandName: "fl_vz_speed_max", value: _flVzSpeedMax, min: 0.5, max: 3.0, divisions: 25, unit: "м/с", onChanged: (v) => setState(() => _flVzSpeedMax = v), onChangeEnd: (v) => SerialService.sendCommand("fl_vz_speed_max $v")),
-          XFireSliderCard(title: "Минимальная высота полета", commandName: "fl_height_min", value: _flHeightMin, min: 0.0, max: 5.0, divisions: 50, unit: "м", onChanged: (v) => setState(() => _flHeightMin = v), onChangeEnd: (v) => SerialService.sendCommand("fl_height_min $v")),
-        ]),
+    double rollDeg = SerialService.gyroRoll * 57.2958;
+    double pitchDeg = SerialService.gyroPitch * 57.2958;
+    double yawDeg = SerialService.gyroYaw * 57.2958;
+    while (yawDeg > 180) yawDeg -= 360;
+    while (yawDeg < -180) yawDeg += 360;
 
-        _buildExpansionCard("Аварийная посадка и связь", "Failsafe при разряде, потере пульта и шин", Icons.warning_amber_rounded, [
-          XFireSwitchCard(title: "При разряде батареи", commandName: "fs_bat_en", value: _fsBatEn == 1, onChanged: (v) { setState(() => _fsBatEn = v ? 1 : 0); SerialService.sendCommand("fs_bat_en ${_fsBatEn.round()}"); }),
-          XFireSwitchCard(title: "При обрыве связи с пультом", commandName: "fs_rtx_en", value: _fsRtxEn == 1, onChanged: (v) { setState(() => _fsRtxEn = v ? 1 : 0); SerialService.sendCommand("fs_rtx_en ${_fsRtxEn.round()}"); }),
-          XFireSwitchCard(title: "При обрыве связи по шине SPI", commandName: "fs_spi_en", value: _fsSpiEn == 1, onChanged: (v) { setState(() => _fsSpiEn = v ? 1 : 0); SerialService.sendCommand("fs_spi_en ${_fsSpiEn.round()}"); }),
-          XFireSwitchCard(title: "При обрыве связи по шине I2C", commandName: "fs_i2c_en", value: _fsI2cEn == 1, onChanged: (v) { setState(() => _fsI2cEn = v ? 1 : 0); SerialService.sendCommand("fs_i2c_en ${_fsI2cEn.round()}"); }),
-          XFireSliderCard(title: "Порог падения качества связи", commandName: "rtx_link_warn_threshold", value: _rtxLinkWarnThreshold, min: 5, max: 90, divisions: 85, unit: "%", onChanged: (v) => setState(() => _rtxLinkWarnThreshold = v), onChangeEnd: (v) { SerialService.rtxLinkWarnThreshold = v; SerialService.sendCommand("rtx_link_warn_threshold ${v.round()}"); }),
-          XFireSwitchCard(title: "Инициатива с борта при ухудшении связи", commandName: "rtx_auto_en", value: _rtxAutoEn == 1, onChanged: (v) { setState(() => _rtxAutoEn = v ? 1 : 0); SerialService.rtxAutoEn = v ? 1.0 : 0.0; SerialService.sendCommand("rtx_auto_en ${_rtxAutoEn.round()}"); }),
-        ]),
+    return StreamBuilder<void>(
+      stream: SerialService.telemetryController.stream,
+      builder: (context, snapshot) {
+        return ListView(
+          padding: const EdgeInsets.symmetric(vertical: 8.0),
+          children: [
+            _buildExpansionCard("Телеметрия", "Авиогоризонт, HUD и датчики в реальном времени", Icons.radar, [
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 13, vertical: 4),
+                padding: const EdgeInsets.all(8),
+                height: 260,
+                decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.06))),
+                child: Column(
+                  children: [
+                    SizedBox(height: 26, child: CustomPaint(painter: YawHudScalePainter(value: yawDeg, minVal: -180, maxVal: 180, isTop: true), size: const Size(double.infinity, 26))),
+                    const SizedBox(height: 2),
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Expanded(flex: 2, child: CustomPaint(painter: PitchHudScalePainter(value: pitchDeg + (rollDeg * 0.5), minVal: -90, maxVal: 90, isLeftSide: true), size: const Size(double.infinity, double.infinity))),
+                          Expanded(flex: 4, child: Center(child: Stack(alignment: Alignment.center, children: [CustomPaint(size: const Size(155, 155), painter: ArtificialHorizonPainter(roll: SerialService.gyroRoll, pitch: SerialService.gyroPitch)), const Icon(Icons.add, color: Colors.white, size: 24)]))),
+                          Expanded(flex: 2, child: CustomPaint(painter: PitchHudScalePainter(value: pitchDeg - (rollDeg * 0.5), minVal: -90, maxVal: 90, isLeftSide: false), size: const Size(double.infinity, double.infinity))),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    SizedBox(height: 26, child: CustomPaint(painter: YawHudScalePainter(value: yawDeg, minVal: -180, maxVal: 180, isTop: false), size: const Size(double.infinity, 26))),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 4.0),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: const Color(0xFF1C1C1E), borderRadius: BorderRadius.circular(16)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text("GYROSCOPE", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+                      const SizedBox(height: 4),
+                      _buildSensorBar("Gyro Roll", SerialService.gyroRoll, -3.14, 3.14, "rad/s", Colors.blueAccent),
+                      _buildSensorBar("Gyro Pitch", SerialService.gyroPitch, -3.14, 3.14, "rad/s", Colors.blueAccent),
+                      _buildSensorBar("Gyro Yaw", SerialService.gyroYaw, -3.14, 3.14, "rad/s", Colors.blueAccent),
+                      const SizedBox(height: 6),
+                      const Text("ACCELEROMETER", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+                      const SizedBox(height: 4),
+                      _buildSensorBar("Accel X", SerialService.accelX, -2.0, 2.0, "G", Colors.cyanAccent),
+                      _buildSensorBar("Accel Y", SerialService.accelY, -2.0, 2.0, "G", Colors.cyanAccent),
+                      _buildSensorBar("Accel Z", SerialService.accelZ, -2.0, 2.0, "G", Colors.cyanAccent),
+                    ],
+                  ),
+                ),
+              ),
+            ]),
 
-        _buildExpansionCard("Радиоуправление и экспоненты", "RC Rate, Super Expo и мертвые зоны стиков", Icons.gamepad, [
-          XFireSliderCard(title: "RC Rate (Roll/Pitch)", commandName: "rc_rate", value: _rcRate, min: 0.1, max: 2.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcRate = v), onChangeEnd: (v) => SerialService.sendCommand("rc_rate $v")),
-          XFireSliderCard(title: "RC Super Expo", commandName: "rc_super_expo", value: _rcSuperExpo, min: 0.0, max: 0.9, divisions: 18, unit: "", onChanged: (v) => setState(() => _rcSuperExpo = v), onChangeEnd: (v) => SerialService.sendCommand("rc_super_expo $v")),
-          XFireSliderCard(title: "RC Stick Expo", commandName: "rc_stick_expo", value: _rcStickExpo, min: 0.0, max: 1.0, divisions: 20, unit: "", onChanged: (v) => setState(() => _rcStickExpo = v), onChangeEnd: (v) => SerialService.sendCommand("rc_stick_expo $v")),
-          XFireSliderCard(title: "Yaw Rate", commandName: "rc_yaw_rate", value: _rcYawRate, min: 0.1, max: 2.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcYawRate = v), onChangeEnd: (v) => SerialService.sendCommand("rc_yaw_rate $v")),
-          XFireSliderCard(title: "Мертвая зона стиков", commandName: "rc_deadband", value: _rcDeadband, min: 0, max: 50, divisions: 50, unit: "PWM", onChanged: (v) => setState(() => _rcDeadband = v), onChangeEnd: (v) => SerialService.sendCommand("rc_deadband $v")),
-          XFireSliderCard(title: "Сглаживание RC", commandName: "rc_filter_smoothing", value: _rcFilterSmoothing, min: 0.05, max: 1.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcFilterSmoothing = v), onChangeEnd: (v) => SerialService.sendCommand("rc_filter_smoothing $v")),
-        ]),
+            _buildExpansionCard("Прошивка полетного контроллера", "Обновление прошивки STM32 по USB", Icons.memory, [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 4.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(_statusFC, style: const TextStyle(fontFamily: 'monospace', fontSize: 11, color: Colors.greenAccent)),
+                    const SizedBox(height: 10),
+                    LinearProgressIndicator(value: _progressFC, color: Colors.blueAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 40,
+                      child: ElevatedButton.icon(
+                        onPressed: _isFlashingFC ? null : _flashFC,
+                        icon: const Icon(Icons.memory, size: 16),
+                        label: Text(_isFlashingFC ? "Прошивка FC..." : "Прошить полетный контроллер", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ]),
 
-        _buildExpansionCard("Питание и батарея", "Настройка LiPo ячеек и порогов просадки", Icons.battery_charging_full, [
-          XFireSliderCard(title: "Количество ячеек LiPo", commandName: "bat_cells", value: _batCells, min: 1, max: 6, divisions: 5, unit: "S", onChanged: (v) => setState(() => _batCells = v), onChangeEnd: (v) => SerialService.sendCommand("bat_cells ${v.round()}")),
-          XFireSliderCard(title: "Порог Failsafe батареи", commandName: "bat_fs_v", value: _batFsV, min: 6.0, max: 25.0, divisions: 190, unit: "В", onChanged: (v) => setState(() => _batFsV = v), onChangeEnd: (v) => SerialService.sendCommand("bat_fs_v $v")),
-          XFireSliderCard(title: "Скорость посадки Failsafe", commandName: "fs_speed", value: _fsSpeed, min: 0.2, max: 2.0, divisions: 18, unit: "м/с", onChanged: (v) => setState(() => _fsSpeed = v), onChangeEnd: (v) => SerialService.sendCommand("fs_speed $v")),
-        ]),
+            _buildExpansionCard("Полетные режимы и ограничения", "Режимы, углы крена, тангажа и лимиты высоты", Icons.flight, [
+              XFireSegmentedCard(title: "Режим полета", commandName: "fl_mode", options: const ["Acro", "Angle", "Horizon"], selectedIndex: _flMode.round(), onSelected: (val) { setState(() => _flMode = val.toDouble()); SerialService.sendCommand("fl_mode $val"); }),
+              XFireSliderCard(title: "Максимальный угол крена", commandName: "fl_roll_max", value: _flRollMax, min: 10.0, max: 80.0, divisions: 14, unit: "°", onChanged: (v) => setState(() => _flRollMax = v), onChangeEnd: (v) => SerialService.sendCommand("fl_roll_max $v")),
+              XFireSliderCard(title: "Максимальный угол тангажа", commandName: "fl_pitch_max", value: _flPitchMax, min: 10.0, max: 80.0, divisions: 14, unit: "°", onChanged: (v) => setState(() => _flPitchMax = v), onChangeEnd: (v) => SerialService.sendCommand("fl_pitch_max $v")),
+              XFireSliderCard(title: "Максимальная вертикальная скорость", commandName: "fl_vz_speed_max", value: _flVzSpeedMax, min: 0.5, max: 3.0, divisions: 25, unit: "м/с", onChanged: (v) => setState(() => _flVzSpeedMax = v), onChangeEnd: (v) => SerialService.sendCommand("fl_vz_speed_max $v")),
+              XFireSliderCard(title: "Минимальная высота полета", commandName: "fl_height_min", value: _flHeightMin, min: 0.0, max: 5.0, divisions: 50, unit: "м", onChanged: (v) => setState(() => _flHeightMin = v), onChangeEnd: (v) => SerialService.sendCommand("fl_height_min $v")),
+            ]),
 
-        _buildExpansionCard("Лидар и фильтры сенсоров", "Фильтрация гироскопов, акселерометра и Notch", Icons.waves, [
-          XFireSwitchCard(title: "Включить лидар VL53L1X", commandName: "lidar_en", value: _lidarEn == 1, onChanged: (v) { setState(() => _lidarEn = v ? 1 : 0); SerialService.sendCommand("lidar_en ${_lidarEn.round()}"); }),
-          XFireSliderCard(title: "Фильтр гироскопа LPF", commandName: "gyro_filter_alpha", value: _gyroFilterAlpha, min: 0.05, max: 1.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _gyroFilterAlpha = v), onChangeEnd: (v) => SerialService.sendCommand("gyro_filter_alpha $v")),
-          XFireSliderCard(title: "Фильтр акселерометра LPF", commandName: "acc_filter_alpha", value: _accFilterAlpha, min: 0.01, max: 1.0, divisions: 99, unit: "", onChanged: (v) => setState(() => _accFilterAlpha = v), onChangeEnd: (v) => SerialService.sendCommand("acc_filter_alpha $v")),
-          XFireSwitchCard(title: "Динамический Notch фильтр", commandName: "filter_dyn_notch_en", value: _filterDynNotchEn == 1, onChanged: (v) { setState(() => _filterDynNotchEn = v ? 1 : 0); SerialService.sendCommand("filter_dyn_notch_en ${_filterDynNotchEn.round()}"); }),
-          XFireSliderCard(title: "Центр Notch фильтра", commandName: "filter_notch_freq", value: _filterNotchFreq, min: 30, max: 150, divisions: 120, unit: "Гц", onChanged: (v) => setState(() => _filterNotchFreq = v), onChangeEnd: (v) => SerialService.sendCommand("filter_notch_freq $v")),
-        ]),
+            _buildExpansionCard("Аварийная посадка и связь", "Failsafe при разряде, потере пульта и шин", Icons.warning_amber_rounded, [
+              XFireSwitchCard(title: "При разряде батареи", commandName: "fs_bat_en", value: _fsBatEn == 1, onChanged: (v) { setState(() => _fsBatEn = v ? 1 : 0); SerialService.sendCommand("fs_bat_en ${_fsBatEn.round()}"); }),
+              XFireSwitchCard(title: "При обрыве связи с пультом", commandName: "fs_rtx_en", value: _fsRtxEn == 1, onChanged: (v) { setState(() => _fsRtxEn = v ? 1 : 0); SerialService.sendCommand("fs_rtx_en ${_fsRtxEn.round()}"); }),
+              XFireSwitchCard(title: "При обрыве связи по шине SPI", commandName: "fs_spi_en", value: _fsSpiEn == 1, onChanged: (v) { setState(() => _fsSpiEn = v ? 1 : 0); SerialService.sendCommand("fs_spi_en ${_fsSpiEn.round()}"); }),
+              XFireSwitchCard(title: "При обрыве связи по шине I2C", commandName: "fs_i2c_en", value: _fsI2cEn == 1, onChanged: (v) { setState(() => _fsI2cEn = v ? 1 : 0); SerialService.sendCommand("fs_i2c_en ${_fsI2cEn.round()}"); }),
+              XFireSliderCard(title: "Порог падения качества связи", commandName: "rtx_link_warn_threshold", value: _rtxLinkWarnThreshold, min: 5, max: 90, divisions: 85, unit: "%", onChanged: (v) => setState(() => _rtxLinkWarnThreshold = v), onChangeEnd: (v) { SerialService.rtxLinkWarnThreshold = v; SerialService.sendCommand("rtx_link_warn_threshold ${v.round()}"); }),
+              XFireSwitchCard(title: "Инициатива с борта при ухудшении связи", commandName: "rtx_auto_en", value: _rtxAutoEn == 1, onChanged: (v) { setState(() => _rtxAutoEn = v ? 1 : 0); SerialService.rtxAutoEn = v ? 1.0 : 0.0; SerialService.sendCommand("rtx_auto_en ${_rtxAutoEn.round()}"); }),
+            ]),
 
-        _buildExpansionCard("ПИД-регуляторы (PID Tunings)", "Настройки Kp, Ki, Kd для осей Roll, Pitch, Yaw и Vz", Icons.tune, [
-          PidAxisCardWidget(axisName: "Roll Axis (Rate)", kpCmd: "roll_kp", kiCmd: "roll_ki", kdCmd: "roll_kd", kp: _rollKp, ki: _rollKi, kd: _rollKd, onUpdate: (p, i, d) { setState(() { _rollKp = p; _rollKi = i; _rollKd = d; }); SerialService.sendCommand("roll_kp $p"); SerialService.sendCommand("roll_ki $i"); SerialService.sendCommand("roll_kd $d"); }),
-          PidAxisCardWidget(axisName: "Pitch Axis (Rate)", kpCmd: "pitch_kp", kiCmd: "pitch_ki", kdCmd: "pitch_kd", kp: _pitchKp, ki: _pitchKi, kd: _pitchKd, onUpdate: (p, i, d) { setState(() { _pitchKp = p; _pitchKi = i; _pitchKd = d; }); SerialService.sendCommand("pitch_kp $p"); SerialService.sendCommand("pitch_ki $i"); SerialService.sendCommand("pitch_kd $d"); }),
-          PidAxisCardWidget(axisName: "Yaw Axis (Rate)", kpCmd: "yaw_kp", kiCmd: "yaw_ki", kdCmd: "yaw_kd", kp: _yawKp, ki: _yawKi, kd: _yawKd, onUpdate: (p, i, d) { setState(() { _yawKp = p; _yawKi = i; _yawKd = d; }); SerialService.sendCommand("yaw_kp $p"); SerialService.sendCommand("yaw_ki $i"); SerialService.sendCommand("yaw_kd $d"); }),
-          PidAxisCardWidget(axisName: "Vertical Speed Axis (Vz)", kpCmd: "vz_kp", kiCmd: "vz_ki", kdCmd: "vz_kd", kp: _vzKp, ki: _vzKi, kd: _vzKd, onUpdate: (p, i, d) { setState(() { _vzKp = p; _vzKi = i; _vzKd = d; }); SerialService.sendCommand("vz_kp $p"); SerialService.sendCommand("vz_ki $i"); SerialService.sendCommand("vz_kd $d"); }),
-        ]),
+            _buildExpansionCard("Радиоуправление и экспоненты", "RC Rate, Super Expo и мертвые зоны стиков", Icons.gamepad, [
+              XFireSliderCard(title: "RC Rate (Roll/Pitch)", commandName: "rc_rate", value: _rcRate, min: 0.1, max: 2.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcRate = v), onChangeEnd: (v) => SerialService.sendCommand("rc_rate $v")),
+              XFireSliderCard(title: "RC Super Expo", commandName: "rc_super_expo", value: _rcSuperExpo, min: 0.0, max: 0.9, divisions: 18, unit: "", onChanged: (v) => setState(() => _rcSuperExpo = v), onChangeEnd: (v) => SerialService.sendCommand("rc_super_expo $v")),
+              XFireSliderCard(title: "RC Stick Expo", commandName: "rc_stick_expo", value: _rcStickExpo, min: 0.0, max: 1.0, divisions: 20, unit: "", onChanged: (v) => setState(() => _rcStickExpo = v), onChangeEnd: (v) => SerialService.sendCommand("rc_stick_expo $v")),
+              XFireSliderCard(title: "Yaw Rate", commandName: "rc_yaw_rate", value: _rcYawRate, min: 0.1, max: 2.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcYawRate = v), onChangeEnd: (v) => SerialService.sendCommand("rc_yaw_rate $v")),
+              XFireSliderCard(title: "Мертвая зона стиков", commandName: "rc_deadband", value: _rcDeadband, min: 0, max: 50, divisions: 50, unit: "PWM", onChanged: (v) => setState(() => _rcDeadband = v), onChangeEnd: (v) => SerialService.sendCommand("rc_deadband $v")),
+              XFireSliderCard(title: "Сглаживание RC", commandName: "rc_filter_smoothing", value: _rcFilterSmoothing, min: 0.05, max: 1.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcFilterSmoothing = v), onChangeEnd: (v) => SerialService.sendCommand("rc_filter_smoothing $v")),
+            ]),
 
-        const SizedBox(height: 24),
-      ],
+            _buildExpansionCard("Питание и батарея", "Настройка LiPo ячеек и порогов просадки", Icons.battery_charging_full, [
+              XFireSliderCard(title: "Количество ячеек LiPo", commandName: "bat_cells", value: _batCells, min: 1, max: 6, divisions: 5, unit: "S", onChanged: (v) => setState(() => _batCells = v), onChangeEnd: (v) => SerialService.sendCommand("bat_cells ${v.round()}")),
+              XFireSliderCard(title: "Порог Failsafe батареи", commandName: "bat_fs_v", value: _batFsV, min: 6.0, max: 25.0, divisions: 190, unit: "В", onChanged: (v) => setState(() => _batFsV = v), onChangeEnd: (v) => SerialService.sendCommand("bat_fs_v $v")),
+              XFireSliderCard(title: "Скорость посадки Failsafe", commandName: "fs_speed", value: _fsSpeed, min: 0.2, max: 2.0, divisions: 18, unit: "м/с", onChanged: (v) => setState(() => _fsSpeed = v), onChangeEnd: (v) => SerialService.sendCommand("fs_speed $v")),
+            ]),
+
+            _buildExpansionCard("Лидар и фильтры сенсоров", "Фильтрация гироскопов, акселерометра и Notch", Icons.waves, [
+              XFireSwitchCard(title: "Включить лидар VL53L1X", commandName: "lidar_en", value: _lidarEn == 1, onChanged: (v) { setState(() => _lidarEn = v ? 1 : 0); SerialService.sendCommand("lidar_en ${_lidarEn.round()}"); }),
+              XFireSliderCard(title: "Фильтр гироскопа LPF", commandName: "gyro_filter_alpha", value: _gyroFilterAlpha, min: 0.05, max: 1.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _gyroFilterAlpha = v), onChangeEnd: (v) => SerialService.sendCommand("gyro_filter_alpha $v")),
+              XFireSliderCard(title: "Фильтр акселерометра LPF", commandName: "acc_filter_alpha", value: _accFilterAlpha, min: 0.01, max: 1.0, divisions: 99, unit: "", onChanged: (v) => setState(() => _accFilterAlpha = v), onChangeEnd: (v) => SerialService.sendCommand("acc_filter_alpha $v")),
+              XFireSwitchCard(title: "Динамический Notch фильтр", commandName: "filter_dyn_notch_en", value: _filterDynNotchEn == 1, onChanged: (v) { setState(() => _filterDynNotchEn = v ? 1 : 0); SerialService.sendCommand("filter_dyn_notch_en ${_filterDynNotchEn.round()}"); }),
+              XFireSliderCard(title: "Центр Notch фильтра", commandName: "filter_notch_freq", value: _filterNotchFreq, min: 30, max: 150, divisions: 120, unit: "Гц", onChanged: (v) => setState(() => _filterNotchFreq = v), onChangeEnd: (v) => SerialService.sendCommand("filter_notch_freq $v")),
+            ]),
+
+            _buildExpansionCard("ПИД-регуляторы (PID Tunings)", "Настройки Kp, Ki, Kd для осей Roll, Pitch, Yaw и Vz", Icons.tune, [
+              PidAxisCardWidget(axisName: "Roll Axis (Rate)", kpCmd: "roll_kp", kiCmd: "roll_ki", kdCmd: "roll_kd", kp: _rollKp, ki: _rollKi, kd: _rollKd, onUpdate: (p, i, d) { setState(() { _rollKp = p; _rollKi = i; _rollKd = d; }); SerialService.sendCommand("roll_kp $p"); SerialService.sendCommand("roll_ki $i"); SerialService.sendCommand("roll_kd $d"); }),
+              PidAxisCardWidget(axisName: "Pitch Axis (Rate)", kpCmd: "pitch_kp", kiCmd: "pitch_ki", kdCmd: "pitch_kd", kp: _pitchKp, ki: _pitchKi, kd: _pitchKd, onUpdate: (p, i, d) { setState(() { _pitchKp = p; _pitchKi = i; _pitchKd = d; }); SerialService.sendCommand("pitch_kp $p"); SerialService.sendCommand("pitch_ki $i"); SerialService.sendCommand("pitch_kd $d"); }),
+              PidAxisCardWidget(axisName: "Yaw Axis (Rate)", kpCmd: "yaw_kp", kiCmd: "yaw_ki", kdCmd: "yaw_kd", kp: _yawKp, ki: _yawKi, kd: _yawKd, onUpdate: (p, i, d) { setState(() { _yawKp = p; _yawKi = i; _yawKd = d; }); SerialService.sendCommand("yaw_kp $p"); SerialService.sendCommand("yaw_ki $i"); SerialService.sendCommand("yaw_kd $d"); }),
+              PidAxisCardWidget(axisName: "Vertical Speed Axis (Vz)", kpCmd: "vz_kp", kiCmd: "vz_ki", kdCmd: "vz_kd", kp: _vzKp, ki: _vzKi, kd: _vzKd, onUpdate: (p, i, d) { setState(() { _vzKp = p; _vzKi = i; _vzKd = d; }); SerialService.sendCommand("vz_kp $p"); SerialService.sendCommand("vz_ki $i"); SerialService.sendCommand("vz_kd $d"); }),
+            ]),
+
+            const SizedBox(height: 24),
+          ],
+        );
+      },
     );
   }
 }
@@ -852,6 +996,64 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
   double _rcProtocol = 1.0; 
   double _txPowerW = 100.0;
 
+  // Переменные прошивки пульта
+  bool _isFlashingRC = false;
+  double _progressRC = 0.0;
+  String _statusRC = "Готов к прошивке пульта управления";
+
+  Future<void> _flashRC() async {
+    if (!SerialService.isConnected || SerialService.usbPort == null) {
+      showAppDialog(context, "Ошибка", "Устройство не подключено по USB!", isError: true);
+      return;
+    }
+    setState(() {
+      _isFlashingRC = true;
+      _progressRC = 0.0;
+      _statusRC = "Связь с загрузчиком пульта...";
+    });
+    try {
+      await SerialService.usbPort!.write(Uint8List.fromList([0x7F]));
+      await Future.delayed(const Duration(milliseconds: 300));
+      setState(() => _statusRC = "Запись прошивки пульта...");
+      for (int i = 1; i <= 10; i++) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        setState(() => _progressRC = i / 10.0);
+      }
+      setState(() {
+        _isFlashingRC = false;
+        _statusRC = "УСПЕХ: Пульт успешно прошит!";
+      });
+      if (mounted) showAppDialog(context, "Успех", "Операция прошивки пульта завершена успешно!");
+    } catch (e) {
+      setState(() {
+        _isFlashingRC = false;
+        _statusRC = "ОШИБКА: $e";
+      });
+      if (mounted) showAppDialog(context, "Ошибка", "Сбой прошивки пульта: $e", isError: true);
+    }
+  }
+
+  Widget _buildExpansionCard(String title, String subtitle, IconData icon, List<Widget> children) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 11.0, vertical: 4.0),
+      child: Card(
+        margin: EdgeInsets.zero,
+        child: ExpansionTile(
+          leading: Icon(icon, color: Colors.amberAccent, size: 20),
+          title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amberAccent)),
+          subtitle: Text(subtitle, style: const TextStyle(fontSize: 10, color: Colors.white70)),
+          iconColor: Colors.amberAccent,
+          collapsedIconColor: Colors.white54,
+          children: [
+            const SizedBox(height: 8),
+            ...children,
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildSectionHeader(String title, IconData icon) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(13, 16, 13, 6),
@@ -870,6 +1072,31 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
+        _buildExpansionCard("Прошивка пульта", "Обновление микропрограммы пульта управления", Icons.gamepad, [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 4.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_statusRC, style: const TextStyle(fontFamily: 'monospace', fontSize: 11, color: Colors.greenAccent)),
+                const SizedBox(height: 10),
+                LinearProgressIndicator(value: _progressRC, color: Colors.blueAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  height: 40,
+                  child: ElevatedButton.icon(
+                    onPressed: _isFlashingRC ? null : _flashRC,
+                    icon: const Icon(Icons.gamepad, size: 16),
+                    label: Text(_isFlashingRC ? "Прошивка пульта..." : "Прошить пульт управления", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ]),
+
         _buildSectionHeader("КАЛИБРОВКА СТИКОВ ПУЛЬТА", Icons.gamepad),
         XFireCard(
           child: Column(
@@ -1859,235 +2086,4 @@ class ArtificialHorizonPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant ArtificialHorizonPainter oldDelegate) => oldDelegate.roll != roll || oldDelegate.pitch != pitch;
-}
-
-// ==========================================
-// ВКЛАДКА 6: ТЕЛЕМЕТРИЯ
-// ==========================================
-class ThreeDViewTab extends StatefulWidget {
-  const ThreeDViewTab({super.key});
-
-  @override
-  State<ThreeDViewTab> createState() => _ThreeDViewTabState();
-}
-
-class _ThreeDViewTabState extends State<ThreeDViewTab> {
-  late StreamSubscription<void> _telemetrySub;
-
-  @override
-  void initState() {
-    super.initState();
-    _telemetrySub = SerialService.telemetryController.stream.listen((_) { if (mounted) setState(() {}); });
-    SerialService.sendCommand("mon");
-  }
-
-  @override
-  void dispose() {
-    _telemetrySub.cancel();
-    SerialService.sendCommand("stop");
-    super.dispose();
-  }
-
-  Widget _buildSensorBar(String label, double value, double min, double max, String unit, Color color) {
-    double percent = ((value - min) / (max - min)).clamp(0.0, 1.0);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(label, style: const TextStyle(fontSize: 11, color: Colors.white70)), Text("${value.toStringAsFixed(2)} $unit", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color))]),
-          const SizedBox(height: 2),
-          LinearProgressIndicator(value: percent, color: color, backgroundColor: Colors.white12, minHeight: 5, borderRadius: BorderRadius.circular(3)),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    double rollDeg = SerialService.gyroRoll * 57.2958;
-    double pitchDeg = SerialService.gyroPitch * 57.2958;
-    double yawDeg = SerialService.gyroYaw * 57.2958;
-    while (yawDeg > 180) yawDeg -= 360;
-    while (yawDeg < -180) yawDeg += 360;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Column(
-        children: [
-          Expanded(
-            flex: 6,
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 13, vertical: 4),
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.06))),
-              child: Column(
-                children: [
-                  SizedBox(height: 26, child: CustomPaint(painter: YawHudScalePainter(value: yawDeg, minVal: -180, maxVal: 180, isTop: true), size: const Size(double.infinity, 26))),
-                  const SizedBox(height: 2),
-                  Expanded(
-                    child: Row(
-                      children: [
-                        Expanded(flex: 2, child: CustomPaint(painter: PitchHudScalePainter(value: pitchDeg + (rollDeg * 0.5), minVal: -90, maxVal: 90, isLeftSide: true), size: const Size(double.infinity, double.infinity))),
-                        Expanded(flex: 4, child: Center(child: Stack(alignment: Alignment.center, children: [CustomPaint(size: const Size(195, 195), painter: ArtificialHorizonPainter(roll: SerialService.gyroRoll, pitch: SerialService.gyroPitch)), const Icon(Icons.add, color: Colors.white, size: 24)]))),
-                        Expanded(flex: 2, child: CustomPaint(painter: PitchHudScalePainter(value: pitchDeg - (rollDeg * 0.5), minVal: -90, maxVal: 90, isLeftSide: false), size: const Size(double.infinity, double.infinity))),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  SizedBox(height: 26, child: CustomPaint(painter: YawHudScalePainter(value: yawDeg, minVal: -180, maxVal: 180, isTop: false), size: const Size(double.infinity, 26))),
-                ],
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 4,
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 13, vertical: 4),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: const Color(0xFF1C1C1E), borderRadius: BorderRadius.circular(16)),
-              child: ListView(
-                padding: EdgeInsets.zero,
-                children: [
-                  const Text("GYROSCOPE", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
-                  const SizedBox(height: 4),
-                  _buildSensorBar("Gyro Roll", SerialService.gyroRoll, -3.14, 3.14, "rad/s", Colors.blueAccent),
-                  _buildSensorBar("Gyro Pitch", SerialService.gyroPitch, -3.14, 3.14, "rad/s", Colors.blueAccent),
-                  _buildSensorBar("Gyro Yaw", SerialService.gyroYaw, -3.14, 3.14, "rad/s", Colors.blueAccent),
-                  const SizedBox(height: 6),
-                  const Text("ACCELEROMETER", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
-                  const SizedBox(height: 4),
-                  _buildSensorBar("Accel X", SerialService.accelX, -2.0, 2.0, "G", Colors.cyanAccent),
-                  _buildSensorBar("Accel Y", SerialService.accelY, -2.0, 2.0, "G", Colors.cyanAccent),
-                  _buildSensorBar("Accel Z", SerialService.accelZ, -2.0, 2.0, "G", Colors.cyanAccent),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ==========================================
-// ВКЛАДКА 7: ПРОШИВКА FC И RC
-// ==========================================
-class FlasherTab extends StatefulWidget {
-  const FlasherTab({super.key});
-
-  @override
-  State<FlasherTab> createState() => _FlasherTabState();
-}
-
-class _FlasherTabState extends State<FlasherTab> {
-  bool _isFlashingFC = false;
-  bool _isFlashingRC = false;
-  double _progressFC = 0.0;
-  double _progressRC = 0.0;
-  String _statusFC = "Готов к прошивке полетного контроллера";
-  String _statusRC = "Готов к прошивке пульта управления";
-
-  Future<void> _flashDevice(bool isFC) async {
-    if (!SerialService.isConnected || SerialService.usbPort == null) {
-      showAppDialog(context, "Ошибка", "Устройство не подключено по USB!", isError: true);
-      return;
-    }
-    setState(() {
-      if (isFC) { _isFlashingFC = true; _progressFC = 0.0; _statusFC = "Связь с загрузчиком FC..."; }
-      else { _isFlashingRC = true; _progressRC = 0.0; _statusRC = "Связь с загрузчиком пульта..."; }
-    });
-    try {
-      await SerialService.usbPort!.write(Uint8List.fromList([0x7F]));
-      await Future.delayed(const Duration(milliseconds: 300));
-      setState(() {
-        if (isFC) _statusFC = "Запись прошивки FC...";
-        else _statusRC = "Запись прошивки пульта...";
-      });
-      for (int i = 1; i <= 10; i++) {
-        await Future.delayed(const Duration(milliseconds: 100));
-        setState(() {
-          if (isFC) _progressFC = i / 10.0;
-          else _progressRC = i / 10.0;
-        });
-      }
-      setState(() {
-        if (isFC) { _isFlashingFC = false; _statusFC = "УСПЕХ: Полетный контроллер прошит!"; }
-        else { _isFlashingRC = false; _statusRC = "УСПЕХ: Пульт успешно прошит!"; }
-      });
-      if (mounted) showAppDialog(context, "Успех", "Операция прошивки завершена успешно!");
-    } catch (e) {
-      setState(() {
-        if (isFC) { _isFlashingFC = false; _statusFC = "ОШИБКА: $e"; }
-        else { _isFlashingRC = false; _statusRC = "ОШИБКА: $e"; }
-      });
-      if (mounted) showAppDialog(context, "Ошибка", "Сбой прошивки: $e", isError: true);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      children: [
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-          child: Text("ЗАГРУЗЧИКИ ЭКОСИСТЕМЫ XFIRE", style: TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
-        ),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text("1. Загрузчик полетного контроллера (STM32)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                const SizedBox(height: 6),
-                Text(_statusFC, style: const TextStyle(fontFamily: 'monospace', fontSize: 11, color: Colors.greenAccent)),
-                const SizedBox(height: 10),
-                LinearProgressIndicator(value: _progressFC, color: Colors.blueAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  height: 40,
-                  child: ElevatedButton.icon(
-                    onPressed: _isFlashingFC ? null : () => _flashDevice(true),
-                    icon: const Icon(Icons.memory, size: 16),
-                    label: Text(_isFlashingFC ? "Прошивка FC..." : "Прошить полетный контроллер", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text("2. Загрузчик пульта управления", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                const SizedBox(height: 6),
-                Text(_statusRC, style: const TextStyle(fontFamily: 'monospace', fontSize: 11, color: Colors.greenAccent)),
-                const SizedBox(height: 10),
-                LinearProgressIndicator(value: _progressRC, color: Colors.blueAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  height: 40,
-                  child: ElevatedButton.icon(
-                    onPressed: _isFlashingRC ? null : () => _flashDevice(false),
-                    icon: const Icon(Icons.gamepad, size: 16),
-                    label: Text(_isFlashingRC ? "Прошивка пульта..." : "Прошить пульт управления", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 24),
-      ],
-    );
-  }
 }
