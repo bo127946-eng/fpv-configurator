@@ -1,4 +1,4 @@
-// XFire Ecosystem (Финальный вариант с вертикальными шкалами тангажа)
+// XFire Ecosystem (Финальный вариант с развернутыми курсорами и отступом 2мм)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -1114,83 +1114,103 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
     );
   }
 
-  Widget _buildSectionHeader(String title, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(13, 16, 13, 6),
-      child: Row(
-        children: [
-          Icon(icon, size: 16, color: Colors.amberAccent),
-          const SizedBox(width: 8),
-          Text(title, style: const TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
-        _buildExpansionCard("Прошивка пульта", "Обновление микропрограммы пульта управления", Icons.gamepad, [
+        _buildExpansionCard("Калибровка стиков", "Настройка нейтрали и мертвых зон", Icons.gamepad, [
+          XFireActionCard(
+            title: "Калибровка нейтрали стиков",
+            commandName: "rc_cal_sticks",
+            onTap: () {
+              if (!SerialService.isConnected) {
+                showAppDialog(context, "Ошибка", "Устройство пульта не подключено!", isError: true);
+              } else {
+                SerialService.sendCommand("rc_cal_sticks");
+                showAppDialog(context, "Калибровка", "Команда калибровки нейтрали отправлена в пульт.");
+              }
+            },
+          ),
+          XFireSliderCard(
+            title: "Мертвая зона стиков (Deadband)",
+            commandName: "rc_tx_deadband",
+            value: _stickDeadband,
+            min: 0,
+            max: 50,
+            divisions: 50,
+            unit: "PWM",
+            onChanged: (v) => setState(() => _stickDeadband = v),
+            onChangeEnd: (v) => SerialService.sendCommand("rc_tx_deadband ${v.round()}"),
+          ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 4.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(_statusRC, style: const TextStyle(fontFamily: 'monospace', fontSize: 11, color: Colors.greenAccent)),
-                const SizedBox(height: 10),
-                LinearProgressIndicator(value: _progressRC, color: Colors.blueAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  height: 40,
-                  child: ElevatedButton.icon(
-                    onPressed: _isFlashingRC ? null : _flashRC,
-                    icon: const Icon(Icons.gamepad, size: 16),
-                    label: Text(_isFlashingRC ? "Прошивка пульта..." : "Прошить пульт управления", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                  ),
+            padding: const EdgeInsets.symmetric(horizontal: 11.0, vertical: 4.0),
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(_statusRC, style: const TextStyle(fontFamily: 'monospace', fontSize: 11, color: Colors.greenAccent)),
+                    const SizedBox(height: 10),
+                    LinearProgressIndicator(value: _progressRC, color: Colors.blueAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 40,
+                      child: ElevatedButton.icon(
+                        onPressed: _isFlashingRC ? null : _flashRC,
+                        icon: const Icon(Icons.gamepad, size: 16),
+                        label: Text(_isFlashingRC ? "Прошивка пульта..." : "Прошить пульт управления", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ]),
 
-        _buildSectionHeader("КАЛИБРОВКА СТИКОВ ПУЛЬТА", Icons.gamepad),
-        XFireActionCard(
-          title: "Калибровка нейтрали стиков",
-          commandName: "rc_cal_sticks",
-          onTap: () {
-            if (!SerialService.isConnected) {
-              showAppDialog(context, "Ошибка", "Устройство пульта не подключено!", isError: true);
-            } else {
-              SerialService.sendCommand("rc_cal_sticks");
-              showAppDialog(context, "Калибровка", "Команда калибровки нейтрали отправлена в пульт.");
-            }
-          },
-        ),
-
-        XFireSliderCard(title: "Мертвая зона стиков (Deadband)", commandName: "rc_tx_deadband", value: _stickDeadband, min: 0, max: 50, divisions: 50, unit: "PWM", onChanged: (v) => setState(() => _stickDeadband = v), onChangeEnd: (v) => SerialService.sendCommand("rc_tx_deadband ${v.round()}")),
-
-        _buildSectionHeader("ПРОТОКОЛ И РАДИОПЕРЕДАТЧИК ПУЛЬТА", Icons.wifi),
-        XFireSegmentedCard(title: "Протокол связи с модулем", commandName: "rc_proto", options: const ["CRSF", "XFire RTX", "SBUS"], selectedIndex: _rcProtocol.round(), onSelected: (val) { setState(() => _rcProtocol = val.toDouble()); SerialService.sendCommand("rc_proto $val"); }),
-        XFireSliderCard(title: "Выходная мощность передатчика пульта", commandName: "tx_power_mw", value: _txPowerW, min: 10, max: 1000, divisions: 99, unit: "мВт", onChanged: (v) => setState(() => _txPowerW = v), onChangeEnd: (v) => SerialService.sendCommand("tx_power_mw ${v.round()}")),
-
-        _buildSectionHeader("ТЕСТ КАНАЛОВ ПУЛЬТА (CH1 - CH4)", Icons.bar_chart),
-        XFireCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text("Монитор каналов управления в реальном времени", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-              const SizedBox(height: 12),
-              _buildChannelBar("Channel 1 (Roll)", 1500, Colors.blueAccent),
-              _buildChannelBar("Channel 2 (Pitch)", 1500, Colors.cyanAccent),
-              _buildChannelBar("Channel 3 (Throttle)", 1000, Colors.greenAccent),
-              _buildChannelBar("Channel 4 (Yaw)", 1500, Colors.amberAccent),
-            ],
+        _buildExpansionCard("Протокол", "Выбор протокола связи и мощности передатчика", Icons.wifi, [
+          XFireSegmentedCard(
+            title: "Протокол связи с модулем",
+            commandName: "rc_proto",
+            options: const ["CRSF", "XFire RTX", "SBUS"],
+            selectedIndex: _rcProtocol.round(),
+            onSelected: (val) {
+              setState(() => _rcProtocol = val.toDouble());
+              SerialService.sendCommand("rc_proto $val");
+            },
           ),
-        ),
+          XFireSliderCard(
+            title: "Выходная мощность передатчика пульта",
+            commandName: "tx_power_mw",
+            value: _txPowerW,
+            min: 10,
+            max: 1000,
+            divisions: 99,
+            unit: "мВт",
+            onChanged: (v) => setState(() => _txPowerW = v),
+            onChangeEnd: (v) => SerialService.sendCommand("tx_power_mw ${v.round()}"),
+          ),
+        ]),
+
+        _buildExpansionCard("Тест каналов", "Монитор каналов управления в реальном времени", Icons.bar_chart, [
+          XFireCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Каналы пульта (CH1 - CH4)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                const SizedBox(height: 12),
+                _buildChannelBar("Channel 1 (Roll)", 1500, Colors.blueAccent),
+                _buildChannelBar("Channel 2 (Pitch)", 1500, Colors.cyanAccent),
+                _buildChannelBar("Channel 3 (Throttle)", 1000, Colors.greenAccent),
+                _buildChannelBar("Channel 4 (Yaw)", 1500, Colors.amberAccent),
+              ],
+            ),
+          ),
+        ]),
         const SizedBox(height: 24),
       ],
     );
@@ -1843,7 +1863,7 @@ class PitchHudScalePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final paintLine = Paint()
       ..color = Colors.white70
-      ..strokeWidth = 2.0;
+      ..strokeWidth = 2.5;
     final paintText = TextPainter(textDirection: TextDirection.ltr);
     final indicatorPaint = Paint()
       ..color = Colors.white
@@ -1851,42 +1871,49 @@ class PitchHudScalePainter extends CustomPainter {
 
     final double x = isLeftSide ? size.width - 10.0 : 10.0;
 
-    canvas.drawLine(Offset(x, 10), Offset(x, size.height - 10), paintLine);
+    // Основная вертикальная линия шкалы
+    canvas.drawLine(Offset(x, 14), Offset(x, size.height - 14), paintLine);
 
     double range = maxVal - minVal;
 
     for (int i = 0; i <= 6; i++) {
       double v = minVal + (range / 6) * i;
-      double y = size.height - 10 - ((v - minVal) / range) * (size.height - 20);
+      double y = size.height - 14 - ((v - minVal) / range) * (size.height - 28);
 
+      // Засечки шкалы направлены НАРУЖУ
       canvas.drawLine(
-        Offset(isLeftSide ? x : x - 5, y),
-        Offset(isLeftSide ? x + 5 : x, y),
+        Offset(x, y),
+        Offset(isLeftSide ? x - 6 : x + 6, y),
         paintLine,
       );
 
       paintText.text = TextSpan(
         text: "${v.toInt()}°",
-        style: const TextStyle(color: Colors.white70, fontSize: 8, fontWeight: FontWeight.bold),
+        style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
       );
       paintText.layout();
 
-      double textX = isLeftSide ? x - 26 : x + 8;
+      double textX = isLeftSide ? x - 28 : x + 10;
       paintText.paint(canvas, Offset(textX, y - 5));
     }
 
     double clampedVal = value.clamp(minVal, maxVal);
-    double currentY = size.height - 10 - ((clampedVal - minVal) / range) * (size.height - 20);
+    double currentY = size.height - 14 - ((clampedVal - minVal) / range) * (size.height - 28);
 
+    // Курсор развернут к шкале с отступом ~6 пикселей (2мм)
     final path = Path();
     if (isLeftSide) {
-      path.moveTo(x + 2, currentY);
-      path.lineTo(x + 12, currentY - 5);
-      path.lineTo(x + 12, currentY + 5);
+      // Левая шкала: линия справа от курсора, острие указывает налево (к шкале)
+      double cursorX = x - 6; // Отступ 6 пикселей (2мм) влево от линии шкалы
+      path.moveTo(cursorX + 10, currentY);
+      path.lineTo(cursorX, currentY - 5);
+      path.lineTo(cursorX, currentY + 5);
     } else {
-      path.moveTo(x - 2, currentY);
-      path.lineTo(x - 12, currentY - 5);
-      path.lineTo(x - 12, currentY + 5);
+      // Правая шкала: линия слева от курсора, острие указывает направо (к шкале)
+      double cursorX = x + 6; // Отступ 6 пикселей (2мм) вправо от линии шкалы
+      path.moveTo(cursorX - 10, currentY);
+      path.lineTo(cursorX, currentY - 5);
+      path.lineTo(cursorX, currentY + 5);
     }
     path.close();
     canvas.drawPath(path, indicatorPaint);
@@ -1930,7 +1957,22 @@ class YawHudScalePainter extends CustomPainter {
     }
 
     double currentX = margin + ((value.clamp(minVal, maxVal) - minVal) / range) * (size.width - (margin * 2));
-    canvas.drawPath(Path()..moveTo(currentX, y + (isTop ? 2 : -2))..lineTo(currentX - 8, y + (isTop ? 16 : -16))..lineTo(currentX + 8, y + (isTop ? 16 : -16))..close(), indicatorPaint);
+    
+    // Курсор развернут к шкале с отступом ~6 пикселей (2мм)
+    final path = Path();
+    if (isTop) {
+      double cursorY = y + 6; // Отступ 6 пикселей вниз от верхней линии шкалы
+      path.moveTo(currentX, cursorY + 10);
+      path.lineTo(currentX - 5, cursorY);
+      path.lineTo(currentX + 5, cursorY);
+    } else {
+      double cursorY = y - 6; // Отступ 6 пикселей вверх от нижней линии шкалы
+      path.moveTo(currentX, cursorY - 10);
+      path.lineTo(currentX - 5, cursorY);
+      path.lineTo(currentX + 5, cursorY);
+    }
+    path.close();
+    canvas.drawPath(path, indicatorPaint);
   }
 
   @override
