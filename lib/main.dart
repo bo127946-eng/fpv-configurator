@@ -1,4 +1,4 @@
-// XFire Ecosystem (Оптимизированный и чистый вариант)
+// XFire Ecosystem (Финальный оптимизированный вариант)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -372,13 +372,11 @@ class _MainContainerState extends State<MainContainer> {
     const SettingsTab(),
     const RemoteControlTab(),
     const RadioTab(),
-    const TestsTab(),
     const TerminalTab(),
   ];
 
   final List<String> _tabNames = [
-    "Инфо", "Полетный контроллер FC", "Пульт RC", "Радиомодуль RTX",
-    "Калибровка и тесты", "Терминал CLI",
+    "Инфо", "Полетный контроллер FC", "Пульт RC", "Радиомодуль RTX", "Терминал CLI",
   ];
 
   @override
@@ -827,6 +825,37 @@ class _SettingsTabState extends State<SettingsTab> {
     );
   }
 
+  Widget _buildActionCard({required BuildContext context, required String title, required String subtitleCommand, required VoidCallback onTap}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 4.0),
+      child: Card(
+        margin: EdgeInsets.zero,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsets.all(14.0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                      const SizedBox(height: 2),
+                      Text(subtitleCommand, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.white54),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     double rollDeg = SerialService.gyroRoll * 57.2958;
@@ -913,6 +942,61 @@ class _SettingsTabState extends State<SettingsTab> {
                   ],
                 ),
               ),
+            ]),
+
+            _buildExpansionCard("Тесты оборудования", "Аппаратные, исполнительные и системные тесты", Icons.rule, [
+              _buildActionCard(context: context, title: "Тест подключения MPU6050", subtitleCommand: "test_mpu", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_mpu"); showAppDialog(context, "Тест MPU6050", "Команда отправлена."); } }),
+              _buildActionCard(context: context, title: "Тест подключения SX126x", subtitleCommand: "test_sx", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_sx"); showAppDialog(context, "Тест SX126x", "Проверка SPI запущена!"); } }),
+              _buildActionCard(context: context, title: "Тест подключения лидара", subtitleCommand: "test_lidar", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_lidar"); showAppDialog(context, "Тест лидара", "Запрос отправлен!"); } }),
+              _buildActionCard(context: context, title: "Тест моторов 25%", subtitleCommand: "test_motor", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_motor"); showAppDialog(context, "Внимание", "Тест моторов (25%) активирован!", isError: true); } }),
+              _buildActionCard(context: context, title: "Тест PID 25%", subtitleCommand: "test_pid", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_pid"); showAppDialog(context, "Тест PID", "Стресс-тест ПИД активирован."); } }),
+              _buildActionCard(context: context, title: "Тест связи с пультом", subtitleCommand: "test_rc", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_rc"); showAppDialog(context, "Тест RC", "Диагностика пакетов запущена."); } }),
+              XFireCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("Тест смены канала связи с пультом", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                    const SizedBox(height: 2),
+                    const Text("test_rc_can", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 10),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text("Текущий канал автопоиска:", style: TextStyle(fontSize: 11, color: Colors.white70)),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
+                          child: const Text("ПОИСК КОНТРОЛЛЕРА", style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 11)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 36,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          if (!SerialService.isConnected) {
+                            showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
+                          } else {
+                            SerialService.sendCommand("test_rc_can");
+                            showAppDialog(context, "Успех", "Отправлена команда: test_rc_can (контроллер определит канал автоматически)");
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                        child: const Text("Запустить автопоиск канала", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ]),
+
+            _buildExpansionCard("Калибровки датчиков", "Калибровка гироскопа, акселерометра и лидара", Icons.tune, [
+              _buildActionCard(context: context, title: "Калибровка гироскопа", subtitleCommand: "cal_gyro", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("cal_gyro"); showAppDialog(context, "Успех", "Калибровка гироскопа запущена!"); } }),
+              _buildActionCard(context: context, title: "Калибровка акселерометра", subtitleCommand: "cal_acc", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("cal_acc"); showAppDialog(context, "Успех", "Калибровка акселерометра запущена!"); } }),
+              _buildActionCard(context: context, title: "Калибровка лидара (Xtalk)", subtitleCommand: "cal_lidar", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("cal_lidar"); showAppDialog(context, "Успех", "Калибровка лидара запущена!"); } }),
+              _buildActionCard(context: context, title: "Применить настройки RTX", subtitleCommand: "rtx_write", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("rtx_write"); showAppDialog(context, "Успех", "Настройки радиомодуля применены!"); } }),
             ]),
 
             _buildExpansionCard("Полетные режимы и ограничения", "Режимы, углы крена, тангажа и лимиты высоты", Icons.flight, [
@@ -1670,135 +1754,7 @@ class _RadioTabState extends State<RadioTab> {
 }
 
 // ==========================================
-// ВКЛАДКА 4: КАЛИБРОВКА И ТЕСТЫ
-// ==========================================
-class TestsTab extends StatefulWidget {
-  const TestsTab({super.key});
-
-  @override
-  State<TestsTab> createState() => _TestsTabState();
-}
-
-class _TestsTabState extends State<TestsTab> {
-  int _selectedChannel = 0;
-
-  Widget _buildSectionHeader(String title, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(13, 16, 13, 6),
-      child: Row(
-        children: [
-          Icon(icon, size: 16, color: Colors.amberAccent),
-          const SizedBox(width: 8),
-          Text(title, style: const TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActionCard({required BuildContext context, required String title, required String subtitleCommand, required IconData icon, required Color color, required VoidCallback onTap}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 4.0),
-      child: Card(
-        margin: EdgeInsets.zero,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          child: Padding(
-            padding: const EdgeInsets.all(14.0),
-            child: Row(
-              children: [
-                Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: color, size: 22)),
-                const SizedBox(width: 16),
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)), const SizedBox(height: 2), Text(subtitleCommand, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace'))])),
-                const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.white54),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      children: [
-        _buildSectionHeader("АППАРАТНЫЕ ТЕСТЫ ОБОРУДОВАНИЯ", Icons.memory),
-        _buildActionCard(context: context, title: "Тест подключения MPU6050", subtitleCommand: "test_mpu", icon: Icons.explore, color: Colors.cyanAccent, onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_mpu"); showAppDialog(context, "Тест MPU6050", "Команда отправлена."); } }),
-        _buildActionCard(context: context, title: "Тест подключения SX126x", subtitleCommand: "test_sx", icon: Icons.wifi, color: Colors.blueAccent, onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_sx"); showAppDialog(context, "Тест SX126x", "Проверка SPI запущена!"); } }),
-        _buildActionCard(context: context, title: "Тест подключения лидара", subtitleCommand: "test_lidar", icon: Icons.radar, color: Colors.orangeAccent, onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_lidar"); showAppDialog(context, "Тест лидара", "Запрос отправлен!"); } }),
-
-        _buildSectionHeader("ИСПОЛНИТЕЛЬНЫЕ И СИСТЕМНЫЕ ТЕСТЫ", Icons.gavel),
-        _buildActionCard(context: context, title: "Тест моторов 25%", subtitleCommand: "test_motor", icon: Icons.sports_motorsports, color: Colors.redAccent, onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_motor"); showAppDialog(context, "Внимание", "Тест моторов (25%) активирован!", isError: true); } }),
-        _buildActionCard(context: context, title: "Тест PID 25%", subtitleCommand: "test_pid", icon: Icons.tune, color: Colors.purpleAccent, onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_pid"); showAppDialog(context, "Тест PID", "Стресс-тест ПИД активирован."); } }),
-        _buildActionCard(context: context, title: "Тест связи с пультом", subtitleCommand: "test_rc", icon: Icons.gamepad, color: Colors.greenAccent, onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_rc"); showAppDialog(context, "Тест RC", "Диагностика пакетов запущена."); } }),
-
-        XFireCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text("Тест смены канала связи с пультом", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amberAccent)),
-              const Text("test_rc_can", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
-              const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text("Выбор канала (0 - 99):", style: TextStyle(fontSize: 11, color: Colors.white70)),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
-                    child: Text("КАНАЛ: $_selectedChannel", style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 12)),
-                  ),
-                ],
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 3.0),
-                child: SliderTheme(
-                  data: SliderTheme.of(context).copyWith(
-                    trackShape: XFireSliderTrackShape(),
-                    trackHeight: 6.0,
-                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 20.0),
-                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10.0),
-                  ),
-                  child: Slider(value: _selectedChannel.toDouble(), min: 0, max: 99, divisions: 99, onChanged: (v) => setState(() => _selectedChannel = v.round())),
-                ),
-              ),
-              const SizedBox(height: 6),
-              SizedBox(
-                width: double.infinity,
-                height: 36,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    if (!SerialService.isConnected) {
-                      showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
-                    } else {
-                      SerialService.sendCommand("test_rc_can $_selectedChannel");
-                      showAppDialog(context, "Успех", "Отправлена команда: test_rc_can $_selectedChannel");
-                    }
-                  },
-                  icon: const Icon(Icons.wifi_channel, size: 16),
-                  label: const Text("Выполнить тест смены канала", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        _buildSectionHeader("КАЛИБРОВКИ ДАТЧИКОВ", Icons.explore),
-        _buildActionCard(context: context, title: "Калибровка гироскопа", subtitleCommand: "cal_gyro", icon: Icons.explore_outlined, color: Colors.blueAccent, onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("cal_gyro"); showAppDialog(context, "Успех", "Калибровка гироскопа запущена!"); } }),
-        _buildActionCard(context: context, title: "Калибровка акселерометра", subtitleCommand: "cal_acc", icon: Icons.grid_view, color: Colors.cyanAccent, onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("cal_acc"); showAppDialog(context, "Успех", "Калибровка акселерометра запущена!"); } }),
-        _buildActionCard(context: context, title: "Калибровка лидара (Xtalk)", subtitleCommand: "cal_lidar", icon: Icons.radar, color: Colors.orangeAccent, onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("cal_lidar"); showAppDialog(context, "Успех", "Калибровка лидара запущена!"); } }),
-        _buildSectionHeader("СИСТЕМНЫЕ КОМАНДЫ", Icons.settings),
-        _buildActionCard(context: context, title: "Применить настройки RTX", subtitleCommand: "rtx_write", icon: Icons.save, color: Colors.greenAccent, onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("rtx_write"); showAppDialog(context, "Успех", "Настройки радиомодуля применены!"); } }),
-      ],
-    );
-  }
-}
-
-// ==========================================
-// ВКЛАДКА 5: ТЕРМИНАЛ CLI
+// ВКЛАДКА 4: ТЕРМИНАЛ CLI
 // ==========================================
 class TerminalTab extends StatefulWidget {
   const TerminalTab({super.key});
