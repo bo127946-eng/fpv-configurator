@@ -1039,7 +1039,7 @@ class _SettingsTabState extends State<SettingsTab> {
             ]),
 
             // БЛОК 5: РАДИОМОДУЛЬ RTX НА БОРТУ
-            _buildExpansionCard("Радиомодуль RTX (на борту)", "Параметры беспроводного интерфейса дрона", CpuUsage() /*icon*/, Icons.wifi, [
+            _buildExpansionCard("Радиомодуль RTX (на борту)", "Параметры беспроводного интерфейса дрона", Icons.wifi, [
               XFireSwitchCard(title: "Включить RTX модуль", commandName: "rtx_en", value: _rtxEn == 1, onChanged: (v) { setState(() => _rtxEn = v ? 1.0 : 0.0); SerialService.sendCommand("rtx_en ${_rtxEn.round()}"); }),
               XFireSliderCard(title: "Диапазон частот (x100 МГц)", commandName: "rtx_band", value: _rtxBand, min: 1, max: 9, divisions: 8, unit: "", onChanged: (v) => setState(() => _rtxBand = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_band ${v.round()}")),
               XFireSliderCard(title: "Сетевой адрес устройства", commandName: "rtx_addr", value: _rtxAddr, min: 0, max: 65535, divisions: 100, unit: "", onChanged: (v) => setState(() => _rtxAddr = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_addr ${v.round()}")),
