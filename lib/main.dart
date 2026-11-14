@@ -1,4 +1,4 @@
-// XFire Ecosystem v3.6 (Полный объединенный код конфигуратора - Обновлено под 2312 / 9450 / 4S / 915MHz)
+// XFire Ecosystem v3.6 (Обновлено: центрированный выпадающий список, USB Serial в конце выпадающего меню)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -322,7 +322,7 @@ class XFireSegmentedCard extends StatelessWidget {
 }
 
 // ==========================================
-// ИСПРАВЛЕННЫЙ ПИД ВИДЖЕТ (StatefulWidget против сброса фокуса)
+// ПИД ВИДЖЕТ (StatefulWidget)
 // ==========================================
 class PidAxisCardWidget extends StatefulWidget {
   final String axisName;
@@ -451,6 +451,7 @@ class MainContainer extends StatefulWidget {
 
 class _MainContainerState extends State<MainContainer> {
   int _currentIndex = 0;
+  late StreamSubscription<String> _sub;
   
   final List<Widget> _tabs = [
     const InfoConnectionTab(),
@@ -465,41 +466,111 @@ class _MainContainerState extends State<MainContainer> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _sub = SerialService.logController.stream.listen((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _sub.cancel();
+    super.dispose();
+  }
+
+  Future<void> _toggleUsbConnectionFromDropdown() async {
+    if (SerialService.isConnected) {
+      await SerialService.disconnect();
+    } else {
+      List<UsbDevice> devices = await UsbSerial.listDevices();
+      if (devices.isEmpty) {
+        SerialService.appendLog(">> ERROR: No USB devices found\n");
+      } else {
+        SerialService.usbPort = await devices[0].create();
+        bool openResult = await SerialService.usbPort!.open();
+        if (!openResult) {
+          SerialService.appendLog(">> ERROR: Failed to open USB port\n");
+        } else {
+          await SerialService.usbPort!.setPortParameters(115200, UsbPort.DATABITS_8, UsbPort.STOPBITS_1, UsbPort.PARITY_NONE);
+          SerialService.isConnected = true;
+          SerialService.appendLog(">> USB Connected: ${devices[0].deviceName}\n");
+          SerialService._usbSubscription = SerialService.usbPort!.inputStream!.listen((data) => SerialService.handleIncomingData(data));
+        }
+      }
+    }
+    setState(() {});
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: const Color(0xFF121214),
         elevation: 0,
-        title: Row(
-          children: [
-            const Icon(Icons.local_fire_department, color: Colors.amberAccent, size: 20),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1C1C1E),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white12),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<int>(
-                    value: _currentIndex,
-                    dropdownColor: const Color(0xFF1C1C1E),
-                    isExpanded: true,
-                    icon: const Icon(Icons.arrow_drop_down, color: Colors.amberAccent),
-                    items: List.generate(_tabs.length, (index) {
-                      return DropdownMenuItem<int>(
-                        value: index,
-                        child: Text(_tabNames[index], style: TextStyle(color: index == 0 ? Colors.greenAccent : Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-                      );
-                    }),
-                    onChanged: (val) { if (val != null) setState(() => _currentIndex = val); },
+        centerTitle: true,
+        title: Center(
+          child: Container(
+            width: 280,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1C1C1E),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white12),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<int>(
+                value: _currentIndex,
+                dropdownColor: const Color(0xFF1C1C1E),
+                borderRadius: BorderRadius.circular(16),
+                isExpanded: true,
+                icon: const Icon(Icons.arrow_drop_down, color: Colors.amberAccent),
+                items: [
+                  ...List.generate(_tabs.length, (index) {
+                    return DropdownMenuItem<int>(
+                      value: index,
+                      child: Text(
+                        _tabNames[index],
+                        style: TextStyle(
+                          color: index == 0 ? Colors.greenAccent : Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    );
+                  }),
+                  // USB Serial в конце выпадающего списка
+                  DropdownMenuItem<int>(
+                    value: _tabs.length,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          "Соединение USB Serial",
+                          style: TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                        Icon(
+                          Icons.usb,
+                          color: SerialService.isConnected ? Colors.greenAccent : Colors.redAccent,
+                          size: 16,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                ],
+                onChanged: (val) {
+                  if (val != null) {
+                    if (val < _tabs.length) {
+                      setState(() => _currentIndex = val);
+                    } else {
+                      _toggleUsbConnectionFromDropdown();
+                    }
+                  }
+                },
               ),
             ),
-          ],
+          ),
         ),
       ),
       body: Center(
@@ -522,7 +593,6 @@ class SerialService {
   static StreamController<String> logController = StreamController.broadcast();
   static StreamController<void> telemetryController = StreamController.broadcast();
 
-  // Дефолты для 915 МГц (Band 9 = 900 MHz + Channel 15 = 915 MHz)
   static double rtxBand = 9.0; 
   static double rtxChan = 15.0; 
   static double rtxSf = 7.0;
@@ -593,7 +663,7 @@ class DocSection {
 }
 
 // ==========================================
-// ВКЛАДКА 0: ИНФО
+// ВКЛАДКА 0: ИНФО (БЕЗ БЛОКА USB)
 // ==========================================
 class InfoConnectionTab extends StatefulWidget {
   const InfoConnectionTab({super.key});
@@ -603,41 +673,13 @@ class InfoConnectionTab extends StatefulWidget {
 }
 
 class _InfoConnectionTabState extends State<InfoConnectionTab> {
-  String _displayResponse = SerialService.lastResponse;
-  bool _isConnected = SerialService.isConnected;
-  late StreamSubscription<String> _sub;
   List<DocSection> _sections = [];
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _sub = SerialService.logController.stream.listen((_) {
-      if (mounted) setState(() { _displayResponse = SerialService.lastResponse; _isConnected = SerialService.isConnected; });
-    });
     _loadDocumentation();
-  }
-
-  @override
-  void dispose() {
-    _sub.cancel();
-    super.dispose();
-  }
-
-  Future<void> _toggleConnection() async {
-    if (_isConnected) {
-      await SerialService.disconnect();
-    } else {
-      List<UsbDevice> devices = await UsbSerial.listDevices();
-      if (devices.isEmpty) { setState(() => SerialService.lastResponse = "No USB devices found"); return; }
-      SerialService.usbPort = await devices[0].create();
-      bool openResult = await SerialService.usbPort!.open();
-      if (!openResult) { setState(() => SerialService.lastResponse = "Failed to open USB port"); return; }
-      await SerialService.usbPort!.setPortParameters(115200, UsbPort.DATABITS_8, UsbPort.STOPBITS_1, UsbPort.PARITY_NONE);
-      SerialService.isConnected = true;
-      setState(() { _isConnected = true; SerialService.lastResponse = "USB Connected: ${devices[0].deviceName}"; });
-      SerialService._usbSubscription = SerialService.usbPort!.inputStream!.listen((data) => SerialService.handleIncomingData(data));
-    }
   }
 
   Future<void> _loadDocumentation() async {
@@ -700,44 +742,6 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text("УПРАВЛЕНИЕ ПОДКЛЮЧЕНИЕМ USB", style: TextStyle(fontSize: 10, color: Colors.amberAccent, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(color: (_isConnected ? Colors.greenAccent : Colors.amberAccent).withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
-                      child: const Icon(Icons.usb, color: Colors.greenAccent, size: 18),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(child: Text(_displayResponse, style: const TextStyle(fontFamily: 'monospace', color: Colors.greenAccent, fontSize: 11, fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis)),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  height: 40,
-                  child: ElevatedButton.icon(
-                    onPressed: _toggleConnection,
-                    icon: Icon(_isConnected ? Icons.link_off : Icons.link, size: 16),
-                    label: Text(_isConnected ? "Disconnect USB" : "Connect USB", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _isConnected ? Colors.red.shade900 : Colors.blueAccent,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -781,7 +785,7 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
 }
 
 // ==========================================
-// ВКЛАДКА 1: ПОЛЕТНЫЙ КОНТРОЛЛЕР FC (ДЕФОЛТЫ ПОД 2312 / 9450 / 4S / 915МГц)
+// ВКЛАДКА 1: ПОЛЕТНЫЙ КОНТРОЛЛЕР FC
 // ==========================================
 class SettingsTab extends StatefulWidget {
   const SettingsTab({super.key});
@@ -791,16 +795,16 @@ class SettingsTab extends StatefulWidget {
 }
 
 class _SettingsTabState extends State<SettingsTab> {
-  double _flMode = 1;          // Дефолт: Angle для устойчивого полета на 2312/9450
+  double _flMode = 1;          
   double _flRollMax = 25.0;    
   double _flPitchMax = 25.0;   
   double _flVzSpeedMax = 1.2;  
   double _flHeightMin = 0.0;   
 
   double _rtxEn = 1;
-  double _rtxBand = 9;         // 915 МГц (900 МГц базовая)
+  double _rtxBand = 9;         
   double _rtxAddr = 0;
-  double _rtxChan = 15;        // 915 МГц канал (+15 МГц)
+  double _rtxChan = 15;        
   double _rtxSf = 7;
   double _rtxBw = 7;
   double _rtxCr = 1;
@@ -816,7 +820,6 @@ class _SettingsTabState extends State<SettingsTab> {
   double _fsI2cEn = 1;
   double _fsVzSpeed = 0.5;
 
-  // Плавные RC настройки для 9450 пропеллеров (инерционных)
   double _rcRate = 0.35;
   double _rcSuperExpo = 0.03;
   double _rcStickExpo = 0.45;
@@ -827,7 +830,6 @@ class _SettingsTabState extends State<SettingsTab> {
   double _rcHorizonTransition = 0.75;
   double _rcFilterSmoothing = 0.35;
 
-  // Дефолты для 4S аккумулятора (14.8В номинал, Failsafe на 13.8В)
   double _batCells = 4;
   double _batFsV = 13.8;
   double _batFilterAlpha = 0.05;
@@ -838,12 +840,11 @@ class _SettingsTabState extends State<SettingsTab> {
   double _gyroFilterAlpha = 0.10;
   double _accFilterAlpha = 0.10;
   double _filterMode = 3; 
-  double _filterNotchFreq = 120.0; // Скорректировано под вибрации 2312/9450
+  double _filterNotchFreq = 120.0; 
   double _filterNotchBw = 20.0;
   double _filterDynMinHz = 70.0;
   double _filterDynMaxHz = 220.0;
 
-  // ПИД-регуляторы под инерцию моторов 2312 и пропеллеров 9450
   double _rollKp = 0.45, _rollKi = 0.010, _rollKd = 0.018;
   double _pitchKp = 0.45, _pitchKi = 0.010, _pitchKd = 0.018;
   double _yawKp = 0.60, _yawKi = 0.010, _yawKd = 0.0;
@@ -947,7 +948,6 @@ class _SettingsTabState extends State<SettingsTab> {
         return ListView(
           padding: const EdgeInsets.symmetric(vertical: 8.0),
           children: [
-            // 1 БЛОК: ПОЛЕТНЫЕ РЕЖИМЫ
             _buildExpansionCard("Полетные режимы и ограничения", "Режимы, углы крена, тангажа и лимиты высоты", Icons.flight, [
               XFireSegmentedCard(title: "Режим полета", commandName: "fl_mode", options: const ["Acro", "Angle", "Horizon"], selectedIndex: _flMode.round(), onSelected: (val) { setState(() => _flMode = val.toDouble()); SerialService.sendCommand("fl_mode $val"); }),
               XFireSliderCard(title: "Максимальный угол крена", commandName: "fl_roll_max", value: _flRollMax, min: 10.0, max: 80.0, divisions: 14, unit: "°", onChanged: (v) => setState(() => _flRollMax = v), onChangeEnd: (v) => SerialService.sendCommand("fl_roll_max $v")),
@@ -956,7 +956,6 @@ class _SettingsTabState extends State<SettingsTab> {
               XFireSliderCard(title: "Минимальная высота полета", commandName: "fl_height_min", value: _flHeightMin, min: 0.0, max: 5.0, divisions: 50, unit: "м", onChanged: (v) => setState(() => _flHeightMin = v), onChangeEnd: (v) => SerialService.sendCommand("fl_height_min $v")),
             ]),
 
-            // 2 БЛОК: РАДИОУПРАВЛЕНИЕ И ЭКСПОНЕНТЫ
             _buildExpansionCard("Радиоуправление и экспоненты", "RC Rate, Super Expo и мертвые зоны стиков", Icons.gamepad, [
               XFireSliderCard(title: "RC Rate (Roll/Pitch)", commandName: "rc_rate", value: _rcRate, min: 0.1, max: 2.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcRate = v), onChangeEnd: (v) => SerialService.sendCommand("rc_rate $v")),
               XFireSliderCard(title: "RC Super Expo", commandName: "rc_super_expo", value: _rcSuperExpo, min: 0.0, max: 0.9, divisions: 18, unit: "", onChanged: (v) => setState(() => _rcSuperExpo = v), onChangeEnd: (v) => SerialService.sendCommand("rc_super_expo $v")),
@@ -969,7 +968,6 @@ class _SettingsTabState extends State<SettingsTab> {
               XFireSliderCard(title: "Сглаживание RC", commandName: "rc_filter_smoothing", value: _rcFilterSmoothing, min: 0.05, max: 1.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcFilterSmoothing = v), onChangeEnd: (v) => SerialService.sendCommand("rc_filter_smoothing $v")),
             ]),
 
-            // 3 БЛОК: АВАРИЙНАЯ ПОСАДКА И FAILSAFE
             _buildExpansionCard("Аварийная посадка и Failsafe", "Реакция на разряд, потерю связи и шин", Icons.warning_amber_rounded, [
               XFireSwitchCard(title: "RC Failsafe (пакеты пульта)", commandName: "rc_fs_en", value: _rcFsEn == 1, onChanged: (v) { setState(() => _rcFsEn = v ? 1.0 : 0.0); SerialService.sendCommand("rc_fs_en ${_rcFsEn.round()}"); }),
               XFireSwitchCard(title: "При разряде батареи", commandName: "fs_bat_en", value: _fsBatEn == 1, onChanged: (v) { setState(() => _fsBatEn = v ? 1.0 : 0.0); SerialService.sendCommand("fs_bat_en ${_fsBatEn.round()}"); }),
@@ -981,7 +979,6 @@ class _SettingsTabState extends State<SettingsTab> {
               XFireSliderCard(title: "Скорость аварийного снижения Failsafe", commandName: "fs_vz_speed", value: _fsVzSpeed, min: 0.2, max: 2.0, divisions: 18, unit: "м/с", onChanged: (v) => setState(() => _fsVzSpeed = v), onChangeEnd: (v) => SerialService.sendCommand("fs_vz_speed $v")),
             ]),
 
-            // 4 БЛОК: ПИТАНИЕ И БАТАРЕЯ (4S ЛиПо)
             _buildExpansionCard("Питание и батарея (4S LiPo)", "Настройка 4S ячеек и фильтрации питания", Icons.battery_charging_full, [
               XFireSliderCard(title: "Количество ячеек LiPo", commandName: "bat_cells", value: _batCells, min: 1, max: 6, divisions: 5, unit: "S", onChanged: (v) => setState(() => _batCells = v), onChangeEnd: (v) => SerialService.sendCommand("bat_cells ${v.round()}")),
               XFireSliderCard(title: "Порог Failsafe батареи 4S", commandName: "bat_fs_v", value: _batFsV, min: 6.0, max: 25.0, divisions: 190, unit: "В", onChanged: (v) => setState(() => _batFsV = v), onChangeEnd: (v) => SerialService.sendCommand("bat_fs_v $v")),
@@ -1562,6 +1559,7 @@ class RtxAntennaExpansion extends StatelessWidget {
                       child: DropdownButton<int>(
                         value: antennaComboIndex,
                         dropdownColor: const Color(0xFF242428),
+                        borderRadius: BorderRadius.circular(12),
                         isExpanded: true,
                         icon: const Icon(Icons.arrow_drop_down, color: Colors.amberAccent),
                         style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold),
@@ -1704,8 +1702,8 @@ class RadioTab extends StatefulWidget {
 
 class _RadioTabState extends State<RadioTab> {
   double _rtxEn = 1;
-  double _rtxBand = SerialService.rtxBand; // 9 (900 МГц)
-  double _rtxChan = SerialService.rtxChan; // 15 (915 МГц)
+  double _rtxBand = SerialService.rtxBand; 
+  double _rtxChan = SerialService.rtxChan; 
   double _rtxSf = SerialService.rtxSf;
   double _rtxBw = SerialService.rtxBw; 
   double _rtxCr = SerialService.rtxCr;
@@ -1724,7 +1722,7 @@ class _RadioTabState extends State<RadioTab> {
   final List<double> _bwTable = [7800.0, 10400.0, 15600.0, 20800.0, 31250.0, 41700.0, 62500.0, 125000.0, 250000.0, 500000.0];
   final Map<int, double> _snrTable = {5: -2.5, 6: -5.0, 7: -7.5, 8: -10.0, 9: -12.5, 10: -15.0, 11: -17.5, 12: -20.0};
 
-  double get _currentFreqMhz => (_rtxBand * 100.0) + _rtxChan; // 9 * 100 + 15 = 915 МГц
+  double get _currentFreqMhz => (_rtxBand * 100.0) + _rtxChan; 
 
   double _calculateSensitivity() {
     int bwIdx = _rtxBw.round().clamp(0, _bwTable.length - 1);
@@ -1854,7 +1852,7 @@ class _RadioTabState extends State<RadioTab> {
 }
 
 // ==========================================
-// ВКЛАДКА 4: ТЕРМИНАЛ CLI
+// ВКЛАДКА 4: ТЕРМИНАЛ CLI (ЧИСТЫЙ ТЕРМИНАЛ)
 // ==========================================
 class TerminalTab extends StatefulWidget {
   const TerminalTab({super.key});
