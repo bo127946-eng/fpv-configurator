@@ -1,4 +1,4 @@
-// XFire Ecosystem (Полный объединенный код конфигуратора - Обновлено)
+// XFire Ecosystem v3.6 (Полный объединенный код конфигуратора - Обновлено под 2312 / 9450 / 4S / 915MHz)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -321,13 +321,59 @@ class XFireSegmentedCard extends StatelessWidget {
   }
 }
 
-class PidAxisCardWidget extends StatelessWidget {
+// ==========================================
+// ИСПРАВЛЕННЫЙ ПИД ВИДЖЕТ (StatefulWidget против сброса фокуса)
+// ==========================================
+class PidAxisCardWidget extends StatefulWidget {
   final String axisName;
   final String kpCmd, kiCmd, kdCmd;
   final double kp, ki, kd;
   final Function(double, double, double) onUpdate;
 
-  const PidAxisCardWidget({super.key, required this.axisName, required this.kpCmd, required this.kiCmd, required this.kdCmd, required this.kp, required this.ki, required this.kd, required this.onUpdate});
+  const PidAxisCardWidget({
+    super.key,
+    required this.axisName,
+    required this.kpCmd,
+    required this.kiCmd,
+    required this.kdCmd,
+    required this.kp,
+    required this.ki,
+    required this.kd,
+    required this.onUpdate,
+  });
+
+  @override
+  State<PidAxisCardWidget> createState() => _PidAxisCardWidgetState();
+}
+
+class _PidAxisCardWidgetState extends State<PidAxisCardWidget> {
+  late TextEditingController _kpController;
+  late TextEditingController _kiController;
+  late TextEditingController _kdController;
+
+  @override
+  void initState() {
+    super.initState();
+    _kpController = TextEditingController(text: widget.kp.toString());
+    _kiController = TextEditingController(text: widget.ki.toString());
+    _kdController = TextEditingController(text: widget.kd.toString());
+  }
+
+  @override
+  void didUpdateWidget(covariant PidAxisCardWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.kp != widget.kp) _kpController.text = widget.kp.toString();
+    if (oldWidget.ki != widget.ki) _kiController.text = widget.ki.toString();
+    if (oldWidget.kd != widget.kd) _kdController.text = widget.kd.toString();
+  }
+
+  @override
+  void dispose() {
+    _kpController.dispose();
+    _kiController.dispose();
+    _kdController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -335,17 +381,17 @@ class PidAxisCardWidget extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(axisName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+          Text(widget.axisName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
           const SizedBox(height: 2),
-          Text("$kpCmd / $kiCmd / $kdCmd", style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 9, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
+          Text("${widget.kpCmd} / ${widget.kiCmd} / ${widget.kdCmd}", style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 9, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
           Row(
             children: [
-              Expanded(child: TextField(decoration: const InputDecoration(labelText: 'Kp', isDense: true), keyboardType: TextInputType.number, controller: TextEditingController(text: kp.toString())..selection = TextSelection.fromPosition(TextPosition(offset: kp.toString().length)), onSubmitted: (val) { double? np = double.tryParse(val); if (np != null) onUpdate(np, ki, kd); })),
+              Expanded(child: TextField(decoration: const InputDecoration(labelText: 'Kp', isDense: true), keyboardType: TextInputType.number, controller: _kpController, onSubmitted: (val) { double? np = double.tryParse(val); if (np != null) widget.onUpdate(np, widget.ki, widget.kd); })),
               const SizedBox(width: 8),
-              Expanded(child: TextField(decoration: const InputDecoration(labelText: 'Ki', isDense: true), keyboardType: TextInputType.number, controller: TextEditingController(text: ki.toString())..selection = TextSelection.fromPosition(TextPosition(offset: ki.toString().length)), onSubmitted: (val) { double? ni = double.tryParse(val); if (ni != null) onUpdate(kp, ni, kd); })),
+              Expanded(child: TextField(decoration: const InputDecoration(labelText: 'Ki', isDense: true), keyboardType: TextInputType.number, controller: _kiController, onSubmitted: (val) { double? ni = double.tryParse(val); if (ni != null) widget.onUpdate(widget.kp, ni, widget.kd); })),
               const SizedBox(width: 8),
-              Expanded(child: TextField(decoration: const InputDecoration(labelText: 'Kd', isDense: true), keyboardType: TextInputType.number, controller: TextEditingController(text: kd.toString())..selection = TextSelection.fromPosition(TextPosition(offset: kd.toString().length)), onSubmitted: (val) { double? nd = double.tryParse(val); if (nd != null) onUpdate(kp, ki, nd); })),
+              Expanded(child: TextField(decoration: const InputDecoration(labelText: 'Kd', isDense: true), keyboardType: TextInputType.number, controller: _kdController, onSubmitted: (val) { double? nd = double.tryParse(val); if (nd != null) widget.onUpdate(widget.kp, widget.ki, nd); })),
             ],
           ),
         ],
@@ -390,7 +436,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     return const Scaffold(
       backgroundColor: Color(0xFF0A0A0A),
       body: Center(
-        child: Text("XFire", style: TextStyle(fontSize: 42, fontWeight: FontWeight.bold, letterSpacing: 4.0, color: Colors.white)),
+        child: Text("XFire v3.6", style: TextStyle(fontSize: 42, fontWeight: FontWeight.bold, letterSpacing: 4.0, color: Colors.white)),
       ),
     );
   }
@@ -415,7 +461,7 @@ class _MainContainerState extends State<MainContainer> {
   ];
 
   final List<String> _tabNames = [
-    "Инфо", "Полетный контроллер FC", "Пульт RC", "Радиомодуль RTX", "Терминал CLI",
+    "Инфо", "Полетный контроллер FC", "Пульт RC", "Радиомодуль RTX (915 МГц)", "Терминал CLI",
   ];
 
   @override
@@ -464,7 +510,7 @@ class _MainContainerState extends State<MainContainer> {
 }
 
 // ==========================================
-// СЕРВИС СВЯЗИ И УТИЛИТЫ
+// СЕРВИС СВЯЗИ И УТИЛИТЫ (ДЕФОЛТЫ 915 МГц)
 // ==========================================
 class SerialService {
   static bool isConnected = false;
@@ -476,8 +522,9 @@ class SerialService {
   static StreamController<String> logController = StreamController.broadcast();
   static StreamController<void> telemetryController = StreamController.broadcast();
 
-  static double rtxBand = 4.0; 
-  static double rtxChan = 33.0; 
+  // Дефолты для 915 МГц (Band 9 = 900 MHz + Channel 15 = 915 MHz)
+  static double rtxBand = 9.0; 
+  static double rtxChan = 15.0; 
   static double rtxSf = 7.0;
   static double rtxBw = 7.0;
   static double rtxCr = 1.0;
@@ -698,12 +745,12 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
-                      child: const Text('v.3.5.1 (CLI)', style: TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                      child: const Text('v.3.6 (CLI)', style: TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
                 const SizedBox(height: 10),
-                const Text('Аппаратно-программная экосистема для управления дронами.', style: TextStyle(fontSize: 12, color: Colors.white70, height: 1.4)),
+                const Text('Аппаратно-программная экосистема для управления дронами (Моторы: 2312, Пропы: 9450, 4S, 915 МГц).', style: TextStyle(fontSize: 12, color: Colors.white70, height: 1.4)),
               ],
             ),
           ),
@@ -734,7 +781,7 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
 }
 
 // ==========================================
-// ВКЛАДКА 1: ПОЛЕТНЫЙ КОНТРОЛЛЕР FC
+// ВКЛАДКА 1: ПОЛЕТНЫЙ КОНТРОЛЛЕР FC (ДЕФОЛТЫ ПОД 2312 / 9450 / 4S / 915МГц)
 // ==========================================
 class SettingsTab extends StatefulWidget {
   const SettingsTab({super.key});
@@ -744,16 +791,16 @@ class SettingsTab extends StatefulWidget {
 }
 
 class _SettingsTabState extends State<SettingsTab> {
-  double _flMode = 0;          
-  double _flRollMax = 20.0;    
-  double _flPitchMax = 20.0;   
+  double _flMode = 1;          // Дефолт: Angle для устойчивого полета на 2312/9450
+  double _flRollMax = 25.0;    
+  double _flPitchMax = 25.0;   
   double _flVzSpeedMax = 1.2;  
   double _flHeightMin = 0.0;   
 
-  double _rtxEn = 0;
-  double _rtxBand = 4;
+  double _rtxEn = 1;
+  double _rtxBand = 9;         // 915 МГц (900 МГц базовая)
   double _rtxAddr = 0;
-  double _rtxChan = 33;
+  double _rtxChan = 15;        // 915 МГц канал (+15 МГц)
   double _rtxSf = 7;
   double _rtxBw = 7;
   double _rtxCr = 1;
@@ -769,18 +816,20 @@ class _SettingsTabState extends State<SettingsTab> {
   double _fsI2cEn = 1;
   double _fsVzSpeed = 0.5;
 
-  double _rcRate = 0.40;
-  double _rcSuperExpo = 0.05;
-  double _rcStickExpo = 0.50;
-  double _rcYawRate = 0.35;
-  double _rcYawSuperExpo = 0.05;
-  double _rcYawExpo = 0.40;
-  double _rcDeadband = 20.0;
+  // Плавные RC настройки для 9450 пропеллеров (инерционных)
+  double _rcRate = 0.35;
+  double _rcSuperExpo = 0.03;
+  double _rcStickExpo = 0.45;
+  double _rcYawRate = 0.30;
+  double _rcYawSuperExpo = 0.03;
+  double _rcYawExpo = 0.35;
+  double _rcDeadband = 15.0;
   double _rcHorizonTransition = 0.75;
-  double _rcFilterSmoothing = 0.30;
+  double _rcFilterSmoothing = 0.35;
 
+  // Дефолты для 4S аккумулятора (14.8В номинал, Failsafe на 13.8В)
   double _batCells = 4;
-  double _batFsV = 14.0;
+  double _batFsV = 13.8;
   double _batFilterAlpha = 0.05;
 
   double _lidarEn = 0;
@@ -789,19 +838,20 @@ class _SettingsTabState extends State<SettingsTab> {
   double _gyroFilterAlpha = 0.10;
   double _accFilterAlpha = 0.10;
   double _filterMode = 3; 
-  double _filterNotchFreq = 150.0;
-  double _filterNotchBw = 25.0;
-  double _filterDynMinHz = 80.0;
-  double _filterDynMaxHz = 250.0;
+  double _filterNotchFreq = 120.0; // Скорректировано под вибрации 2312/9450
+  double _filterNotchBw = 20.0;
+  double _filterDynMinHz = 70.0;
+  double _filterDynMaxHz = 220.0;
 
-  double _rollKp = 0.50, _rollKi = 0.015, _rollKd = 0.02;
-  double _pitchKp = 0.50, _pitchKi = 0.015, _pitchKd = 0.02;
-  double _yawKp = 0.65, _yawKi = 0.010, _yawKd = 0.0;
-  double _vzKp = 7.5, _vzKi = 1.3, _vzKd = 0.35;
+  // ПИД-регуляторы под инерцию моторов 2312 и пропеллеров 9450
+  double _rollKp = 0.45, _rollKi = 0.010, _rollKd = 0.018;
+  double _pitchKp = 0.45, _pitchKi = 0.010, _pitchKd = 0.018;
+  double _yawKp = 0.60, _yawKi = 0.010, _yawKd = 0.0;
+  double _vzKp = 7.0, _vzKi = 1.2, _vzKd = 0.30;
 
   bool _isFlashingFC = false;
   double _progressFC = 0.0;
-  String _statusFC = "Готов к прошивке полетного контроллера";
+  String _statusFC = "Готов к прошивке полетного контроллера (v3.6)";
 
   @override
   void initState() {
@@ -828,16 +878,16 @@ class _SettingsTabState extends State<SettingsTab> {
     try {
       await SerialService.usbPort!.write(Uint8List.fromList([0x7F]));
       await Future.delayed(const Duration(milliseconds: 300));
-      setState(() => _statusFC = "Запись прошивки FC...");
+      setState(() => _statusFC = "Запись прошивки FC v3.6...");
       for (int i = 1; i <= 10; i++) {
         await Future.delayed(const Duration(milliseconds: 100));
         setState(() => _progressFC = i / 10.0);
       }
       setState(() {
         _isFlashingFC = false;
-        _statusFC = "УСПЕХ: Полетный контроллер прошит!";
+        _statusFC = "УСПЕХ: Полетный контроллер прошит (v3.6)!";
       });
-      if (mounted) showAppDialog(context, "Успех", "Операция прошивки FC завершена успешно!");
+      if (mounted) showAppDialog(context, "Успех", "Операция прошивки FC v3.6 завершена успешно!");
     } catch (e) {
       setState(() {
         _isFlashingFC = false;
@@ -897,7 +947,7 @@ class _SettingsTabState extends State<SettingsTab> {
         return ListView(
           padding: const EdgeInsets.symmetric(vertical: 8.0),
           children: [
-            // 1 БЛОК: ПОЛЕТНЫЕ РЕЖИМЫ (ПЕРЕНЕСЕН НА САМЫЙ ВЕРХ)
+            // 1 БЛОК: ПОЛЕТНЫЕ РЕЖИМЫ
             _buildExpansionCard("Полетные режимы и ограничения", "Режимы, углы крена, тангажа и лимиты высоты", Icons.flight, [
               XFireSegmentedCard(title: "Режим полета", commandName: "fl_mode", options: const ["Acro", "Angle", "Horizon"], selectedIndex: _flMode.round(), onSelected: (val) { setState(() => _flMode = val.toDouble()); SerialService.sendCommand("fl_mode $val"); }),
               XFireSliderCard(title: "Максимальный угол крена", commandName: "fl_roll_max", value: _flRollMax, min: 10.0, max: 80.0, divisions: 14, unit: "°", onChanged: (v) => setState(() => _flRollMax = v), onChangeEnd: (v) => SerialService.sendCommand("fl_roll_max $v")),
@@ -931,14 +981,13 @@ class _SettingsTabState extends State<SettingsTab> {
               XFireSliderCard(title: "Скорость аварийного снижения Failsafe", commandName: "fs_vz_speed", value: _fsVzSpeed, min: 0.2, max: 2.0, divisions: 18, unit: "м/с", onChanged: (v) => setState(() => _fsVzSpeed = v), onChangeEnd: (v) => SerialService.sendCommand("fs_vz_speed $v")),
             ]),
 
-            // 4 БЛОК: ПИТАНИЕ И БАТАРЕЯ
-            _buildExpansionCard("Питание и батарея", "Настройка LiPo ячеек и фильтрации питания", Icons.battery_charging_full, [
+            // 4 БЛОК: ПИТАНИЕ И БАТАРЕЯ (4S ЛиПо)
+            _buildExpansionCard("Питание и батарея (4S LiPo)", "Настройка 4S ячеек и фильтрации питания", Icons.battery_charging_full, [
               XFireSliderCard(title: "Количество ячеек LiPo", commandName: "bat_cells", value: _batCells, min: 1, max: 6, divisions: 5, unit: "S", onChanged: (v) => setState(() => _batCells = v), onChangeEnd: (v) => SerialService.sendCommand("bat_cells ${v.round()}")),
-              XFireSliderCard(title: "Порог Failsafe батареи", commandName: "bat_fs_v", value: _batFsV, min: 6.0, max: 25.0, divisions: 190, unit: "В", onChanged: (v) => setState(() => _batFsV = v), onChangeEnd: (v) => SerialService.sendCommand("bat_fs_v $v")),
+              XFireSliderCard(title: "Порог Failsafe батареи 4S", commandName: "bat_fs_v", value: _batFsV, min: 6.0, max: 25.0, divisions: 190, unit: "В", onChanged: (v) => setState(() => _batFsV = v), onChangeEnd: (v) => SerialService.sendCommand("bat_fs_v $v")),
               XFireSliderCard(title: "Фильтр батареи (Alpha)", commandName: "bat_filter_alpha", value: _batFilterAlpha, min: 0.01, max: 1.0, divisions: 99, unit: "", onChanged: (v) => setState(() => _batFilterAlpha = v), onChangeEnd: (v) => SerialService.sendCommand("bat_filter_alpha $v")),
             ]),
 
-            // ОСТАЛЬНЫЕ БЛОКИ ПОЛЕТНОГО КОНТРОЛЛЕРА
             _buildExpansionCard("Телеметрия", "Авиогоризонт, HUD и датчики в реальном времени", Icons.radar, [
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 13, vertical: 4),
@@ -1043,7 +1092,7 @@ class _SettingsTabState extends State<SettingsTab> {
                           child: ElevatedButton.icon(
                             onPressed: _isFlashingFC ? null : _flashFC,
                             icon: const Icon(Icons.memory, size: 16),
-                            label: Text(_isFlashingFC ? "Прошивка FC..." : "Прошить полетный контроллер", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                            label: Text(_isFlashingFC ? "Прошивка FC..." : "Прошить полетный контроллер (v3.6)", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                             style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
                           ),
                         ),
@@ -1058,9 +1107,9 @@ class _SettingsTabState extends State<SettingsTab> {
 
             _buildExpansionCard("Тесты оборудования", "Аппаратные, исполнительные и системные тесты", Icons.rule, [
               XFireActionCard(title: "Тест подключения MPU6050", commandName: "test_mpu", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_mpu"); showAppDialog(context, "Тест MPU6050", "Команда отправлена."); } }),
-              XFireActionCard(title: "Тест подключения SX126x", commandName: "test_sx", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_sx"); showAppDialog(context, "Тест SX126x", "Проверка SPI запущена!"); } }),
+              XFireActionCard(title: "Тест подключения SX126x (915 МГц)", commandName: "test_sx", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_sx"); showAppDialog(context, "Тест SX126x", "Проверка SPI запущена!"); } }),
               XFireActionCard(title: "Тест подключения лидара", commandName: "test_lidar", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_lidar"); showAppDialog(context, "Тест лидара", "Запрос отправлен!"); } }),
-              XFireActionCard(title: "Тест моторов 25%", commandName: "test_motor", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_motor"); showAppDialog(context, "Внимание", "Тест моторов (25%) активирован!", isError: true); } }),
+              XFireActionCard(title: "Тест моторов 2312 (25%)", commandName: "test_motor", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_motor"); showAppDialog(context, "Внимание", "Тест моторов (25%) активирован!", isError: true); } }),
               XFireActionCard(title: "Тест PID 25%", commandName: "test_pid", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_pid"); showAppDialog(context, "Тест PID", "Стресс-тест ПИД активирован."); } }),
               XFireActionCard(title: "Тест связи с пультом", commandName: "test_rc", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_rc"); showAppDialog(context, "Тест RC", "Диагностика пакетов запущена."); } }),
               XFireActionCard(title: "Тест смены канала связи с пультом", commandName: "test_rc_can", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("test_rc_can"); showAppDialog(context, "Автопоиск канала", "Команда отправлена. Новый номер канала придет в сообщении лога."); } }),
@@ -1072,7 +1121,7 @@ class _SettingsTabState extends State<SettingsTab> {
               XFireSliderCard(title: "Фильтр лидара (Alpha)", commandName: "lidar_filter_alpha", value: _lidarFilterAlpha, min: 0.01, max: 1.0, divisions: 99, unit: "", onChanged: (v) => setState(() => _lidarFilterAlpha = v), onChangeEnd: (v) => SerialService.sendCommand("lidar_filter_alpha $v")),
             ]),
 
-            _buildExpansionCard("Фильтрация и Notch-фильтры", "Гироскоп, акселерометр и режекторные фильтры", Icons.waves, [
+            _buildExpansionCard("Фильтрация и Notch-фильтры (2312/9450)", "Гироскоп, акселерометр и режекторные фильтры", Icons.waves, [
               XFireSegmentedCard(title: "Режим фильтрации (filter_mode)", commandName: "filter_mode", options: const ["Off", "LPF", "Notch", "DynNotch"], selectedIndex: _filterMode.round(), onSelected: (val) { setState(() => _filterMode = val.toDouble()); SerialService.sendCommand("filter_mode $val"); }),
               XFireSliderCard(title: "Фильтр гироскопа LPF", commandName: "gyro_filter_alpha", value: _gyroFilterAlpha, min: 0.05, max: 1.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _gyroFilterAlpha = v), onChangeEnd: (v) => SerialService.sendCommand("gyro_filter_alpha $v")),
               XFireSliderCard(title: "Фильтр акселерометра LPF", commandName: "acc_filter_alpha", value: _accFilterAlpha, min: 0.01, max: 1.0, divisions: 99, unit: "", onChanged: (v) => setState(() => _accFilterAlpha = v), onChangeEnd: (v) => SerialService.sendCommand("acc_filter_alpha $v")),
@@ -1082,7 +1131,7 @@ class _SettingsTabState extends State<SettingsTab> {
               XFireSliderCard(title: "Динамический Notch: Макс. частота", commandName: "filter_dyn_max_hz", value: _filterDynMaxHz, min: 150, max: 350, divisions: 200, unit: "Гц", onChanged: (v) => setState(() => _filterDynMaxHz = v), onChangeEnd: (v) => SerialService.sendCommand("filter_dyn_max_hz $v")),
             ]),
 
-            _buildExpansionCard("ПИД-регуляторы (PID Tunings)", "Настройки Kp, Ki, Kd для осей Roll, Pitch, Yaw и Vz", Icons.tune, [
+            _buildExpansionCard("ПИД-регуляторы (Под 2312 / 9450)", "Настройки Kp, Ki, Kd для осей Roll, Pitch, Yaw и Vz", Icons.tune, [
               PidAxisCardWidget(axisName: "Roll Axis (Rate)", kpCmd: "roll_kp", kiCmd: "roll_ki", kdCmd: "roll_kd", kp: _rollKp, ki: _rollKi, kd: _rollKd, onUpdate: (p, i, d) { setState(() { _rollKp = p; _rollKi = i; _rollKd = d; }); SerialService.sendCommand("roll_kp $p"); SerialService.sendCommand("roll_ki $i"); SerialService.sendCommand("roll_kd $d"); }),
               PidAxisCardWidget(axisName: "Pitch Axis (Rate)", kpCmd: "pitch_kp", kiCmd: "pitch_ki", kdCmd: "pitch_kd", kp: _pitchKp, ki: _pitchKi, kd: _pitchKd, onUpdate: (p, i, d) { setState(() { _pitchKp = p; _pitchKi = i; _pitchKd = d; }); SerialService.sendCommand("pitch_kp $p"); SerialService.sendCommand("pitch_ki $i"); SerialService.sendCommand("pitch_kd $d"); }),
               PidAxisCardWidget(axisName: "Yaw Axis (Rate)", kpCmd: "yaw_kp", kiCmd: "yaw_ki", kdCmd: "yaw_kd", kp: _yawKp, ki: _yawKi, kd: _yawKd, onUpdate: (p, i, d) { setState(() { _yawKp = p; _yawKi = i; _yawKd = d; }); SerialService.sendCommand("yaw_kp $p"); SerialService.sendCommand("yaw_ki $i"); SerialService.sendCommand("yaw_kd $d"); }),
@@ -1111,19 +1160,19 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
   double _stickDeadband = 10.0;
   double _rcProtocol = 1.0; 
   double _txPowerW = 100.0;
-  double _rcRate = 0.40;
-  double _rcSuperExpo = 0.05;
-  double _rcStickExpo = 0.50;
-  double _rcYawRate = 0.35;
-  double _rcYawSuperExpo = 0.05;
-  double _rcYawExpo = 0.40;
-  double _rcDeadband = 20.0;
-  double _rcFilterSmoothing = 0.30;
+  double _rcRate = 0.35;
+  double _rcSuperExpo = 0.03;
+  double _rcStickExpo = 0.45;
+  double _rcYawRate = 0.30;
+  double _rcYawSuperExpo = 0.03;
+  double _rcYawExpo = 0.35;
+  double _rcDeadband = 15.0;
+  double _rcFilterSmoothing = 0.35;
   double _rcFsEn = 1.0;
 
   bool _isFlashingRC = false;
   double _progressRC = 0.0;
-  String _statusRC = "Готов к прошивке пульта управления";
+  String _statusRC = "Готов к прошивке пульта управления (v3.6)";
 
   Future<void> _flashRC() async {
     if (!SerialService.isConnected || SerialService.usbPort == null) {
@@ -1138,14 +1187,14 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
     try {
       await SerialService.usbPort!.write(Uint8List.fromList([0x7F]));
       await Future.delayed(const Duration(milliseconds: 300));
-      setState(() => _statusRC = "Запись прошивки пульта...");
+      setState(() => _statusRC = "Запись прошивки пульта v3.6...");
       for (int i = 1; i <= 10; i++) {
         await Future.delayed(const Duration(milliseconds: 100));
         setState(() => _progressRC = i / 10.0);
       }
       setState(() {
         _isFlashingRC = false;
-        _statusRC = "УСПЕХ: Пульт успешно прошит!";
+        _statusRC = "УСПЕХ: Пульт успешно прошит (v3.6)!";
       });
       if (mounted) showAppDialog(context, "Успех", "Операция прошивки пульта завершена успешно!");
     } catch (e) {
@@ -1225,7 +1274,7 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
                       child: ElevatedButton.icon(
                         onPressed: _isFlashingRC ? null : _flashRC,
                         icon: const Icon(Icons.gamepad, size: 16),
-                        label: Text(_isFlashingRC ? "Прошивка пульта..." : "Прошить пульт управления", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        label: Text(_isFlashingRC ? "Прошивка пульта..." : "Прошить пульт управления (v3.6)", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                         style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
                       ),
                     ),
@@ -1240,7 +1289,7 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
           XFireSegmentedCard(
             title: "Протокол связи с модулем",
             commandName: "rc_proto",
-            options: const ["CRSF", "XFire RTX", "SBUS"],
+            options: const ["CRSF", "XFire RTX (915MHz)", "SBUS"],
             selectedIndex: _rcProtocol.round(),
             onSelected: (val) {
               setState(() => _rcProtocol = val.toDouble());
@@ -1407,7 +1456,7 @@ class RtxLinkCalculatorCard extends StatelessWidget {
       child: Card(
         margin: EdgeInsets.zero,
         child: ExpansionTile(
-          title: const Text("Калькулятор линка и дальности связи", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amberAccent)),
+          title: const Text("Калькулятор линка и дальности (915 МГц)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amberAccent)),
           subtitle: const Text("Расчет чувствительности и скорости по воздуху", style: TextStyle(fontSize: 10, color: Colors.white70)),
           iconColor: Colors.amberAccent,
           collapsedIconColor: Colors.white54,
@@ -1490,7 +1539,7 @@ class RtxAntennaExpansion extends StatelessWidget {
       child: Card(
         margin: EdgeInsets.zero,
         child: ExpansionTile(
-          title: const Text("Калькулятор и геометрия антенн", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amberAccent)),
+          title: const Text("Калькулятор и геометрия антенн (915 МГц)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amberAccent)),
           subtitle: const Text("Расчет плеч диполя и антенны Харченко", style: TextStyle(fontSize: 10, color: Colors.white70)),
           iconColor: Colors.amberAccent,
           collapsedIconColor: Colors.white54,
@@ -1644,7 +1693,7 @@ class RtxAntennaExpansion extends StatelessWidget {
 }
 
 // ==========================================
-// ВКЛАДКА 3: РАДИОМОДУЛЬ RTX (БЕЗ ПАРАМЕТРОВ РАДИОМОДУЛЯ, НО С БЛОКОМ ИЗ ФК)
+// ВКЛАДКА 3: РАДИОМОДУЛЬ RTX (915 МГц)
 // ==========================================
 class RadioTab extends StatefulWidget {
   const RadioTab({super.key});
@@ -1655,8 +1704,8 @@ class RadioTab extends StatefulWidget {
 
 class _RadioTabState extends State<RadioTab> {
   double _rtxEn = 1;
-  double _rtxBand = SerialService.rtxBand;
-  double _rtxChan = SerialService.rtxChan;
+  double _rtxBand = SerialService.rtxBand; // 9 (900 МГц)
+  double _rtxChan = SerialService.rtxChan; // 15 (915 МГц)
   double _rtxSf = SerialService.rtxSf;
   double _rtxBw = SerialService.rtxBw; 
   double _rtxCr = SerialService.rtxCr;
@@ -1675,7 +1724,7 @@ class _RadioTabState extends State<RadioTab> {
   final List<double> _bwTable = [7800.0, 10400.0, 15600.0, 20800.0, 31250.0, 41700.0, 62500.0, 125000.0, 250000.0, 500000.0];
   final Map<int, double> _snrTable = {5: -2.5, 6: -5.0, 7: -7.5, 8: -10.0, 9: -12.5, 10: -15.0, 11: -17.5, 12: -20.0};
 
-  double get _currentFreqMhz => (_rtxBand * 100.0) + _rtxChan;
+  double get _currentFreqMhz => (_rtxBand * 100.0) + _rtxChan; // 9 * 100 + 15 = 915 МГц
 
   double _calculateSensitivity() {
     int bwIdx = _rtxBw.round().clamp(0, _bwTable.length - 1);
@@ -1764,18 +1813,17 @@ class _RadioTabState extends State<RadioTab> {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
-        // БЛОК РАДИОМОДУЛЯ RTX (ПЕРЕНЕСЕН С ФК)
-        _buildExpansionCard("Радиомодуль RTX (на борту)", "Параметры беспроводного интерфейса дрона", Icons.wifi, [
+        _buildExpansionCard("Радиомодуль RTX (915 МГц на борту)", "Параметры беспроводного интерфейса дрона", Icons.wifi, [
           XFireSwitchCard(title: "Включить RTX модуль", commandName: "rtx_en", value: _rtxEn == 1, onChanged: (v) { setState(() => _rtxEn = v ? 1.0 : 0.0); SerialService.sendCommand("rtx_en ${_rtxEn.round()}"); }),
-          XFireSliderCard(title: "Диапазон частот (x100 МГц)", commandName: "rtx_band", value: _rtxBand, min: 1, max: 9, divisions: 8, unit: "", onChanged: (v) => setState(() => _rtxBand = v), onChangeEnd: (v) { SerialService.rtxBand = v; SerialService.sendCommand("rtx_band ${v.round()}"); }),
+          XFireSliderCard(title: "Диапазон частот (9 = 900 МГц)", commandName: "rtx_band", value: _rtxBand, min: 1, max: 9, divisions: 8, unit: "", onChanged: (v) => setState(() => _rtxBand = v), onChangeEnd: (v) { SerialService.rtxBand = v; SerialService.sendCommand("rtx_band ${v.round()}"); }),
           XFireSliderCard(title: "Сетевой адрес устройства", commandName: "rtx_addr", value: 0, min: 0, max: 65535, divisions: 100, unit: "", onChanged: (v) {}, onChangeEnd: (v) => SerialService.sendCommand("rtx_addr ${v.round()}")),
-          XFireSliderCard(title: "Рабочий канал связи (1 МГц)", commandName: "rtx_chan", value: _rtxChan, min: 0, max: 99, divisions: 99, unit: "МГц", onChanged: (v) => setState(() => _rtxChan = v), onChangeEnd: (v) { SerialService.rtxChan = v; SerialService.sendCommand("rtx_chan ${v.round()}"); }),
+          XFireSliderCard(title: "Рабочий канал связи (+15 МГц = 915 МГц)", commandName: "rtx_chan", value: _rtxChan, min: 0, max: 99, divisions: 99, unit: "МГц", onChanged: (v) => setState(() => _rtxChan = v), onChangeEnd: (v) { SerialService.rtxChan = v; SerialService.sendCommand("rtx_chan ${v.round()}"); }),
           XFireSliderCard(title: "Spreading Factor (SF)", commandName: "rtx_sf", value: _rtxSf, min: 5, max: 12, divisions: 7, unit: "", onChanged: (v) => setState(() => _rtxSf = v), onChangeEnd: (v) { SerialService.rtxSf = v; SerialService.sendCommand("rtx_sf ${v.round()}"); }),
           XFireSliderCard(title: "Полоса пропускания (Bandwidth)", commandName: "rtx_bw", value: _rtxBw, min: 0, max: 9, divisions: 9, unit: "", onChanged: (v) => setState(() => _rtxBw = v), onChangeEnd: (v) { SerialService.rtxBw = v; SerialService.sendCommand("rtx_bw ${v.round()}"); }),
           XFireSliderCard(title: "Коэффициент кодирования (CR)", commandName: "rtx_cr", value: _rtxCr, min: 1, max: 4, divisions: 3, unit: "", onChanged: (v) => setState(() => _rtxCr = v), onChangeEnd: (v) { SerialService.rtxCr = v; SerialService.sendCommand("rtx_cr ${v.round()}"); }),
           XFireSliderCard(title: "Мощность передатчика", commandName: "rtx_power", value: _rtxPower, min: -9, max: 22, divisions: 31, unit: "dBm", onChanged: (v) => setState(() => _rtxPower = v), onChangeEnd: (v) { SerialService.rtxPower = v; SerialService.sendCommand("rtx_power ${v.round()}"); }),
           XFireSwitchCard(title: "Автоматическая подстройка частоты (AFC)", commandName: "rtx_afc_en", value: false, onChanged: (v) => SerialService.sendCommand("rtx_afc_en ${v ? 1 : 0}")),
-          XFireActionCard(title: "Применить настройки RTX", commandName: "rtx_write", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("rtx_write"); showAppDialog(context, "Успех", "Настройки радиомодуля применены!"); } }),
+          XFireActionCard(title: "Применить настройки RTX", commandName: "rtx_write", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("rtx_write"); showAppDialog(context, "Успех", "Настройки радиомодуля 915 МГц применены!"); } }),
         ]),
 
         RtxLinkCalculatorCard(
