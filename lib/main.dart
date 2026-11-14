@@ -1,4 +1,4 @@
-// XFire Ecosystem v3.6 (Обновлено: центрированный выпадающий список, USB Serial в конце выпадающего меню)
+// XFire Ecosystem v3.6 (Обновлено: центрированный селектор вкладок, стандартный переключатель USB в конце списка)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -540,7 +540,7 @@ class _MainContainerState extends State<MainContainer> {
                       ),
                     );
                   }),
-                  // USB Serial в конце выпадающего списка
+                  // Обычный переключатель USB Serial в конце выпадающего списка
                   DropdownMenuItem<int>(
                     value: _tabs.length,
                     child: Row(
@@ -550,10 +550,13 @@ class _MainContainerState extends State<MainContainer> {
                           "Соединение USB Serial",
                           style: TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold),
                         ),
-                        Icon(
-                          Icons.usb,
-                          color: SerialService.isConnected ? Colors.greenAccent : Colors.redAccent,
-                          size: 16,
+                        Switch(
+                          value: SerialService.isConnected,
+                          onChanged: (val) {
+                            Navigator.pop(context);
+                            _toggleUsbConnectionFromDropdown();
+                          },
+                          activeColor: Colors.blueAccent,
                         ),
                       ],
                     ),
