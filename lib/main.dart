@@ -1,4 +1,4 @@
-// XFire Ecosystem v3.6 (Оптимизировано: пакетная передача config, прогресс-бары прошивки)
+// XFire Ecosystem v3.7 (Исправлено: параметры антенн в RtxAntennaExpansion, пакетный config, прогресс-бары)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -254,7 +254,7 @@ class _XFireFlashCardState extends State<XFireFlashCard> {
       });
       if (mounted) {
         setState(() {
-          _statusState = "Прошивка успешно завершена (v3.6)!";
+          _statusState = "Прошивка успешно завершена (v3.7)!";
           _progress = 1.0;
         });
         showAppDialog(context, "Успех", "${widget.targetName} успешно прошит!");
@@ -622,7 +622,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     return const Scaffold(
       backgroundColor: Color(0xFF0A0A0A),
       body: Center(
-        child: Text("XFire v3.6", style: TextStyle(fontSize: 42, fontWeight: FontWeight.bold, letterSpacing: 4.0, color: Colors.white)),
+        child: Text("XFire v3.7", style: TextStyle(fontSize: 42, fontWeight: FontWeight.bold, letterSpacing: 4.0, color: Colors.white)),
       ),
     );
   }
@@ -959,7 +959,7 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
-                      child: const Text('v.3.6 (CLI)', style: TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                      child: const Text('v.3.7 (CLI)', style: TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
@@ -1305,7 +1305,7 @@ class _SettingsTabState extends State<SettingsTab> {
 
             _buildExpansionCard("Прошивка полетного контроллера", "Обновление прошивки STM32 с прогресс-баром", Icons.memory, [
               XFireFlashCard(
-                title: "Прошить полетный контроллер (v3.6)",
+                title: "Прошить полетный контроллер (v3.7)",
                 targetName: "Полетный контроллер FC",
                 onFlash: (onProgress) async {
                   onProgress("Стирание флеш-памяти STM32...", 0.2);
@@ -1313,7 +1313,7 @@ class _SettingsTabState extends State<SettingsTab> {
                   if (SerialService.isConnected && SerialService.usbPort != null) {
                     await SerialService.usbPort!.write(Uint8List.fromList([0x7F]));
                   }
-                  onProgress("Запись блоков прошивки v3.6...", 0.6);
+                  onProgress("Запись блоков прошивки v3.7...", 0.6);
                   await Future.delayed(const Duration(milliseconds: 1200));
                   onProgress("Проверка контрольной суммы CRC...", 0.9);
                   await Future.delayed(const Duration(milliseconds: 600));
@@ -1476,7 +1476,7 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
 
         _buildExpansionCard("Прошивка пульта управления", "Обновление ПО пульта с прогресс-баром", Icons.memory, [
           XFireFlashCard(
-            title: "Прошить пульт управления (v3.6)",
+            title: "Прошить пульт управления (v3.7)",
             targetName: "Пульт управления RC",
             onFlash: (onProgress) async {
               onProgress("Стирание памяти пульта...", 0.25);
@@ -1484,7 +1484,7 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
               if (SerialService.isConnected && SerialService.usbPort != null) {
                 await SerialService.usbPort!.write(Uint8List.fromList([0x7F]));
               }
-              onProgress("Запись прошивки пульта v3.6...", 0.65);
+              onProgress("Запись прошивки пульта v3.7...", 0.65);
               await Future.delayed(const Duration(milliseconds: 1300));
               onProgress("Проверка целостности...", 0.9);
               await Future.delayed(const Duration(milliseconds: 500));
@@ -1918,11 +1918,11 @@ class RtxAntennaExpansion extends StatelessWidget {
               title: "Применить настройки антенн",
               parameters: [
                 "ant_combo_config $antennaComboIndex",
-                "ant_sleeve_en ${_hasProtectiveSleeve ? 1 : 0}",
-                "ant_sleeve_thick $_sleeveThicknessMm",
-                "ant_tube_diam $_dipoleTubeDiameterMm",
-                "ant_top_wire $_dipoleTopWireSqMm",
-                "ant_kharc_wire $_kharchenkoWireSqMm",
+                "ant_sleeve_en ${hasProtectiveSleeve ? 1 : 0}",
+                "ant_sleeve_thick $sleeveThicknessMm",
+                "ant_tube_diam $dipoleTubeDiameterMm",
+                "ant_top_wire $dipoleTopWireSqMm",
+                "ant_kharc_wire $kharchenkoWireSqMm",
                 "ant_fade_margin $calcEnvironmentLoss"
               ],
             ),
