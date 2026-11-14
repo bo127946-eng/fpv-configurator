@@ -1,4 +1,4 @@
-// XFire Ecosystem v3.10 (Карточки «Применить настройки» и прошивки полностью кликабельные, без лишних надписей)
+// XFire Ecosystem v3.10 (Обновленный интерфейс карточек)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -186,73 +186,57 @@ class XFireActionCard extends StatelessWidget {
   }
 }
 
-// Карточка применения настроек (чистая карточка-кнопка без config и лишних кнопок)
+// Карточка применения настроек (в стиле карточек тестов со стрелочкой и подсказкой)
 class XFireBatchApplyCard extends StatelessWidget {
   final String title;
+  final String hint;
   final List<String> parameters;
   final VoidCallback? onApplied;
 
   const XFireBatchApplyCard({
     super.key,
     required this.title,
+    required this.hint,
     required this.parameters,
     this.onApplied,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 4.0),
-      child: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFF141416),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.blueAccent.withOpacity(0.3)),
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () {
-              if (!SerialService.isConnected) {
-                showAppDialog(context, "Ошибка соединения", "Устройство не подключено по USB!", isError: true);
-                return;
-              }
-              SerialService.sendBatchConfig(parameters);
-              if (onApplied != null) onApplied!();
-              showAppDialog(context, "Пакет настроек", "Конфигурация успешно применена!");
-            },
-            borderRadius: BorderRadius.circular(14),
-            child: Padding(
-              padding: const EdgeInsets.all(14.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return XFireCard(
+      child: InkWell(
+        onTap: () {
+          if (!SerialService.isConnected) {
+            showAppDialog(context, "Ошибка соединения", "Устройство не подключено по USB!", isError: true);
+            return;
+          }
+          SerialService.sendBatchConfig(parameters);
+          if (onApplied != null) onApplied!();
+          showAppDialog(context, "Пакет настроек", "Конфигурация успешно применена!");
+        },
+        borderRadius: BorderRadius.circular(10),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                        color: Colors.blueAccent,
-                      ),
-                    ),
-                  ),
-                  const Icon(
-                    Icons.send_rounded,
-                    size: 18,
-                    color: Colors.blueAccent,
-                  ),
+                  Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                  const SizedBox(height: 2),
+                  Text(hint, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
                 ],
               ),
             ),
-          ),
+            const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.white54),
+          ],
         ),
       ),
     );
   }
 }
 
-// Карточка прошивки (вся карточка кликабельна, со встроенным прогресс-баром)
+// Карточка прошивки (со стрелочкой в режиме покоя в стиле других карточек)
 class XFireFlashCard extends StatefulWidget {
   final String title;
   final String targetName;
@@ -366,9 +350,9 @@ class _XFireFlashCardState extends State<XFireFlashCard> {
                         ),
                       ),
                       Icon(
-                        _isFlashing ? Icons.hourglass_top_rounded : Icons.system_update_alt_rounded,
-                        size: 20,
-                        color: _isFlashing ? Colors.amberAccent : Colors.blueAccent,
+                        _isFlashing ? Icons.hourglass_top_rounded : Icons.arrow_forward_ios,
+                        size: _isFlashing ? 20 : 14,
+                        color: _isFlashing ? Colors.amberAccent : Colors.white54,
                       ),
                     ],
                   ),
@@ -1167,6 +1151,7 @@ class _SettingsTabState extends State<SettingsTab> {
                 XFireSliderCard(title: "Минимальная высота полета", commandName: "fl_height_min", value: _flHeightMin, min: 0.0, max: 5.0, divisions: 50, unit: "м", onChanged: (v) => setState(() => _flHeightMin = v), onChangeEnd: (v) => SerialService.sendCommand("fl_height_min $v")),
                 XFireBatchApplyCard(
                   title: "Применить настройки режимов",
+                  hint: "Пакетная отправка лимитов углов и высоты полета",
                   parameters: [
                     "fl_mode ${_flMode.round()}",
                     "fl_roll_max $_flRollMax",
@@ -1194,6 +1179,7 @@ class _SettingsTabState extends State<SettingsTab> {
                 XFireSliderCard(title: "Сглаживание RC", commandName: "rc_filter_smoothing", value: _rcFilterSmoothing, min: 0.05, max: 1.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcFilterSmoothing = v), onChangeEnd: (v) => SerialService.sendCommand("rc_filter_smoothing $v")),
                 XFireBatchApplyCard(
                   title: "Применить настройки радио",
+                  hint: "Пакетная отправка RC Rate, Super Expo и мертвых зон",
                   parameters: [
                     "rc_rate $_rcRate",
                     "rc_super_expo $_rcSuperExpo",
@@ -1222,6 +1208,7 @@ class _SettingsTabState extends State<SettingsTab> {
                 XFireSliderCard(title: "Скорость аварийного снижения Failsafe", commandName: "fs_vz_speed", value: _fsVzSpeed, min: 0.2, max: 2.0, divisions: 18, unit: "м/с", onChanged: (v) => setState(() => _fsVzSpeed = v), onChangeEnd: (v) => SerialService.sendCommand("fs_vz_speed $v")),
                 XFireBatchApplyCard(
                   title: "Применить настройки Failsafe",
+                  hint: "Пакетная отправка сценариев аварийного снижения",
                   parameters: [
                     "rc_fs_en ${_rcFsEn.round()}",
                     "fs_bat_en ${_fsBatEn.round()}",
@@ -1243,6 +1230,7 @@ class _SettingsTabState extends State<SettingsTab> {
                 XFireSwitchCard(title: "Инициатива с борта при ухудшении связи", commandName: "rtx_auto_en", value: _rtxAutoEn == 1, onChanged: (v) { setState(() => _rtxAutoEn = v ? 1.0 : 0.0); SerialService.sendCommand("rtx_auto_en ${_rtxAutoEn.round()}"); }),
                 XFireBatchApplyCard(
                   title: "Применить настройки канала",
+                  hint: "Пакетная отправка порогов предупреждения и инициативы",
                   parameters: [
                     "rtx_link_warn_threshold ${_rtxLinkWarnThreshold.round()}",
                     "rtx_auto_en ${_rtxAutoEn.round()}"
@@ -1261,6 +1249,7 @@ class _SettingsTabState extends State<SettingsTab> {
                 XFireSliderCard(title: "Фильтр батареи (Alpha)", commandName: "bat_filter_alpha", value: _batFilterAlpha, min: 0.01, max: 1.0, divisions: 99, unit: "", onChanged: (v) => setState(() => _batFilterAlpha = v), onChangeEnd: (v) => SerialService.sendCommand("bat_filter_alpha $v")),
                 XFireBatchApplyCard(
                   title: "Применить настройки батареи",
+                  hint: "Пакетная отправка параметров ячеек 4S и фильтрации",
                   parameters: [
                     "bat_cells ${_batCells.round()}",
                     "bat_fs_v $_batFsV",
@@ -1420,6 +1409,7 @@ class _SettingsTabState extends State<SettingsTab> {
                 XFireSliderCard(title: "Фильтр лидара (Alpha)", commandName: "lidar_filter_alpha", value: _lidarFilterAlpha, min: 0.01, max: 1.0, divisions: 99, unit: "", onChanged: (v) => setState(() => _lidarFilterAlpha = v), onChangeEnd: (v) => SerialService.sendCommand("lidar_filter_alpha $v")),
                 XFireBatchApplyCard(
                   title: "Применить настройки лидара",
+                  hint: "Пакетная отправка высоты и фильтра дальномера",
                   parameters: [
                     "lidar_en ${_lidarEn.round()}",
                     "lidar_min_alt $_lidarMinAlt",
@@ -1443,6 +1433,7 @@ class _SettingsTabState extends State<SettingsTab> {
                 XFireSliderCard(title: "Динамический Notch: Макс. частота", commandName: "filter_dyn_max_hz", value: _filterDynMaxHz, min: 150, max: 350, divisions: 200, unit: "Гц", onChanged: (v) => setState(() => _filterDynMaxHz = v), onChangeEnd: (v) => SerialService.sendCommand("filter_dyn_max_hz $v")),
                 XFireBatchApplyCard(
                   title: "Применить настройки фильтров",
+                  hint: "Пакетная отправка частот Notch и коэффициентов LPF",
                   parameters: [
                     "filter_mode ${_filterMode.round()}",
                     "gyro_filter_alpha $_gyroFilterAlpha",
@@ -1467,6 +1458,7 @@ class _SettingsTabState extends State<SettingsTab> {
                 PidAxisCardWidget(axisName: "Vertical Speed Axis (Vz)", kpCmd: "vz_kp", kiCmd: "vz_ki", kdCmd: "vz_kd", kp: _vzKp, ki: _vzKi, kd: _vzKd, onUpdate: (p, i, d) { setState(() { _vzKp = p; _vzKi = i; _vzKd = d; }); SerialService.sendCommand("vz_kp $p"); SerialService.sendCommand("vz_ki $i"); SerialService.sendCommand("vz_kd $d"); }),
                 XFireBatchApplyCard(
                   title: "Применить настройки ПИД",
+                  hint: "Пакетная отправка коэффициентов регулятора осей",
                   parameters: [
                     "roll_kp $_rollKp", "roll_ki $_rollKi", "roll_kd $_rollKd",
                     "pitch_kp $_pitchKp", "pitch_ki $_pitchKi", "pitch_kd $_pitchKd",
@@ -1544,6 +1536,7 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
             ),
             XFireBatchApplyCard(
               title: "Применить настройки стиков",
+              hint: "Пакетная отправка мертвой зоны стиков пульта",
               parameters: [
                 "rc_tx_deadband ${_stickDeadband.round()}"
               ],
@@ -1603,6 +1596,7 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
             ),
             XFireBatchApplyCard(
               title: "Применить настройки протокола",
+              hint: "Пакетная отправка типа протокола и мощности Tx",
               parameters: [
                 "rc_proto ${_rcProtocol.round()}",
                 "tx_power_mw ${_txPowerW.round()}"
@@ -1627,6 +1621,7 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
             XFireSwitchCard(title: "RC Failsafe (пакеты пульта)", commandName: "rc_fs_en", value: _rcFsEn == 1, onChanged: (v) { setState(() => _rcFsEn = v ? 1.0 : 0.0); SerialService.sendCommand("rc_fs_en ${_rcFsEn.round()}"); }),
             XFireBatchApplyCard(
               title: "Применить настройки экспонент",
+              hint: "Пакетная отправка кривых управления и сглаживания",
               parameters: [
                 "rc_rate $_rcRate",
                 "rc_super_expo $_rcSuperExpo",
@@ -2013,6 +2008,7 @@ class RtxAntennaExpansion extends StatelessWidget {
             ),
             XFireBatchApplyCard(
               title: "Применить настройки антенн",
+              hint: "Пакетная отправка геометрии диполя и антенны Харченко",
               parameters: [
                 "ant_combo_config $antennaComboIndex",
                 "ant_sleeve_en ${hasProtectiveSleeve ? 1 : 0}",
@@ -2148,6 +2144,7 @@ class _RadioTabState extends State<RadioTab> {
             XFireSwitchCard(title: "Автоматическая подстройка частоты (AFC)", commandName: "rtx_afc_en", value: _rtxAfcEn, onChanged: (v) => setState(() => _rtxAfcEn = v)),
             XFireBatchApplyCard(
               title: "Применить настройки RTX",
+              hint: "Пакетная отправка параметров радиомодуля (SF, BW, Power)",
               parameters: [
                 "rtx_en ${_rtxEn.round()}",
                 "rtx_band ${_rtxBand.round()}",
