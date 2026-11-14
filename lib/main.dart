@@ -1,4 +1,4 @@
-// XFire Ecosystem v3.6 (Обновлено: панель терминала с автодополнением, обработка ошибок USB, стандартные карточки прошивки)
+// XFire Ecosystem v3.6 (Обновлено: автодополнение открывается вверх, синие кнопки справа, статус прошивки желтым)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -1086,10 +1086,8 @@ class _SettingsTabState extends State<SettingsTab> {
                   children: [
                     const Text("Прошивка полетного контроллера (STM32)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
                     const SizedBox(height: 2),
-                    const Text("fc_firmware_flash v3.6", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
+                    Text(_statusFC, style: const TextStyle(color: Colors.amberAccent, fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
                     const SizedBox(height: 10),
-                    Text(_statusFC, style: const TextStyle(fontFamily: 'monospace', fontSize: 11, color: Colors.greenAccent)),
-                    const SizedBox(height: 14),
                     SizedBox(
                       width: double.infinity,
                       height: 40,
@@ -1266,10 +1264,8 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
               children: [
                 const Text("Прошивка пульта управления", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
                 const SizedBox(height: 2),
-                const Text("rc_firmware_flash v3.6", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
+                Text(_statusRC, style: const TextStyle(color: Colors.amberAccent, fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
                 const SizedBox(height: 10),
-                Text(_statusRC, style: const TextStyle(fontFamily: 'monospace', fontSize: 11, color: Colors.greenAccent)),
-                const SizedBox(height: 14),
                 SizedBox(
                   width: double.infinity,
                   height: 40,
@@ -1857,7 +1853,7 @@ class _RadioTabState extends State<RadioTab> {
 }
 
 // ==========================================
-// ВКЛАДКА 4: ТЕРМИНАЛ CLI (С АВТОДОПОЛНЕНИЕМ)
+// ВКЛАДКА 4: ТЕРМИНАЛ CLI (АВТОДОПОЛНЕНИЕ ВВЕРХ)
 // ==========================================
 class TerminalTab extends StatefulWidget {
   const TerminalTab({super.key});
@@ -1921,31 +1917,7 @@ class _TerminalTabState extends State<TerminalTab> {
             padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 8.0),
             child: Row(
               children: [
-                // Кнопка Инфо (иконка)
-                SizedBox(
-                  height: 44,
-                  width: 44,
-                  child: IconButton.filledTonal(
-                    onPressed: () => SerialService.sendCommand("info"),
-                    icon: const Icon(Icons.info_outline, size: 18, color: Colors.amberAccent),
-                    tooltip: "Read Config Info",
-                    style: IconButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                // Кнопка очистки (иконка)
-                SizedBox(
-                  height: 44,
-                  width: 44,
-                  child: IconButton.filledTonal(
-                    onPressed: () { SerialService.terminalLog = ""; SerialService.logController.add(""); },
-                    icon: const Icon(Icons.cleaning_services, size: 18),
-                    tooltip: "Clear Log",
-                    style: IconButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                // Поле ввода с выпадающим списком команд
+                // Поле ввода с выпадающим списком команд (теперь открывается ВВЕРХ)
                 Expanded(
                   child: Autocomplete<String>(
                     optionsBuilder: (TextEditingValue textEditingValue) {
@@ -1975,33 +1947,36 @@ class _TerminalTabState extends State<TerminalTab> {
                     },
                     optionsViewBuilder: (context, onSelected, options) {
                       return Align(
-                        alignment: Alignment.topLeft,
-                        child: Material(
-                          elevation: 6.0,
-                          color: const Color(0xFF1C1C1E),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            side: const BorderSide(color: Colors.white12),
-                          ),
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxHeight: 180, maxWidth: 260),
-                            child: ListView.builder(
-                              padding: EdgeInsets.zero,
-                              shrinkWrap: true,
-                              itemCount: options.length,
-                              itemBuilder: (BuildContext context, int index) {
-                                final String option = options.elementAt(index);
-                                return InkWell(
-                                  onTap: () => onSelected(option),
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
-                                    child: Text(
-                                      option,
-                                      style: const TextStyle(fontFamily: 'monospace', fontSize: 12, color: Colors.amberAccent, fontWeight: FontWeight.bold),
+                        alignment: Alignment.bottomLeft, // Открываем список ВВЕРХ от поля ввода
+                        child: Transform.translate(
+                          offset: const Offset(0, -8), // Небольшой отступ над полем
+                          child: Material(
+                            elevation: 6.0,
+                            color: const Color(0xFF1C1C1E),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: const BorderSide(color: Colors.white12),
+                            ),
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxHeight: 180, maxWidth: 260),
+                              child: ListView.builder(
+                                padding: EdgeInsets.zero,
+                                shrinkWrap: true,
+                                itemCount: options.length,
+                                itemBuilder: (BuildContext context, int index) {
+                                  final String option = options.elementAt(index);
+                                  return InkWell(
+                                    onTap: () => onSelected(option),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
+                                      child: Text(
+                                        option,
+                                        style: const TextStyle(fontFamily: 'monospace', fontSize: 12, color: Colors.amberAccent, fontWeight: FontWeight.bold),
+                                      ),
                                     ),
-                                  ),
-                                );
-                              },
+                                  );
+                                },
+                              ),
                             ),
                           ),
                         ),
@@ -2010,7 +1985,37 @@ class _TerminalTabState extends State<TerminalTab> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                // Кнопка отправки
+                // Кнопка Инфо (синяя, справа)
+                SizedBox(
+                  height: 44,
+                  width: 44,
+                  child: IconButton.filled(
+                    onPressed: () => SerialService.sendCommand("info"),
+                    icon: const Icon(Icons.info_outline, size: 18, color: Colors.white),
+                    tooltip: "Read Config Info",
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.blueAccent,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                // Кнопка очистки (синяя, справа)
+                SizedBox(
+                  height: 44,
+                  width: 44,
+                  child: IconButton.filled(
+                    onPressed: () { SerialService.terminalLog = ""; SerialService.logController.add(""); },
+                    icon: const Icon(Icons.cleaning_services, size: 18, color: Colors.white),
+                    tooltip: "Clear Log",
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.blueAccent,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                // Кнопка отправки (синяя, справа)
                 IconButton.filled(
                   icon: const Icon(Icons.send_rounded, size: 18, color: Colors.white),
                   onPressed: () {
@@ -2019,7 +2024,11 @@ class _TerminalTabState extends State<TerminalTab> {
                       _autocompleteController!.clear();
                     }
                   },
-                  style: IconButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.all(12)),
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.blueAccent,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.all(12),
+                  ),
                 ),
               ],
             ),
