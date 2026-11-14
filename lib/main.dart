@@ -1,4 +1,4 @@
-// XFire Ecosystem v3.6 (Обновлено: автодополнение открывается вверх, синие кнопки справа, статус прошивки желтым)
+// XFire Ecosystem v3.6 (Оптимизировано: чистый стиль, стабильный терминал с автодополнением вверх, аккуратные карточки)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -87,7 +87,7 @@ class XFireSliderTrackShape extends RectangularSliderTrackShape {
 }
 
 // ==========================================
-// ОБЩИЕ УНИВЕРСАЛЬНЫЕ КОМПОНЕНТЫ СТИЛЯ
+// УНИВЕРСАЛЬНЫЕ КОМПОНЕНТЫ СТИЛЯ
 // ==========================================
 class XFireCard extends StatelessWidget {
   final Widget child;
@@ -322,7 +322,7 @@ class XFireSegmentedCard extends StatelessWidget {
 }
 
 // ==========================================
-// ПИД ВИДЖЕТ (StatefulWidget)
+// ПИД ВИДЖЕТ
 // ==========================================
 class PidAxisCardWidget extends StatefulWidget {
   final String axisName;
@@ -590,7 +590,7 @@ class _MainContainerState extends State<MainContainer> {
 }
 
 // ==========================================
-// СЕРВИС СВЯЗИ И УТИЛИТЫ (ДЕФОЛТЫ 915 МГц)
+// СЕРВИС СВЯЗИ И УТИЛИТЫ
 // ==========================================
 class SerialService {
   static bool isConnected = false;
@@ -672,7 +672,7 @@ class DocSection {
 }
 
 // ==========================================
-// ВКЛАДКА 0: ИНФО (БЕЗ БЛОКА USB)
+// ВКЛАДКА 0: ИНФО
 // ==========================================
 class InfoConnectionTab extends StatefulWidget {
   const InfoConnectionTab({super.key});
@@ -1853,7 +1853,7 @@ class _RadioTabState extends State<RadioTab> {
 }
 
 // ==========================================
-// ВКЛАДКА 4: ТЕРМИНАЛ CLI (АВТОДОПОЛНЕНИЕ ВВЕРХ)
+// ВКЛАДКА 4: ТЕРМИНАЛ CLI (С АВТОДОПОЛНЕНИЕМ ВВЕРХ)
 // ==========================================
 class TerminalTab extends StatefulWidget {
   const TerminalTab({super.key});
@@ -1865,7 +1865,9 @@ class TerminalTab extends StatefulWidget {
 class _TerminalTabState extends State<TerminalTab> {
   late StreamSubscription<String> _sub;
   String _displayLog = "";
-  TextEditingController? _autocompleteController;
+  final TextEditingController _controller = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
+  List<String> _suggestions = [];
 
   final List<String> _cliCommands = [
     "info", "mon", "stop",
@@ -1884,18 +1886,38 @@ class _TerminalTabState extends State<TerminalTab> {
   void initState() {
     super.initState();
     _displayLog = SerialService.terminalLog;
-    _sub = SerialService.logController.stream.listen((log) { if (mounted) setState(() => _displayLog = log); });
+    _sub = SerialService.logController.stream.listen((log) {
+      if (mounted) setState(() => _displayLog = log);
+    });
+    _controller.addListener(_onTextChanged);
+  }
+
+  void _onTextChanged() {
+    final text = _controller.text.trim();
+    setState(() {
+      if (text.isEmpty) {
+        _suggestions = [];
+      } else {
+        _suggestions = _cliCommands
+            .where((cmd) => cmd.toLowerCase().contains(text.toLowerCase()))
+            .toList();
+      }
+    });
   }
 
   @override
   void dispose() {
     _sub.cancel();
+    _controller.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
   void _submitCommand(String val) {
     if (val.isNotEmpty) {
       SerialService.sendCommand(val);
+      _controller.clear();
+      setState(() => _suggestions = []);
     }
   }
 
@@ -1909,83 +1931,65 @@ class _TerminalTabState extends State<TerminalTab> {
             child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 13, vertical: 4),
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.06))),
-              child: SingleChildScrollView(reverse: true, child: Text(_displayLog, style: const TextStyle(fontFamily: 'monospace', color: Colors.greenAccent, fontSize: 11))),
+              decoration: BoxDecoration(
+                color: Colors.black,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white.withOpacity(0.06)),
+              ),
+              child: SingleChildScrollView(
+                reverse: true,
+                child: Text(_displayLog, style: const TextStyle(fontFamily: 'monospace', color: Colors.greenAccent, fontSize: 11)),
+              ),
             ),
           ),
+          // Выпадающий список подсказок (появляется ВВЕРХ над полем ввода)
+          if (_suggestions.isNotEmpty)
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 13),
+              constraints: const BoxConstraints(maxHeight: 150),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1C1C1E),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white12),
+              ),
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                itemCount: _suggestions.length,
+                itemBuilder: (context, index) {
+                  final item = _suggestions[index];
+                  return InkWell(
+                    onTap: () {
+                      _controller.text = item;
+                      _controller.selection = TextSelection.fromPosition(TextPosition(offset: item.length));
+                      setState(() => _suggestions = []);
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
+                      child: Text(
+                        item,
+                        style: const TextStyle(fontFamily: 'monospace', fontSize: 12, color: Colors.amberAccent, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          const SizedBox(height: 4),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 8.0),
             child: Row(
               children: [
-                // Поле ввода с выпадающим списком команд (теперь открывается ВВЕРХ)
                 Expanded(
-                  child: Autocomplete<String>(
-                    optionsBuilder: (TextEditingValue textEditingValue) {
-                      if (textEditingValue.text.isEmpty) {
-                        return const Iterable<String>.empty();
-                      }
-                      return _cliCommands.where((String option) {
-                        return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
-                      });
-                    },
-                    onSelected: (String selection) {
-                      _submitCommand(selection);
-                      _autocompleteController?.clear();
-                    },
-                    fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-                      _autocompleteController = controller;
-                      return TextField(
-                        controller: controller,
-                        focusNode: focusNode,
-                        style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
-                        decoration: const InputDecoration(hintText: "Enter CLI command..."),
-                        onSubmitted: (val) {
-                          _submitCommand(val);
-                          controller.clear();
-                        },
-                      );
-                    },
-                    optionsViewBuilder: (context, onSelected, options) {
-                      return Align(
-                        alignment: Alignment.bottomLeft, // Открываем список ВВЕРХ от поля ввода
-                        child: Transform.translate(
-                          offset: const Offset(0, -8), // Небольшой отступ над полем
-                          child: Material(
-                            elevation: 6.0,
-                            color: const Color(0xFF1C1C1E),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              side: const BorderSide(color: Colors.white12),
-                            ),
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(maxHeight: 180, maxWidth: 260),
-                              child: ListView.builder(
-                                padding: EdgeInsets.zero,
-                                shrinkWrap: true,
-                                itemCount: options.length,
-                                itemBuilder: (BuildContext context, int index) {
-                                  final String option = options.elementAt(index);
-                                  return InkWell(
-                                    onTap: () => onSelected(option),
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
-                                      child: Text(
-                                        option,
-                                        style: const TextStyle(fontFamily: 'monospace', fontSize: 12, color: Colors.amberAccent, fontWeight: FontWeight.bold),
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
+                  child: TextField(
+                    controller: _controller,
+                    focusNode: _focusNode,
+                    style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
+                    decoration: const InputDecoration(hintText: "Enter CLI command..."),
+                    onSubmitted: _submitCommand,
                   ),
                 ),
                 const SizedBox(width: 8),
-                // Кнопка Инфо (синяя, справа)
                 SizedBox(
                   height: 44,
                   width: 44,
@@ -2000,12 +2004,14 @@ class _TerminalTabState extends State<TerminalTab> {
                   ),
                 ),
                 const SizedBox(width: 6),
-                // Кнопка очистки (синяя, справа)
                 SizedBox(
                   height: 44,
                   width: 44,
                   child: IconButton.filled(
-                    onPressed: () { SerialService.terminalLog = ""; SerialService.logController.add(""); },
+                    onPressed: () {
+                      SerialService.terminalLog = "";
+                      SerialService.logController.add("");
+                    },
                     icon: const Icon(Icons.cleaning_services, size: 18, color: Colors.white),
                     tooltip: "Clear Log",
                     style: IconButton.styleFrom(
@@ -2015,15 +2021,9 @@ class _TerminalTabState extends State<TerminalTab> {
                   ),
                 ),
                 const SizedBox(width: 6),
-                // Кнопка отправки (синяя, справа)
                 IconButton.filled(
                   icon: const Icon(Icons.send_rounded, size: 18, color: Colors.white),
-                  onPressed: () {
-                    if (_autocompleteController != null && _autocompleteController!.text.isNotEmpty) {
-                      _submitCommand(_autocompleteController!.text);
-                      _autocompleteController!.clear();
-                    }
-                  },
+                  onPressed: () => _submitCommand(_controller.text),
                   style: IconButton.styleFrom(
                     backgroundColor: Colors.blueAccent,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -2042,7 +2042,6 @@ class _TerminalTabState extends State<TerminalTab> {
 // ==========================================
 // ХУДОЖНИКИ HUD И АВИАГОРИЗОНТ
 // ==========================================
-
 class PitchHudScalePainter extends CustomPainter {
   final double value; 
   final double minVal; 
