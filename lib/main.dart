@@ -1,4 +1,4 @@
-// XFire Ecosystem v3.6 (Обновлено: центрированный селектор вкладок, стандартный переключатель USB в конце списка)
+// XFire Ecosystem v3.6 (Обновлено: панель терминала с автодополнением, обработка ошибок USB, стандартные карточки прошивки)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -483,20 +483,27 @@ class _MainContainerState extends State<MainContainer> {
     if (SerialService.isConnected) {
       await SerialService.disconnect();
     } else {
-      List<UsbDevice> devices = await UsbSerial.listDevices();
-      if (devices.isEmpty) {
-        SerialService.appendLog(">> ERROR: No USB devices found\n");
-      } else {
-        SerialService.usbPort = await devices[0].create();
-        bool openResult = await SerialService.usbPort!.open();
-        if (!openResult) {
-          SerialService.appendLog(">> ERROR: Failed to open USB port\n");
+      try {
+        List<UsbDevice> devices = await UsbSerial.listDevices();
+        if (devices.isEmpty) {
+          SerialService.appendLog(">> ERROR: No USB devices found\n");
+          if (mounted) showAppDialog(context, "Ошибка соединения", "USB устройства не найдены! Подключите плату по USB OTG.", isError: true);
         } else {
-          await SerialService.usbPort!.setPortParameters(115200, UsbPort.DATABITS_8, UsbPort.STOPBITS_1, UsbPort.PARITY_NONE);
-          SerialService.isConnected = true;
-          SerialService.appendLog(">> USB Connected: ${devices[0].deviceName}\n");
-          SerialService._usbSubscription = SerialService.usbPort!.inputStream!.listen((data) => SerialService.handleIncomingData(data));
+          SerialService.usbPort = await devices[0].create();
+          bool? openResult = await SerialService.usbPort?.open();
+          if (openResult != true) {
+            SerialService.appendLog(">> ERROR: Failed to open USB port\n");
+            if (mounted) showAppDialog(context, "Ошибка соединения", "Не удалось открыть USB порт устройства!", isError: true);
+          } else {
+            await SerialService.usbPort!.setPortParameters(115200, UsbPort.DATABITS_8, UsbPort.STOPBITS_1, UsbPort.PARITY_NONE);
+            SerialService.isConnected = true;
+            SerialService.appendLog(">> USB Connected: ${devices[0].deviceName}\n");
+            SerialService._usbSubscription = SerialService.usbPort!.inputStream!.listen((data) => SerialService.handleIncomingData(data));
+          }
         }
+      } catch (e) {
+        SerialService.appendLog(">> ERROR: USB Exception: $e\n");
+        if (mounted) showAppDialog(context, "Ошибка соединения", "Сбой подключения USB Serial: $e", isError: true);
       }
     }
     setState(() {});
@@ -540,7 +547,6 @@ class _MainContainerState extends State<MainContainer> {
                       ),
                     );
                   }),
-                  // Обычный переключатель USB Serial в конце выпадающего списка
                   DropdownMenuItem<int>(
                     value: _tabs.length,
                     child: Row(
@@ -1074,31 +1080,29 @@ class _SettingsTabState extends State<SettingsTab> {
             ]),
 
             _buildExpansionCard("Прошивка и калибровки FC", "Обновление прошивки STM32 и калибровка датчиков", Icons.memory, [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 4.0),
-                child: Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(_statusFC, style: const TextStyle(fontFamily: 'monospace', fontSize: 11, color: Colors.greenAccent)),
-                        const SizedBox(height: 10),
-                        LinearProgressIndicator(value: _progressFC, color: Colors.blueAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
-                        const SizedBox(height: 14),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 40,
-                          child: ElevatedButton.icon(
-                            onPressed: _isFlashingFC ? null : _flashFC,
-                            icon: const Icon(Icons.memory, size: 16),
-                            label: Text(_isFlashingFC ? "Прошивка FC..." : "Прошить полетный контроллер (v3.6)", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                          ),
-                        ),
-                      ],
+              XFireCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("Прошивка полетного контроллера (STM32)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                    const SizedBox(height: 2),
+                    const Text("fc_firmware_flash v3.6", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 10),
+                    Text(_statusFC, style: const TextStyle(fontFamily: 'monospace', fontSize: 11, color: Colors.greenAccent)),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 40,
+                      child: ElevatedButton.icon(
+                        onPressed: _isFlashingFC ? null : _flashFC,
+                        icon: const Icon(Icons.memory, size: 16),
+                        label: Text(_isFlashingFC ? "Прошивка FC..." : "Прошить полетный контроллер (v3.6)", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 12),
+                    LinearProgressIndicator(value: _progressFC, color: Colors.blueAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
+                  ],
                 ),
               ),
               XFireActionCard(title: "Калибровка гироскопа", commandName: "cal_gyro", onTap: () { if (!SerialService.isConnected) { showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true); } else { SerialService.sendCommand("cal_gyro"); showAppDialog(context, "Успех", "Калибровка гироскопа запущена!"); } }),
@@ -1256,31 +1260,29 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
             onChanged: (v) => setState(() => _stickDeadband = v),
             onChangeEnd: (v) => SerialService.sendCommand("rc_tx_deadband ${v.round()}"),
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 4.0),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(_statusRC, style: const TextStyle(fontFamily: 'monospace', fontSize: 11, color: Colors.greenAccent)),
-                    const SizedBox(height: 10),
-                    LinearProgressIndicator(value: _progressRC, color: Colors.blueAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
-                    const SizedBox(height: 14),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 40,
-                      child: ElevatedButton.icon(
-                        onPressed: _isFlashingRC ? null : _flashRC,
-                        icon: const Icon(Icons.gamepad, size: 16),
-                        label: Text(_isFlashingRC ? "Прошивка пульта..." : "Прошить пульт управления (v3.6)", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                      ),
-                    ),
-                  ],
+          XFireCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Прошивка пульта управления", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                const SizedBox(height: 2),
+                const Text("rc_firmware_flash v3.6", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
+                const SizedBox(height: 10),
+                Text(_statusRC, style: const TextStyle(fontFamily: 'monospace', fontSize: 11, color: Colors.greenAccent)),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  height: 40,
+                  child: ElevatedButton.icon(
+                    onPressed: _isFlashingRC ? null : _flashRC,
+                    icon: const Icon(Icons.gamepad, size: 16),
+                    label: Text(_isFlashingRC ? "Прошивка пульта..." : "Прошить пульт управления (v3.6)", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                  ),
                 ),
-              ),
+                const SizedBox(height: 12),
+                LinearProgressIndicator(value: _progressRC, color: Colors.blueAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
+              ],
             ),
           ),
         ]),
@@ -1855,7 +1857,7 @@ class _RadioTabState extends State<RadioTab> {
 }
 
 // ==========================================
-// ВКЛАДКА 4: ТЕРМИНАЛ CLI (ЧИСТЫЙ ТЕРМИНАЛ)
+// ВКЛАДКА 4: ТЕРМИНАЛ CLI (С АВТОДОПОЛНЕНИЕМ)
 // ==========================================
 class TerminalTab extends StatefulWidget {
   const TerminalTab({super.key});
@@ -1865,9 +1867,22 @@ class TerminalTab extends StatefulWidget {
 }
 
 class _TerminalTabState extends State<TerminalTab> {
-  final TextEditingController _cmdController = TextEditingController();
   late StreamSubscription<String> _sub;
   String _displayLog = "";
+  TextEditingController? _autocompleteController;
+
+  final List<String> _cliCommands = [
+    "info", "mon", "stop",
+    "fl_mode", "fl_roll_max", "fl_pitch_max", "fl_vz_speed_max", "fl_height_min",
+    "rc_rate", "rc_super_expo", "rc_stick_expo", "rc_yaw_rate", "rc_yaw_super_expo", "rc_yaw_expo", "rc_deadband", "rc_horizon_transition", "rc_filter_smoothing",
+    "bat_cells", "bat_fs_v", "bat_filter_alpha",
+    "lidar_en", "lidar_min_alt", "lidar_filter_alpha",
+    "gyro_filter_alpha", "acc_filter_alpha", "filter_mode", "filter_notch_freq", "filter_notch_bw", "filter_dyn_min_hz", "filter_dyn_max_hz",
+    "roll_kp", "roll_ki", "roll_kd", "pitch_kp", "pitch_ki", "pitch_kd", "yaw_kp", "yaw_ki", "yaw_kd", "vz_kp", "vz_ki", "vz_kd",
+    "rc_cal_sticks", "rc_tx_deadband", "rc_proto", "tx_power_mw",
+    "rtx_en", "rtx_band", "rtx_addr", "rtx_chan", "rtx_sf", "rtx_bw", "rtx_cr", "rtx_power", "rtx_link_warn_threshold", "rtx_auto_en", "rtx_write",
+    "cal_gyro", "cal_acc", "test_mpu", "test_sx", "test_lidar", "test_motor", "test_pid", "test_rc", "test_rc_can"
+  ];
 
   @override
   void initState() {
@@ -1879,8 +1894,13 @@ class _TerminalTabState extends State<TerminalTab> {
   @override
   void dispose() {
     _sub.cancel();
-    _cmdController.dispose();
     super.dispose();
+  }
+
+  void _submitCommand(String val) {
+    if (val.isNotEmpty) {
+      SerialService.sendCommand(val);
+    }
   }
 
   @override
@@ -1889,31 +1909,6 @@ class _TerminalTabState extends State<TerminalTab> {
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 4.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: () => SerialService.sendCommand("info"),
-                    icon: const Icon(Icons.info_outline, size: 16, color: Colors.white),
-                    label: const Text("Read Config Info", style: TextStyle(color: Colors.white)),
-                    style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  height: 44,
-                  child: IconButton.filledTonal(
-                    onPressed: () { SerialService.terminalLog = ""; SerialService.logController.add(""); },
-                    icon: const Icon(Icons.cleaning_services, size: 18),
-                    tooltip: "Clear Log",
-                    style: IconButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                  ),
-                ),
-              ],
-            ),
-          ),
           Expanded(
             child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 13, vertical: 4),
@@ -1926,19 +1921,105 @@ class _TerminalTabState extends State<TerminalTab> {
             padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 8.0),
             child: Row(
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: _cmdController,
-                    style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
-                    decoration: const InputDecoration(hintText: "Enter CLI command..."),
-                    onSubmitted: (val) { if (val.isNotEmpty) { SerialService.sendCommand(val); _cmdController.clear(); } },
+                // Кнопка Инфо (иконка)
+                SizedBox(
+                  height: 44,
+                  width: 44,
+                  child: IconButton.filledTonal(
+                    onPressed: () => SerialService.sendCommand("info"),
+                    icon: const Icon(Icons.info_outline, size: 18, color: Colors.amberAccent),
+                    tooltip: "Read Config Info",
+                    style: IconButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                   ),
                 ),
                 const SizedBox(width: 8),
+                // Кнопка очистки (иконка)
+                SizedBox(
+                  height: 44,
+                  width: 44,
+                  child: IconButton.filledTonal(
+                    onPressed: () { SerialService.terminalLog = ""; SerialService.logController.add(""); },
+                    icon: const Icon(Icons.cleaning_services, size: 18),
+                    tooltip: "Clear Log",
+                    style: IconButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Поле ввода с выпадающим списком команд
+                Expanded(
+                  child: Autocomplete<String>(
+                    optionsBuilder: (TextEditingValue textEditingValue) {
+                      if (textEditingValue.text.isEmpty) {
+                        return const Iterable<String>.empty();
+                      }
+                      return _cliCommands.where((String option) {
+                        return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
+                      });
+                    },
+                    onSelected: (String selection) {
+                      _submitCommand(selection);
+                      _autocompleteController?.clear();
+                    },
+                    fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                      _autocompleteController = controller;
+                      return TextField(
+                        controller: controller,
+                        focusNode: focusNode,
+                        style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
+                        decoration: const InputDecoration(hintText: "Enter CLI command..."),
+                        onSubmitted: (val) {
+                          _submitCommand(val);
+                          controller.clear();
+                        },
+                      );
+                    },
+                    optionsViewBuilder: (context, onSelected, options) {
+                      return Align(
+                        alignment: Alignment.topLeft,
+                        child: Material(
+                          elevation: 6.0,
+                          color: const Color(0xFF1C1C1E),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: const BorderSide(color: Colors.white12),
+                          ),
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxHeight: 180, maxWidth: 260),
+                            child: ListView.builder(
+                              padding: EdgeInsets.zero,
+                              shrinkWrap: true,
+                              itemCount: options.length,
+                              itemBuilder: (BuildContext context, int index) {
+                                final String option = options.elementAt(index);
+                                return InkWell(
+                                  onTap: () => onSelected(option),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
+                                    child: Text(
+                                      option,
+                                      style: const TextStyle(fontFamily: 'monospace', fontSize: 12, color: Colors.amberAccent, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Кнопка отправки
                 IconButton.filled(
                   icon: const Icon(Icons.send_rounded, size: 18, color: Colors.white),
-                  onPressed: () { if (_cmdController.text.isNotEmpty) { SerialService.sendCommand(_cmdController.text); _cmdController.clear(); } },
-                  style: IconButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.all(14)),
+                  onPressed: () {
+                    if (_autocompleteController != null && _autocompleteController!.text.isNotEmpty) {
+                      _submitCommand(_autocompleteController!.text);
+                      _autocompleteController!.clear();
+                    }
+                  },
+                  style: IconButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.all(12)),
                 ),
               ],
             ),
