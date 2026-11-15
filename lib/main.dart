@@ -1,4 +1,4 @@
-// XFire Ecosystem v3.21 (Строгий инженерный расчет с учетом шага, лопастей, KV, КПД и R_int)
+// XFire Ecosystem v3.24 (С расчетом максимальных токов, просадок при макс. углах и вертикальном взлете)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -398,7 +398,7 @@ class _XFireFlashCardState extends State<XFireFlashCard> {
       });
       if (mounted) {
         setState(() {
-          _statusState = "Прошивка успешно завершена (v3.21)!";
+          _statusState = "Прошивка успешно завершена (v3.24)!";
           _progress = 1.0;
         });
         showAppDialog(context, "Успех", "${widget.targetName} успешно прошит!");
@@ -568,7 +568,7 @@ class XFireSliderCard extends StatelessWidget {
                     value: value.clamp(min, max),
                     min: min,
                     max: max,
-                    divisions: divisions,
+                    divisions: divisions > 0 ? divisions : 1,
                     onChanged: onChanged,
                     onChangeEnd: onChangeEnd,
                   ),
@@ -778,7 +778,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     return const Scaffold(
       backgroundColor: Color(0xFF0A0A0A),
       body: Center(
-        child: Text("XFire v3.21", style: TextStyle(fontSize: 42, fontWeight: FontWeight.bold, letterSpacing: 4.0, color: Colors.white)),
+        child: Text("XFire v3.24", style: TextStyle(fontSize: 42, fontWeight: FontWeight.bold, letterSpacing: 4.0, color: Colors.white)),
       ),
     );
   }
@@ -1106,7 +1106,7 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
-                      child: const Text('v.3.21 (CLI)', style: TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                      child: const Text('v.3.24 (CLI)', style: TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
@@ -1163,6 +1163,13 @@ class _ProfilesTabState extends State<ProfilesTab> {
   double _batteryMah = 4000.0;
   double _frameSizeMm = 450.0;
 
+  // Динамическое суммарное внутреннее сопротивление батареи в мОм
+  double _totalRintMohm = 48.0; 
+
+  // Максимальный угол наклона и вертикальная скорость из настроек FC для расчетов
+  double _calcMaxTilt = 35.0; // градусов (fl_roll_max / fl_pitch_max)
+  double _calcMaxVz = 1.2;    // м/с (fl_vz_speed_max)
+
   double get _minPitch => 3.0;
   double get _maxPitch => _propSize <= 6.0 ? 6.0 : 5.5;
 
@@ -1170,44 +1177,33 @@ class _ProfilesTabState extends State<ProfilesTab> {
   double get _maxKv => _propSize <= 6.0 ? 2800.0 : (_propSize <= 8.0 ? 1800.0 : 950.0);
 
   Map<String, dynamic> calculateOptimalSettings() {
-    double ocVoltage = _batteryCells * 3.7; // Напряжение холостого хода
+    double ocVoltage = _batteryCells * 3.7;
     double totalWeightKg = _auwGrams / 1000.0;
     
-    // Физические параметры силовой цепи
-    double rInt = 0.015;     // 15 мОм внутреннее сопротивление батареи
-    double etaEsc = 0.96;    // 96% КПД ESC
-    double etaMotor = 0.80;  // 80% КПД мотора (медь + железо)
+    double rInt = (_totalRintMohm / 1000.0).clamp((_batteryCells * 3.0) / 1000.0, (_batteryCells * 30.0) / 1000.0);
+    double etaEsc = 0.96;    
+    double etaMotor = 0.80;  
 
-    // Обороты под нагрузкой (~80% от холостых)
+    double pitchFactor = _propPitch / 4.5;
+    double bladeFactor = _bladesCount == 2 ? 1.0 : 1.15;
+    
     double rpmLoad = _motorKv * ocVoltage * 0.80;
-    
-    // Аэродинамика: учитываем размер, шаг и количество лопастей винта
-    // Тяга одного мотора
-    double pitchFactor = _propPitch / 4.5; // нормализация к шагу 4.5
-    double bladeFactor = _bladesCount == 2 ? 1.0 : 1.15; // 3 лопасти создают больше тяги, но требуют больше энергии
-    
-    double thrustPerMotorGrams = math.pow(_propSize, 3.2) * _propPitch * math.pow(rpmLoad / 1000.0, 2.0) * (bladeFactor == 1.0 ? 1.0 : 0.88) * 0.045;
+    double thrustPerMotorGrams = math.pow(_propSize, 3.2) * _propPitch * math.pow(rpmLoad / 1000.0, 2.0) * (_bladesCount == 2 ? 1.0 : 0.88) * 0.045;
     double totalThrustGrams = thrustPerMotorGrams * 4.0;
     double twr = totalThrustGrams / _auwGrams;
 
-    // Момент инерции рамы и стабилизация
+    double hoverThrustRatio = (_auwGrams / totalThrustGrams).clamp(0.12, 0.90);
+    double hoverThrottle = (hoverThrustRatio * 100.0 * 1.18).clamp(15.0, 90.0);
+
     double frameRadiusM = (_frameSizeMm / 2000.0);
     double momentOfInertia = totalWeightKg * math.pow(frameRadiusM, 2);
     double behaviorMultiplier = _behaviorIndex == 0 ? 0.8 : (_behaviorIndex == 1 ? 1.0 : 1.35);
-    double stabilizationPowerRatio = 1.04 + (0.08 * (momentOfInertia / 0.05)) * behaviorMultiplier;
 
-    double hoverThrustRatio = (_auwGrams / totalThrustGrams).clamp(0.12, 0.90);
-    double hoverThrottle = (hoverThrustRatio * 100.0 * 1.18 * stabilizationPowerRatio).clamp(15.0, 90.0);
-
-    // Механическая мощность на валу с учетом шага и лопастей
     double specificPowerWPerKg = 130.0 * (math.pow(9.0 / _propSize, 0.85)) * (math.pow(_motorKv / 900.0, 0.1));
-    double hoverPowerMech = totalWeightKg * specificPowerWPerKg * math.sqrt(hoverThrustRatio) * stabilizationPowerRatio * pitchFactor * bladeFactor;
-
-    // Потребная электрическая мощность на входе ESC
+    double hoverPowerMech = totalWeightKg * specificPowerWPerKg * math.sqrt(hoverThrustRatio) * pitchFactor * bladeFactor;
     double pEscIn = hoverPowerMech / (etaMotor * etaEsc);
 
-    // Решение квадратного уравнения для тока висения с учетом просадки на R_int (15 мОм):
-    // I^2 * R_int - I * U_oc + P_esc_in = 0
+    // Ток висения
     double a = rInt;
     double b = -ocVoltage;
     double c = pEscIn;
@@ -1223,37 +1219,55 @@ class _ProfilesTabState extends State<ProfilesTab> {
     double loadVoltage = ocVoltage - (hoverAmps * rInt);
     double batteryThermalLossWatts = math.pow(hoverAmps, 2) * rInt;
 
-    // Полезная емкость аккумулятора (80% от номинала для LiPo)
+    // РАСЧЕТ ДЛЯ МАКСИМАЛЬНОГО УГЛА НАКЛОНА (fl_roll_max / fl_pitch_max)
+    double tiltRad = _calcMaxTilt * math.pi / 180.0;
+    double tiltThrustMultiplier = 1.0 / math.cos(tiltRad);
+    double tiltPowerMultiplier = math.pow(tiltThrustMultiplier, 1.5);
+    double maxTiltAmps = hoverAmps * tiltPowerMultiplier;
+    double maxTiltVoltage = ocVoltage - (maxTiltAmps * rInt);
+    double maxTiltThermalLoss = math.pow(maxTiltAmps, 2) * rInt;
+
+    // РАСЧЕТ ДЛЯ МАКСИМАЛЬНОГО ВЕРТИКАЛЬНОГО ВЗЛЕТА (fl_vz_speed_max)
+    double climbPowerMech = totalWeightKg * 9.81 * _calcMaxVz;
+    double totalClimbEscPower = pEscIn + (climbPowerMech / (etaMotor * etaEsc));
+    
+    double aClimb = rInt;
+    double bClimb = -ocVoltage;
+    double cClimb = totalClimbEscPower;
+    double discClimb = (bClimb * bClimb) - (4 * aClimb * cClimb);
+    double maxVzAmps = hoverAmps * 1.6;
+    if (discClimb >= 0) {
+      maxVzAmps = (-bClimb - math.sqrt(discClimb)) / (2 * aClimb);
+    }
+    double maxVzVoltage = ocVoltage - (maxVzAmps * rInt);
+    double maxVzThermalLoss = math.pow(maxVzAmps, 2) * rInt;
+
     double usableBatteryAh = (_batteryMah / 1000.0) * 0.80;
     double hoverTimeMinutes = (usableBatteryAh / hoverAmps) * 60.0;
 
-    // Полет с наклоном 30° и штрафом -10% на динамику и взлеты
-    double tiltAngleRad = 30.0 * math.pi / 180.0;
-    double thrustMultiplier30 = 1.0 / math.cos(tiltAngleRad);
-    double powerMultiplier30 = math.pow(thrustMultiplier30, 1.5) * stabilizationPowerRatio;
-    
+    double tiltAngleRad30 = 30.0 * math.pi / 180.0;
+    double thrustMultiplier30 = 1.0 / math.cos(tiltAngleRad30);
+    double powerMultiplier30 = math.pow(thrustMultiplier30, 1.5);
     double flightAmps30 = hoverAmps * powerMultiplier30;
     double dynamicFlightMinutes = (usableBatteryAh / flightAmps30) * 60.0 * 0.90;
 
-    // ПИД и фильтры
-    double inertiaFactor = math.pow(_propSize, 2) * _bladesCount;
-    double baseKp = (15.0 / math.sqrt(inertiaFactor)).clamp(0.20, 0.90);
+    double baseKp = (0.25 * (momentOfInertia / 0.02) * (4.0 / twr)).clamp(0.20, 1.20);
     double baseKi = 0.010;
-    double baseKd = (baseKp * 0.04).clamp(0.005, 0.040);
+    double baseKd = (baseKp * 0.035).clamp(0.005, 0.050);
 
     double rollPitchKp = double.parse((baseKp * behaviorMultiplier).toStringAsFixed(3));
     double rollPitchKd = double.parse((baseKd * behaviorMultiplier).toStringAsFixed(3));
-    double yawKp = (rollPitchKp * (1.0 + (_frameSizeMm / 500.0))).clamp(0.3, 1.2);
-    double yawKd = (rollPitchKd * 0.5).clamp(0.0, 0.02);
+    double yawKp = (rollPitchKp * 1.2).clamp(0.3, 1.5);
+    double yawKd = (rollPitchKd * 0.4).clamp(0.0, 0.025);
 
     double rcRate = _behaviorIndex == 0 ? 0.25 : (_behaviorIndex == 1 ? 0.38 : 0.55);
     double superExpo = _behaviorIndex == 0 ? 0.02 : (_behaviorIndex == 1 ? 0.04 : 0.08);
 
-    double maxRps = (_motorKv * ocVoltage) / 60.0;
+    double maxRps = (_motorKv * loadVoltage) / 60.0;
     double bladePassFreq = maxRps * _bladesCount; 
-    double notchFreq = (bladePassFreq * 0.75).clamp(40.0, 250.0);
-    double dynMinHz = (notchFreq * 0.6).clamp(30.0, 90.0);
-    double dynMaxHz = (notchFreq * 1.8).clamp(150.0, 350.0);
+    double notchFreq = (bladePassFreq * 0.75).clamp(40.0, 300.0);
+    double dynMinHz = (notchFreq * 0.55).clamp(30.0, 100.0);
+    double dynMaxHz = (notchFreq * 1.85).clamp(140.0, 380.0);
 
     return {
       'roll_kp': rollPitchKp,
@@ -1277,6 +1291,13 @@ class _ProfilesTabState extends State<ProfilesTab> {
       'bat_thermal_loss': batteryThermalLossWatts.toStringAsFixed(1),
       'flight_time': hoverTimeMinutes.toStringAsFixed(1),
       'flight_time_30deg': dynamicFlightMinutes.toStringAsFixed(1),
+      'total_rint_mohm': _totalRintMohm.toStringAsFixed(1),
+      'max_tilt_amps': maxTiltAmps.toStringAsFixed(1),
+      'max_tilt_voltage': maxTiltVoltage.toStringAsFixed(2),
+      'max_tilt_loss': maxTiltThermalLoss.toStringAsFixed(1),
+      'max_vz_amps': maxVzAmps.toStringAsFixed(1),
+      'max_vz_voltage': maxVzVoltage.toStringAsFixed(2),
+      'max_vz_loss': maxVzThermalLoss.toStringAsFixed(1),
     };
   }
 
@@ -1287,21 +1308,56 @@ class _ProfilesTabState extends State<ProfilesTab> {
     if (_motorKv < _minKv) _motorKv = _minKv;
     if (_motorKv > _maxKv) _motorKv = _maxKv;
 
-    var optimal = calculateOptimalSettings();
+    double minRint = _batteryCells * 3.0;
+    double maxRint = _batteryCells * 30.0;
+    if (_totalRintMohm < minRint) _totalRintMohm = minRint;
+    if (_totalRintMohm > maxRint) _totalRintMohm = maxRint;
+
+    var optimal = calculateProfileSettingsDynamic(_batteryCells, _totalRintMohm);
 
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
         XFireExpansionCard(
           title: "Калькулятор сетапа и полета",
-          subtitle: "Подбор PID, фильтров, TWR и расчет расхода батареи",
+          subtitle: "Расчет PID, R_int, максимальных углов и вертикального взлета",
           icon: Icons.tune_rounded,
           children: [
             XFireSliderCard(title: "Размер пропеллера", commandName: "prop_size_inch", value: _propSize, min: 5.0, max: 13.0, divisions: 8, unit: "\"", onChanged: (v) => setState(() => _propSize = v), onChangeEnd: (_) {}),
             XFireSliderCard(title: "Шаг пропеллера", commandName: "prop_pitch_inch", value: _propPitch, min: _minPitch, max: _maxPitch, divisions: ((_maxPitch - _minPitch) * 10).round(), unit: "\"", onChanged: (v) => setState(() => _propPitch = v), onChangeEnd: (_) {}),
             XFireSegmentedCard(title: "Количество лопастей пропа", commandName: "prop_blades", options: const ["2 лопасти", "3 лопасти"], selectedIndex: _bladesCount == 2 ? 0 : 1, onSelected: (val) => setState(() => _bladesCount = val == 0 ? 2.0 : 3.0)),
             XFireSliderCard(title: "KV двигателя", commandName: "motor_kv", value: _motorKv, min: _minKv, max: _maxKv, divisions: 50, unit: "KV", onChanged: (v) => setState(() => _motorKv = v), onChangeEnd: (_) {}),
-            XFireSliderCard(title: "Количество банок аккумулятора", commandName: "battery_cells", value: _batteryCells, min: 3.0, max: 6.0, divisions: 3, unit: "S", onChanged: (v) => setState(() => _batteryCells = v), onChangeEnd: (_) {}),
+            XFireSliderCard(
+              title: "Количество банок аккумулятора",
+              commandName: "battery_cells",
+              value: _batteryCells,
+              min: 3.0,
+              max: 6.0,
+              divisions: 3,
+              unit: "S",
+              onChanged: (v) {
+                setState(() {
+                  _batteryCells = v;
+                  double newMin = _batteryCells * 3.0;
+                  double newMax = _batteryCells * 30.0;
+                  _totalRintMohm = _totalRintMohm.clamp(newMin, newMax);
+                });
+              },
+              onChangeEnd: (_) {},
+            ),
+            XFireSliderCard(
+              title: "Внутреннее сопротивление батареи (3-30 мОм/банку)",
+              commandName: "bat_rint_mohm",
+              value: _totalRintMohm,
+              min: minRint,
+              max: maxRint,
+              divisions: (maxRint - minRint).round().clamp(1, 200),
+              unit: "мОм",
+              onChanged: (v) => setState(() => _totalRintMohm = v),
+              onChangeEnd: (_) {},
+            ),
+            XFireSliderCard(title: "Максимальный угол наклона (fl_roll_max)", commandName: "fl_roll_max", value: _calcMaxTilt, min: 10.0, max: 75.0, divisions: 13, unit: "°", onChanged: (v) => setState(() => _calcMaxTilt = v), onChangeEnd: (_) {}),
+            XFireSliderCard(title: "Максимальная вертикальная скорость (fl_vz_speed_max)", commandName: "fl_vz_speed_max", value: _calcMaxVz, min: 0.5, max: 3.0, divisions: 25, unit: "м/с", onChanged: (v) => setState(() => _calcMaxVz = v), onChangeEnd: (_) {}),
             XFireSliderCard(title: "Взлетный вес дрона (AUW)", commandName: "auw_grams", value: _auwGrams, min: 400.0, max: 3500.0, divisions: 62, unit: "г", onChanged: (v) => setState(() => _auwGrams = v), onChangeEnd: (_) {}),
             XFireSliderCard(title: "Емкость аккумулятора", commandName: "battery_mah", value: _batteryMah, min: 1300.0, max: 16000.0, divisions: 58, unit: "mAh", onChanged: (v) => setState(() => _batteryMah = v), onChangeEnd: (_) {}),
             XFireSliderCard(title: "Диагональ рамы (от мотора до мотора)", commandName: "frame_size_mm", value: _frameSizeMm, min: 220.0, max: 650.0, divisions: 43, unit: "мм", onChanged: (v) => setState(() => _frameSizeMm = v), onChangeEnd: (_) {}),
@@ -1327,7 +1383,7 @@ class _ProfilesTabState extends State<ProfilesTab> {
                   children: [
                     Expanded(
                       child: Text(
-                        "РАСЧЕТ ЛЕТНЫХ ХАРАКТЕРИСТИК (v.3.21)",
+                        "ФИЗИЧЕСКИЙ РАСЧЕТ И НАГРУЗКИ (v.3.24)",
                         style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.1),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1339,16 +1395,27 @@ class _ProfilesTabState extends State<ProfilesTab> {
                 const SizedBox(height: 12),
                 _calcResultRow("Тяговооруженность (TWR):", "${optimal['twr']} : 1", Colors.greenAccent),
                 _calcResultRow("Газ висения (Hover Throttle):", "${optimal['hover_throttle']} %", Colors.cyanAccent),
-                _calcResultRow("Ток висения (с учетом шага/лопастей/КПД):", "${optimal['hover_amps']} А", Colors.amberAccent),
-                _calcResultRow("Напряжение под нагрузкой (15 мОм):", "${optimal['load_voltage']} В", Colors.white70),
-                _calcResultRow("Тепловые потери в батарее:", "${optimal['bat_thermal_loss']} Вт", Colors.redAccent.shade200),
-                _calcResultRow("Время висения (80% емкости):", "${optimal['flight_time']} мин", Colors.white70),
-                _calcResultRow("Время в полете (наклон 30° + взлеты -10%):", "${optimal['flight_time_30deg']} мин", Colors.greenAccent),
+                _calcResultRow("Сопротивление батареи (суммарное):", "${optimal['total_rint_mohm']} мОм (${(_totalRintMohm / _batteryCells).toStringAsFixed(1)} мОм/банку)", Colors.blueAccent),
                 const Divider(color: Colors.white12, height: 16),
-                _calcResultRow("Roll/Pitch Kp / Ki / Kd:", "${optimal['roll_kp']} / ${optimal['roll_ki']} / ${optimal['roll_kd']}", Colors.white),
-                _calcResultRow("Yaw Kp / Ki / Kd (по раме):", "${optimal['yaw_kp']} / ${optimal['yaw_ki']} / ${optimal['yaw_kd']}", Colors.white),
+                _calcResultRow("Ток висения:", "${optimal['hover_amps']} А", Colors.amberAccent),
+                _calcResultRow("Напряжение под нагрузкой (висение):", "${optimal['load_voltage']} В", Colors.white70),
+                _calcResultRow("Тепловые потери батареи (висение):", "${optimal['bat_thermal_loss']} Вт", Colors.white70),
+                const Divider(color: Colors.white12, height: 16),
+                _calcResultRow("Ток при макс. наклоне (${_calcMaxTilt.toStringAsFixed(0)}°):", "${optimal['max_tilt_amps']} А", Colors.orangeAccent),
+                _calcResultRow("Напряжение при макс. наклоне:", "${optimal['max_tilt_voltage']} В", Colors.orangeAccent),
+                _calcResultRow("Тепловые потери (макс. наклон):", "${optimal['max_tilt_loss']} Вт", Colors.redAccent.shade200),
+                const Divider(color: Colors.white12, height: 16),
+                _calcResultRow("Ток при макс. взлете (${_calcMaxVz.toStringAsFixed(1)} м/с):", "${optimal['max_vz_amps']} А", Colors.greenAccent),
+                _calcResultRow("Напряжение при макс. взлете:", "${optimal['max_vz_voltage']} В", Colors.greenAccent),
+                _calcResultRow("Тепловые потери (макс. взлет):", "${optimal['max_vz_loss']} Вт", Colors.redAccent.shade200),
+                const Divider(color: Colors.white12, height: 16),
+                _calcResultRow("Время висения (80% емкости):", "${optimal['flight_time']} мин", Colors.white70),
+                _calcResultRow("Время в полете (наклон 30° + взлеты):", "${optimal['flight_time_30deg']} мин", Colors.greenAccent),
+                const Divider(color: Colors.white12, height: 16),
+                _calcResultRow("Roll/Pitch Kp / Ki / Kd (от инерции):", "${optimal['roll_kp']} / ${optimal['roll_ki']} / ${optimal['roll_kd']}", Colors.white),
+                _calcResultRow("Yaw Kp / Ki / Kd:", "${optimal['yaw_kp']} / ${optimal['yaw_ki']} / ${optimal['yaw_kd']}", Colors.white),
                 _calcResultRow("RC Rate / Super Expo:", "${optimal['rc_rate']} / ${optimal['rc_super_expo']}", Colors.blueAccent),
-                _calcResultRow("Notch / Dyn Notch диапазон:", "${optimal['filter_notch_freq']} Гц (${optimal['filter_dyn_min_hz']}-${optimal['filter_dyn_max_hz']} Гц)", Colors.cyanAccent),
+                _calcResultRow("Notch / Dyn Notch (от BPF винта):", "${optimal['filter_notch_freq']} Гц (${optimal['filter_dyn_min_hz']}-${optimal['filter_dyn_max_hz']} Гц)", Colors.cyanAccent),
               ],
             ),
           ),
@@ -1362,6 +1429,9 @@ class _ProfilesTabState extends State<ProfilesTab> {
             _bladesCount = 2.0;
             _motorKv = 920.0;
             _batteryCells = 4.0;
+            _totalRintMohm = 48.0;
+            _calcMaxTilt = 35.0;
+            _calcMaxVz = 1.2;
             _behaviorIndex = 1;
             _auwGrams = 1200.0;
             _batteryMah = 4000.0;
@@ -1370,8 +1440,12 @@ class _ProfilesTabState extends State<ProfilesTab> {
         ),
 
         XFireBatchApplyCard(
-          hint: "Применение рассчитанных PID, RC и фильтров к контроллеру",
+          hint: "Применение рассчитанных PID, R_int и лимитов к контроллеру",
           parameters: [
+            "bat_rint_mohm $_totalRintMohm",
+            "fl_roll_max $_calcMaxTilt",
+            "fl_pitch_max $_calcMaxTilt",
+            "fl_vz_speed_max $_calcMaxVz",
             "roll_kp ${optimal['roll_kp']}",
             "roll_ki ${optimal['roll_ki']}",
             "roll_kd ${optimal['roll_kd']}",
@@ -1392,6 +1466,134 @@ class _ProfilesTabState extends State<ProfilesTab> {
         const SizedBox(height: 24),
       ],
     );
+  }
+
+  Map<String, dynamic> calculateProfileSettingsDynamic(double cells, double rintMohm) {
+    return calculateOptimalSettingsHelper(cells, rintMohm);
+  }
+
+  Map<String, dynamic> calculateOptimalSettingsHelper(double cells, double rintMohm) {
+    double ocVoltage = cells * 3.7;
+    double totalWeightKg = _auwGrams / 1000.0;
+    
+    double rInt = (rintMohm / 1000.0).clamp((cells * 3.0) / 1000.0, (cells * 30.0) / 1000.0);
+    double etaEsc = 0.96;
+    double etaMotor = 0.80;
+
+    double pitchFactor = _propPitch / 4.5;
+    double bladeFactor = _bladesCount == 2 ? 1.0 : 1.15;
+    
+    double rpmLoad = _motorKv * ocVoltage * 0.80;
+    double thrustPerMotorGrams = math.pow(_propSize, 3.2) * _propPitch * math.pow(rpmLoad / 1000.0, 2.0) * (_bladesCount == 2 ? 1.0 : 0.88) * 0.045;
+    double totalThrustGrams = thrustPerMotorGrams * 4.0;
+    double twr = totalThrustGrams / _auwGrams;
+
+    double hoverThrustRatio = (_auwGrams / totalThrustGrams).clamp(0.12, 0.90);
+    double hoverThrottle = (hoverThrustRatio * 100.0 * 1.18).clamp(15.0, 90.0);
+
+    double frameRadiusM = (_frameSizeMm / 2000.0);
+    double momentOfInertia = totalWeightKg * math.pow(frameRadiusM, 2);
+    double behaviorMultiplier = _behaviorIndex == 0 ? 0.8 : (_behaviorIndex == 1 ? 1.0 : 1.35);
+
+    double specificPowerWPerKg = 130.0 * (math.pow(9.0 / _propSize, 0.85)) * (math.pow(_motorKv / 900.0, 0.1));
+    double hoverPowerMech = totalWeightKg * specificPowerWPerKg * math.sqrt(hoverThrustRatio) * pitchFactor * bladeFactor;
+    double pEscIn = hoverPowerMech / (etaMotor * etaEsc);
+
+    double a = rInt;
+    double b = -ocVoltage;
+    double c = pEscIn;
+    double discriminant = (b * b) - (4 * a * c);
+    
+    double hoverAmps = 10.0;
+    if (discriminant >= 0) {
+      hoverAmps = (-b - math.sqrt(discriminant)) / (2 * a);
+    } else {
+      hoverAmps = ocVoltage / (2 * a);
+    }
+
+    double loadVoltage = ocVoltage - (hoverAmps * rInt);
+    double batteryThermalLossWatts = math.pow(hoverAmps, 2) * rInt;
+
+    // Расчет для макс. наклона
+    double tiltRad = _calcMaxTilt * math.pi / 180.0;
+    double tiltThrustMultiplier = 1.0 / math.cos(tiltRad);
+    double tiltPowerMultiplier = math.pow(tiltThrustMultiplier, 1.5);
+    double maxTiltAmps = hoverAmps * tiltPowerMultiplier;
+    double maxTiltVoltage = ocVoltage - (maxTiltAmps * rInt);
+    double maxTiltThermalLoss = math.pow(maxTiltAmps, 2) * rInt;
+
+    // Расчет для макс. вертикального взлета
+    double climbPowerMech = totalWeightKg * 9.81 * _calcMaxVz;
+    double totalClimbEscPower = pEscIn + (climbPowerMech / (etaMotor * etaEsc));
+    
+    double aClimb = rInt;
+    double bClimb = -ocVoltage;
+    double cClimb = totalClimbEscPower;
+    double discClimb = (bClimb * bClimb) - (4 * aClimb * cClimb);
+    double maxVzAmps = hoverAmps * 1.6;
+    if (discClimb >= 0) {
+      maxVzAmps = (-bClimb - math.sqrt(discClimb)) / (2 * aClimb);
+    }
+    double maxVzVoltage = ocVoltage - (maxVzAmps * rInt);
+    double maxVzThermalLoss = math.pow(maxVzAmps, 2) * rInt;
+
+    double usableBatteryAh = (_batteryMah / 1000.0) * 0.80;
+    double hoverTimeMinutes = (usableBatteryAh / hoverAmps) * 60.0;
+
+    double tiltAngleRad30 = 30.0 * math.pi / 180.0;
+    double thrustMultiplier30 = 1.0 / math.cos(tiltAngleRad30);
+    double powerMultiplier30 = math.pow(thrustMultiplier30, 1.5);
+    double flightAmps30 = hoverAmps * powerMultiplier30;
+    double dynamicFlightMinutes = (usableBatteryAh / flightAmps30) * 60.0 * 0.90;
+
+    double baseKp = (0.25 * (momentOfInertia / 0.02) * (4.0 / twr)).clamp(0.20, 1.20);
+    double baseKi = 0.010;
+    double baseKd = (baseKp * 0.035).clamp(0.005, 0.050);
+
+    double rollPitchKp = double.parse((baseKp * behaviorMultiplier).toStringAsFixed(3));
+    double rollPitchKd = double.parse((baseKd * behaviorMultiplier).toStringAsFixed(3));
+    double yawKp = (rollPitchKp * 1.2).clamp(0.3, 1.5);
+    double yawKd = (rollPitchKd * 0.4).clamp(0.0, 0.025);
+
+    double rcRate = _behaviorIndex == 0 ? 0.25 : (_behaviorIndex == 1 ? 0.38 : 0.55);
+    double superExpo = _behaviorIndex == 0 ? 0.02 : (_behaviorIndex == 1 ? 0.04 : 0.08);
+
+    double maxRps = (_motorKv * loadVoltage) / 60.0;
+    double bladePassFreq = maxRps * _bladesCount; 
+    double notchFreq = (bladePassFreq * 0.75).clamp(40.0, 300.0);
+    double dynMinHz = (notchFreq * 0.55).clamp(30.0, 100.0);
+    double dynMaxHz = (notchFreq * 1.85).clamp(140.0, 380.0);
+
+    return {
+      'roll_kp': rollPitchKp,
+      'roll_ki': baseKi,
+      'roll_kd': rollPitchKd,
+      'pitch_kp': rollPitchKp,
+      'pitch_ki': baseKi,
+      'pitch_kd': rollPitchKd,
+      'yaw_kp': double.parse(yawKp.toStringAsFixed(3)),
+      'yaw_ki': 0.010,
+      'yaw_kd': double.parse(yawKd.toStringAsFixed(3)),
+      'rc_rate': rcRate,
+      'rc_super_expo': superExpo,
+      'filter_notch_freq': double.parse(notchFreq.toStringAsFixed(1)),
+      'filter_dyn_min_hz': double.parse(dynMinHz.toStringAsFixed(1)),
+      'filter_dyn_max_hz': double.parse(dynMaxHz.toStringAsFixed(1)),
+      'twr': twr.toStringAsFixed(1),
+      'hover_throttle': hoverThrottle.toStringAsFixed(0),
+      'hover_amps': hoverAmps.toStringAsFixed(1),
+      'load_voltage': loadVoltage.toStringAsFixed(2),
+      'bat_thermal_loss': batteryThermalLossWatts.toStringAsFixed(1),
+      'flight_time': hoverTimeMinutes.toStringAsFixed(1),
+      'flight_time_30deg': dynamicFlightMinutes.toStringAsFixed(1),
+      'total_rint_mohm': rintMohm.toStringAsFixed(1),
+      'max_tilt_amps': maxTiltAmps.toStringAsFixed(1),
+      'max_tilt_voltage': maxTiltVoltage.toStringAsFixed(2),
+      'max_tilt_loss': maxTiltThermalLoss.toStringAsFixed(1),
+      'max_vz_amps': maxVzAmps.toStringAsFixed(1),
+      'max_vz_voltage': maxVzVoltage.toStringAsFixed(2),
+      'max_vz_loss': maxVzThermalLoss.toStringAsFixed(1),
+    };
   }
 
   Widget _calcResultRow(String label, String value, Color color) {
@@ -1434,18 +1636,6 @@ class _SettingsTabState extends State<SettingsTab> {
   double _flPitchMax = 25.0;   
   double _flVzSpeedMax = 1.2;  
   double _flHeightMin = 0.0;   
-
-  double _rtxEn = 1;
-  double _rtxBand = 9;         
-  double _rtxAddr = 0;
-  double _rtxChan = 15;        
-  double _rtxSf = 7;
-  double _rtxBw = 7;
-  double _rtxCr = 1;
-  double _rtxPower = 22;
-  double _rtxLinkWarnThreshold = 30;
-  double _rtxAfcEn = 0;
-  double _rtxAutoEn = 1;
 
   double _rcFsEn = 1;
   double _fsBatEn = 1;
@@ -1594,37 +1784,19 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
 
             XFireExpansionCard(
-              title: "Аварийный канал",
-              subtitle: "Параметры резервного канала связи и инициативы",
-              icon: Icons.settings_input_antenna,
-              children: [
-                XFireSliderCard(title: "Порог падения качества связи", commandName: "rtx_link_warn_threshold", value: _rtxLinkWarnThreshold, min: 5, max: 90, divisions: 85, unit: "%", onChanged: (v) => setState(() => _rtxLinkWarnThreshold = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_link_warn_threshold ${v.round()}")),
-                XFireSwitchCard(title: "Инициатива с борта при ухудшении связи", commandName: "rtx_auto_en", value: _rtxAutoEn == 1, onChanged: (v) { setState(() => _rtxAutoEn = v ? 1.0 : 0.0); SerialService.sendCommand("rtx_auto_en ${_rtxAutoEn.round()}"); }),
-                XFireResetCard(hint: "Сброс порогов резервного канала", onReset: () {
-                  setState(() { _rtxLinkWarnThreshold = 30; _rtxAutoEn = 1; });
-                  SerialService.sendCommand("default rtx_link");
-                }),
-                XFireBatchApplyCard(
-                  hint: "Пакетная отправка порогов предупреждения и инициативы",
-                  parameters: ["rtx_link_warn_threshold ${_rtxLinkWarnThreshold.round()}", "rtx_auto_en ${_rtxAutoEn.round()}"],
-                ),
-              ],
-            ),
-
-            XFireExpansionCard(
               title: "Питание и батарея (4S LiPo)",
-              subtitle: "Настройка 4S ячеек и фильтрации питания",
+              subtitle: "Настройка ячеек и фильтрации питания",
               icon: Icons.battery_charging_full,
               children: [
                 XFireSliderCard(title: "Количество ячеек LiPo", commandName: "bat_cells", value: _batCells, min: 1, max: 6, divisions: 5, unit: "S", onChanged: (v) => setState(() => _batCells = v), onChangeEnd: (v) => SerialService.sendCommand("bat_cells ${v.round()}")),
-                XFireSliderCard(title: "Порог Failsafe батареи 4S", commandName: "bat_fs_v", value: _batFsV, min: 6.0, max: 25.0, divisions: 190, unit: "В", onChanged: (v) => setState(() => _batFsV = v), onChangeEnd: (v) => SerialService.sendCommand("bat_fs_v $v")),
+                XFireSliderCard(title: "Порог Failsafe батареи", commandName: "bat_fs_v", value: _batFsV, min: 6.0, max: 25.0, divisions: 190, unit: "В", onChanged: (v) => setState(() => _batFsV = v), onChangeEnd: (v) => SerialService.sendCommand("bat_fs_v $v")),
                 XFireSliderCard(title: "Фильтр батареи (Alpha)", commandName: "bat_filter_alpha", value: _batFilterAlpha, min: 0.01, max: 1.0, divisions: 99, unit: "", onChanged: (v) => setState(() => _batFilterAlpha = v), onChangeEnd: (v) => SerialService.sendCommand("bat_filter_alpha $v")),
                 XFireResetCard(hint: "Сброс параметров батареи по умолчанию", onReset: () {
                   setState(() { _batCells = 4; _batFsV = 13.8; _batFilterAlpha = 0.05; });
                   SerialService.sendCommand("default bat");
                 }),
                 XFireBatchApplyCard(
-                  hint: "Пакетная отправка параметров ячеек 4S и фильтрации",
+                  hint: "Пакетная отправка параметров ячеек и фильтрации",
                   parameters: ["bat_cells ${_batCells.round()}", "bat_fs_v $_batFsV", "bat_filter_alpha $_batFilterAlpha"],
                 ),
               ],
@@ -1737,7 +1909,7 @@ class _SettingsTabState extends State<SettingsTab> {
               icon: Icons.memory,
               children: [
                 XFireFlashCard(
-                  title: "Прошить полетный контроллер (v3.21)",
+                  title: "Прошить полетный контроллер (v3.24)",
                   targetName: "Полетный контроллер FC",
                   onFlash: (onProgress) async {
                     onProgress("Стирание флеш-памяти STM32...", 0.2);
@@ -1745,7 +1917,7 @@ class _SettingsTabState extends State<SettingsTab> {
                     if (SerialService.isConnected && SerialService.usbPort != null) {
                       await SerialService.usbPort!.write(Uint8List.fromList([0x7F]));
                     }
-                    onProgress("Запись блоков прошивки v3.21...", 0.6);
+                    onProgress("Запись блоков прошивки v3.24...", 0.6);
                     await Future.delayed(const Duration(milliseconds: 1200));
                     onProgress("Проверка контрольной суммы CRC...", 0.9);
                     await Future.delayed(const Duration(milliseconds: 600));
@@ -1904,7 +2076,7 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
           icon: Icons.memory,
           children: [
             XFireFlashCard(
-              title: "Прошить пульт управления (v3.21)",
+              title: "Прошить пульт управления (v3.24)",
               targetName: "Пульт управления RC",
               onFlash: (onProgress) async {
                 onProgress("Стирание памяти пульта...", 0.25);
@@ -1912,7 +2084,7 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
                 if (SerialService.isConnected && SerialService.usbPort != null) {
                   await SerialService.usbPort!.write(Uint8List.fromList([0x7F]));
                 }
-                onProgress("Запись прошивки пульта v3.21...", 0.65);
+                onProgress("Запись прошивки пульта v3.24...", 0.65);
                 await Future.delayed(const Duration(milliseconds: 1300));
                 onProgress("Проверка целостности...", 0.9);
                 await Future.delayed(const Duration(milliseconds: 500));
@@ -2702,7 +2874,7 @@ class _TerminalTabState extends State<TerminalTab> {
     "info", "mon", "stop", "config", "default",
     "fl_mode", "fl_roll_max", "fl_pitch_max", "fl_vz_speed_max", "fl_height_min",
     "rc_rate", "rc_super_expo", "rc_stick_expo", "rc_yaw_rate", "rc_yaw_super_expo", "rc_yaw_expo", "rc_deadband", "rc_horizon_transition", "rc_filter_smoothing",
-    "bat_cells", "bat_fs_v", "bat_filter_alpha",
+    "bat_cells", "bat_fs_v", "bat_filter_alpha", "bat_rint_mohm",
     "lidar_en", "lidar_min_alt", "lidar_filter_alpha",
     "gyro_filter_alpha", "acc_filter_alpha", "filter_mode", "filter_notch_freq", "filter_notch_bw", "filter_dyn_min_hz", "filter_dyn_max_hz",
     "roll_kp", "roll_ki", "roll_kd", "pitch_kp", "pitch_ki", "pitch_kd", "yaw_kp", "yaw_ki", "yaw_kd", "vz_kp", "vz_ki", "vz_kd",
