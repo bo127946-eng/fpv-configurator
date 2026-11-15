@@ -1,4 +1,4 @@
-// XFire Ecosystem v3.25 (Оптимизированный код без дублирования и с исправленными типами)
+// XFire Ecosystem v3.27 (Оптимизированный стиль кода и обновленные пороги газа висения)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -393,7 +393,7 @@ class _XFireFlashCardState extends State<XFireFlashCard> {
       });
       if (mounted) {
         setState(() {
-          _statusState = "Прошивка успешно завершена (v3.25)!";
+          _statusState = "Прошивка успешно завершена (v3.27)!";
           _progress = 1.0;
         });
         showAppDialog(context, "Успех", "${widget.targetName} успешно прошит!");
@@ -761,7 +761,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     return const Scaffold(
       backgroundColor: Color(0xFF0A0A0A),
       body: Center(
-        child: Text("XFire v3.25", style: TextStyle(fontSize: 42, fontWeight: FontWeight.bold, letterSpacing: 4.0, color: Colors.white)),
+        child: Text("XFire v3.27", style: TextStyle(fontSize: 42, fontWeight: FontWeight.bold, letterSpacing: 4.0, color: Colors.white)),
       ),
     );
   }
@@ -1089,7 +1089,7 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
-                      child: const Text('v.3.25 (CLI)', style: TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                      child: const Text('v.3.27 (CLI)', style: TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
@@ -1156,7 +1156,39 @@ class _ProfilesTabState extends State<ProfilesTab> {
   double get _minKv => _propSize <= 6.0 ? 1500.0 : (_propSize <= 8.0 ? 1000.0 : 350.0);
   double get _maxKv => _propSize <= 6.0 ? 2800.0 : (_propSize <= 8.0 ? 1800.0 : 950.0);
 
-  // Единый оптимизированный метод расчета с поддержкой .toDouble() для math.pow
+  // Цветовые хелперы
+  Color _getCurrentColor(double ampPerMotor) {
+    if (ampPerMotor <= 2.0) return Colors.greenAccent;
+    if (ampPerMotor <= 2.75) return Colors.lightGreenAccent;
+    if (ampPerMotor <= 3.5) return Colors.yellowAccent;
+    if (ampPerMotor <= 5.0) return Colors.orangeAccent;
+    return Colors.redAccent;
+  }
+
+  Color _getVoltageColor(double vPerCell) {
+    if (vPerCell >= 4.0) return Colors.greenAccent;
+    if (vPerCell >= 3.9) return Colors.lightGreenAccent;
+    if (vPerCell >= 3.8) return Colors.yellowAccent;
+    if (vPerCell >= 3.7) return Colors.orangeAccent;
+    return Colors.redAccent;
+  }
+
+  Color _getTimeColor(double minutes) {
+    if (minutes >= 30.0) return Colors.greenAccent;
+    if (minutes >= 20.0) return Colors.lightGreenAccent;
+    if (minutes >= 15.0) return Colors.yellowAccent;
+    if (minutes >= 10.0) return Colors.orangeAccent;
+    return Colors.redAccent;
+  }
+
+  Color _getHoverThrottleColor(double throttle) {
+    if (throttle < 20.0) return Colors.greenAccent;
+    if (throttle <= 30.0) return Colors.lightGreenAccent;
+    if (throttle <= 40.0) return Colors.yellowAccent;
+    if (throttle <= 50.0) return Colors.orangeAccent;
+    return Colors.redAccent;
+  }
+
   Map<String, dynamic> calculateOptimalSettings() {
     double ocVoltage = _batteryCells * 3.7;
     double totalWeightKg = _auwGrams / 1000.0;
@@ -1199,7 +1231,6 @@ class _ProfilesTabState extends State<ProfilesTab> {
     double loadVoltage = ocVoltage - (hoverAmps * rInt);
     double batteryThermalLossWatts = math.pow(hoverAmps, 2).toDouble() * rInt;
 
-    // Расчет для макс. наклона
     double tiltRad = _calcMaxTilt * math.pi / 180.0;
     double tiltThrustMultiplier = 1.0 / math.cos(tiltRad);
     double tiltPowerMultiplier = math.pow(tiltThrustMultiplier, 1.5).toDouble();
@@ -1207,7 +1238,6 @@ class _ProfilesTabState extends State<ProfilesTab> {
     double maxTiltVoltage = ocVoltage - (maxTiltAmps * rInt);
     double maxTiltThermalLoss = math.pow(maxTiltAmps, 2).toDouble() * rInt;
 
-    // Расчет для макс. вертикального взлета
     double climbPowerMech = totalWeightKg * 9.81 * _calcMaxVz;
     double totalClimbEscPower = pEscIn + (climbPowerMech / (etaMotor * etaEsc));
     
@@ -1249,6 +1279,14 @@ class _ProfilesTabState extends State<ProfilesTab> {
     double dynMinHz = (notchFreq * 0.55).clamp(30.0, 100.0);
     double dynMaxHz = (notchFreq * 1.85).clamp(140.0, 380.0);
 
+    double hoverAmpsPerMotor = hoverAmps / 4.0;
+    double maxTiltAmpsPerMotor = maxTiltAmps / 4.0;
+    double maxVzAmpsPerMotor = maxVzAmps / 4.0;
+
+    double loadVPerCell = loadVoltage / _batteryCells;
+    double maxTiltVPerCell = maxTiltVoltage / _batteryCells;
+    double maxVzVPerCell = maxVzVoltage / _batteryCells;
+
     return {
       'roll_kp': rollPitchKp,
       'roll_ki': baseKi,
@@ -1278,6 +1316,16 @@ class _ProfilesTabState extends State<ProfilesTab> {
       'max_vz_amps': maxVzAmps.toStringAsFixed(1),
       'max_vz_voltage': maxVzVoltage.toStringAsFixed(2),
       'max_vz_loss': maxVzThermalLoss.toStringAsFixed(1),
+      // Цветовые параметры
+      'color_hover_amps': _getCurrentColor(hoverAmpsPerMotor),
+      'color_load_voltage': _getVoltageColor(loadVPerCell),
+      'color_tilt_amps': _getCurrentColor(maxTiltAmpsPerMotor),
+      'color_tilt_voltage': _getVoltageColor(maxTiltVPerCell),
+      'color_vz_amps': _getCurrentColor(maxVzAmpsPerMotor),
+      'color_vz_voltage': _getVoltageColor(maxVzVPerCell),
+      'color_flight_time': _getTimeColor(hoverTimeMinutes),
+      'color_flight_time_30': _getTimeColor(dynamicFlightMinutes),
+      'color_hover_throttle': _getHoverThrottleColor(hoverThrottle),
     };
   }
 
@@ -1353,7 +1401,7 @@ class _ProfilesTabState extends State<ProfilesTab> {
             decoration: BoxDecoration(
               color: const Color(0xFF1C1C1E),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.blueAccent.withOpacity(0.4)),
+              border: Border.all(color: Colors.white12),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1363,7 +1411,7 @@ class _ProfilesTabState extends State<ProfilesTab> {
                   children: [
                     Expanded(
                       child: Text(
-                        "ФИЗИЧЕСКИЙ РАСЧЕТ И НАГРУЗКИ (v.3.25)",
+                        "ФИЗИЧЕСКИЙ РАСЧЕТ И НАГРУЗКИ (v.3.27)",
                         style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.1),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1373,29 +1421,29 @@ class _ProfilesTabState extends State<ProfilesTab> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                _calcResultRow("Тяговооруженность (TWR):", "${optimal['twr']} : 1", Colors.greenAccent),
-                _calcResultRow("Газ висения (Hover Throttle):", "${optimal['hover_throttle']} %", Colors.cyanAccent),
-                _calcResultRow("Сопротивление батареи (суммарное):", "${optimal['total_rint_mohm']} мОм (${(_totalRintMohm / _batteryCells).toStringAsFixed(1)} мОм/банку)", Colors.blueAccent),
+                _calcResultRow("Тяговооруженность (TWR):", "${optimal['twr']} : 1", Colors.white),
+                _calcResultRow("Газ висения (Hover Throttle):", "${optimal['hover_throttle']} %", optimal['color_hover_throttle']),
+                _calcResultRow("Сопротивление батареи (суммарное):", "${optimal['total_rint_mohm']} мОм (${(_totalRintMohm / _batteryCells).toStringAsFixed(1)} мОм/банку)", Colors.white),
                 const Divider(color: Colors.white12, height: 16),
-                _calcResultRow("Ток висения:", "${optimal['hover_amps']} А", Colors.amberAccent),
-                _calcResultRow("Напряжение под нагрузкой (висение):", "${optimal['load_voltage']} В", Colors.white70),
-                _calcResultRow("Тепловые потери батареи (висение):", "${optimal['bat_thermal_loss']} Вт", Colors.white70),
+                _calcResultRow("Ток висения (суммарный):", "${optimal['hover_amps']} А", optimal['color_hover_amps']),
+                _calcResultRow("Напряжение под нагрузкой (висение):", "${optimal['load_voltage']} В", optimal['color_load_voltage']),
+                _calcResultRow("Тепловые потери батареи (висение):", "${optimal['bat_thermal_loss']} Вт", Colors.white),
                 const Divider(color: Colors.white12, height: 16),
-                _calcResultRow("Ток при макс. наклоне (${_calcMaxTilt.toStringAsFixed(0)}°):", "${optimal['max_tilt_amps']} А", Colors.orangeAccent),
-                _calcResultRow("Напряжение при макс. наклоне:", "${optimal['max_tilt_voltage']} В", Colors.orangeAccent),
-                _calcResultRow("Тепловые потери (макс. наклон):", "${optimal['max_tilt_loss']} Вт", Colors.redAccent.shade200),
+                _calcResultRow("Ток при макс. наклоне (${_calcMaxTilt.toStringAsFixed(0)}°):", "${optimal['max_tilt_amps']} А", optimal['color_tilt_amps']),
+                _calcResultRow("Напряжение при макс. наклоне:", "${optimal['max_tilt_voltage']} В", optimal['color_tilt_voltage']),
+                _calcResultRow("Тепловые потери (макс. наклон):", "${optimal['max_tilt_loss']} Вт", Colors.white),
                 const Divider(color: Colors.white12, height: 16),
-                _calcResultRow("Ток при макс. взлете (${_calcMaxVz.toStringAsFixed(1)} м/с):", "${optimal['max_vz_amps']} А", Colors.greenAccent),
-                _calcResultRow("Напряжение при макс. взлете:", "${optimal['max_vz_voltage']} В", Colors.greenAccent),
-                _calcResultRow("Тепловые потери (макс. взлет):", "${optimal['max_vz_loss']} Вт", Colors.redAccent.shade200),
+                _calcResultRow("Ток при макс. взлете (${_calcMaxVz.toStringAsFixed(1)} м/с):", "${optimal['max_vz_amps']} А", optimal['color_vz_amps']),
+                _calcResultRow("Напряжение при макс. взлете:", "${optimal['max_vz_voltage']} В", optimal['color_vz_voltage']),
+                _calcResultRow("Тепловые потери (макс. взлет):", "${optimal['max_vz_loss']} Вт", Colors.white),
                 const Divider(color: Colors.white12, height: 16),
-                _calcResultRow("Время висения (80% емкости):", "${optimal['flight_time']} мин", Colors.white70),
-                _calcResultRow("Время в полете (наклон 30° + взлеты):", "${optimal['flight_time_30deg']} мин", Colors.greenAccent),
+                _calcResultRow("Время висения (80% емкости):", "${optimal['flight_time']} мин", optimal['color_flight_time']),
+                _calcResultRow("Время в полете (наклон 30° + взлеты):", "${optimal['flight_time_30deg']} мин", optimal['color_flight_time_30']),
                 const Divider(color: Colors.white12, height: 16),
                 _calcResultRow("Roll/Pitch Kp / Ki / Kd (от инерции):", "${optimal['roll_kp']} / ${optimal['roll_ki']} / ${optimal['roll_kd']}", Colors.white),
                 _calcResultRow("Yaw Kp / Ki / Kd:", "${optimal['yaw_kp']} / ${optimal['yaw_ki']} / ${optimal['yaw_kd']}", Colors.white),
-                _calcResultRow("RC Rate / Super Expo:", "${optimal['rc_rate']} / ${optimal['rc_super_expo']}", Colors.blueAccent),
-                _calcResultRow("Notch / Dyn Notch (от BPF винта):", "${optimal['filter_notch_freq']} Гц (${optimal['filter_dyn_min_hz']}-${optimal['filter_dyn_max_hz']} Гц)", Colors.cyanAccent),
+                _calcResultRow("RC Rate / Super Expo:", "${optimal['rc_rate']} / ${optimal['rc_super_expo']}", Colors.white),
+                _calcResultRow("Notch / Dyn Notch (от BPF винта):", "${optimal['filter_notch_freq']} Гц (${optimal['filter_dyn_min_hz']}-${optimal['filter_dyn_max_hz']} Гц)", Colors.white),
               ],
             ),
           ),
@@ -1752,7 +1800,7 @@ class _SettingsTabState extends State<SettingsTab> {
               icon: Icons.memory,
               children: [
                 XFireFlashCard(
-                  title: "Прошить полетный контроллер (v3.25)",
+                  title: "Прошить полетный контроллер (v3.27)",
                   targetName: "Полетный контроллер FC",
                   onFlash: (onProgress) async {
                     onProgress("Стирание флеш-памяти STM32...", 0.2);
@@ -1760,7 +1808,7 @@ class _SettingsTabState extends State<SettingsTab> {
                     if (SerialService.isConnected && SerialService.usbPort != null) {
                       await SerialService.usbPort!.write(Uint8List.fromList([0x7F]));
                     }
-                    onProgress("Запись блоков прошивки v3.25...", 0.6);
+                    onProgress("Запись блоков прошивки v3.27...", 0.6);
                     await Future.delayed(const Duration(milliseconds: 1200));
                     onProgress("Проверка контрольной суммы CRC...", 0.9);
                     await Future.delayed(const Duration(milliseconds: 600));
@@ -1919,7 +1967,7 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
           icon: Icons.memory,
           children: [
             XFireFlashCard(
-              title: "Прошить пульт управления (v3.25)",
+              title: "Прошить пульт управления (v3.27)",
               targetName: "Пульт управления RC",
               onFlash: (onProgress) async {
                 onProgress("Стирание памяти пульта...", 0.25);
@@ -1927,7 +1975,7 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
                 if (SerialService.isConnected && SerialService.usbPort != null) {
                   await SerialService.usbPort!.write(Uint8List.fromList([0x7F]));
                 }
-                onProgress("Запись прошивки пульта v3.25...", 0.65);
+                onProgress("Запись прошивки пульта v3.27...", 0.65);
                 await Future.delayed(const Duration(milliseconds: 1300));
                 onProgress("Проверка целостности...", 0.9);
                 await Future.delayed(const Duration(milliseconds: 500));
