@@ -1,7 +1,7 @@
-// XFire Ecosystem v3.15 (Интегрированные калькуляторы линка, исправленный сброс state, карточка антенн)
+// XFire Ecosystem v3.16 (Единый стиль, Hex-only ввод, динамический калькулятор сетапа без переполнения)
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/services.dart';
 import 'package:usb_serial/usb_serial.dart';
 import 'dart:async';
 import 'dart:typed_data';
@@ -270,6 +270,7 @@ class XFireBatchApplyCard extends StatelessWidget {
   }
 }
 
+// Карточка с вводом ТОЛЬКО HEX значений
 class XFireTextHexCard extends StatefulWidget {
   final String title;
   final String commandName;
@@ -337,6 +338,9 @@ class _XFireTextHexCardState extends State<XFireTextHexCard> {
           const SizedBox(height: 8),
           TextField(
             controller: _controller,
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[0-9a-fA-FxX]')),
+            ],
             style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
             decoration: const InputDecoration(
               hintText: "например, 0x1424",
@@ -395,7 +399,7 @@ class _XFireFlashCardState extends State<XFireFlashCard> {
       });
       if (mounted) {
         setState(() {
-          _statusState = "Прошивка успешно завершена (v3.15)!";
+          _statusState = "Прошивка успешно завершена (v3.16)!";
           _progress = 1.0;
         });
         showAppDialog(context, "Успех", "${widget.targetName} успешно прошит!");
@@ -775,7 +779,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     return const Scaffold(
       backgroundColor: Color(0xFF0A0A0A),
       body: Center(
-        child: Text("XFire v3.15", style: TextStyle(fontSize: 42, fontWeight: FontWeight.bold, letterSpacing: 4.0, color: Colors.white)),
+        child: Text("XFire v3.16", style: TextStyle(fontSize: 42, fontWeight: FontWeight.bold, letterSpacing: 4.0, color: Colors.white)),
       ),
     );
   }
@@ -1103,7 +1107,7 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
-                      child: const Text('v.3.15 (CLI)', style: TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                      child: const Text('v.3.16 (CLI)', style: TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
@@ -1183,20 +1187,24 @@ class _ProfilesTabState extends State<ProfilesTab> {
     double rcRate = _behaviorIndex == 0 ? 0.25 : (_behaviorIndex == 1 ? 0.38 : 0.55);
     double superExpo = _behaviorIndex == 0 ? 0.02 : (_behaviorIndex == 1 ? 0.04 : 0.08);
 
-    double avgVoltage = _batteryCells * 3.7;
-    double maxRps = (_motorKv * avgVoltage) / 60.0;
+    double voltage = _batteryCells * 3.7;
+    double kvFactor = _motorKv / 1000.0;
+    
+    // Динамический расчет тяги с учетом пропов, шага, KV и напряжения аккумулятора
+    double thrustPerMotor = math.pow(_propSize, 3.4) * _propPitch * math.pow(kvFactor, 1.6) * math.pow(voltage / 14.8, 1.5) * 16.0;
+    double totalThrust = thrustPerMotor * 4.0;
+    double twr = totalThrust / _auwGrams;
+
+    // Динамический газ висения и ток с учетом веса, напряжения и сетапа
+    double hoverThrottle = (_auwGrams / totalThrust * 100.0).clamp(10.0, 85.0);
+    double hoverAmps = (_auwGrams / 1000.0) * (14.8 / voltage) * (14.0 / math.pow(_propSize, 0.5)) * math.pow(1000.0 / _motorKv, 0.2);
+    double flightTimeMinutes = (_batteryMah / 1000.0 / hoverAmps) * 60.0 * 0.78;
+
+    double maxRps = (_motorKv * voltage) / 60.0;
     double bladePassFreq = maxRps * _bladesCount; 
     double notchFreq = (bladePassFreq * 0.75).clamp(40.0, 250.0);
     double dynMinHz = (notchFreq * 0.6).clamp(30.0, 90.0);
     double dynMaxHz = (notchFreq * 1.8).clamp(150.0, 350.0);
-
-    double thrustPerMotor = math.pow(_propSize, 3.2) * _propPitch * math.pow(_motorKv / 1000.0, 1.8) * (_batteryCells * 3.7 / 14.8) * 45.0;
-    double totalThrust = thrustPerMotor * 4.0;
-    double twr = totalThrust / _auwGrams;
-
-    double hoverThrottle = (_auwGrams / totalThrust * 100.0).clamp(15.0, 75.0);
-    double hoverAmps = (_auwGrams / 1000.0) * (11.0 / (_propSize * 0.3 + 0.5));
-    double flightTimeMinutes = (_batteryMah / 1000.0 / hoverAmps) * 60.0 * 0.8;
 
     return {
       'roll_kp': rollPitchKp,
@@ -1249,6 +1257,7 @@ class _ProfilesTabState extends State<ProfilesTab> {
           ],
         ),
 
+        // Карточка результатов (приведена к общему стилю, с защитой текста от уезда за границы)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 4.0),
           child: Container(
@@ -1325,12 +1334,22 @@ class _ProfilesTabState extends State<ProfilesTab> {
 
   Widget _calcResultRow(String label, String value, Color color) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3.0),
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(fontSize: 12, color: Colors.white70)),
-          Text(value, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color, fontFamily: 'monospace')),
+          Expanded(
+            child: Text(
+              label, 
+              style: const TextStyle(fontSize: 11, color: Colors.white70),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            value, 
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color, fontFamily: 'monospace'),
+          ),
         ],
       ),
     );
@@ -1656,7 +1675,7 @@ class _SettingsTabState extends State<SettingsTab> {
               icon: Icons.memory,
               children: [
                 XFireFlashCard(
-                  title: "Прошить полетный контроллер (v3.15)",
+                  title: "Прошить полетный контроллер (v3.16)",
                   targetName: "Полетный контроллер FC",
                   onFlash: (onProgress) async {
                     onProgress("Стирание флеш-памяти STM32...", 0.2);
@@ -1664,7 +1683,7 @@ class _SettingsTabState extends State<SettingsTab> {
                     if (SerialService.isConnected && SerialService.usbPort != null) {
                       await SerialService.usbPort!.write(Uint8List.fromList([0x7F]));
                     }
-                    onProgress("Запись блоков прошивки v3.15...", 0.6);
+                    onProgress("Запись блоков прошивки v3.16...", 0.6);
                     await Future.delayed(const Duration(milliseconds: 1200));
                     onProgress("Проверка контрольной суммы CRC...", 0.9);
                     await Future.delayed(const Duration(milliseconds: 600));
@@ -1823,7 +1842,7 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
           icon: Icons.memory,
           children: [
             XFireFlashCard(
-              title: "Прошить пульт управления (v3.15)",
+              title: "Прошить пульт управления (v3.16)",
               targetName: "Пульт управления RC",
               onFlash: (onProgress) async {
                 onProgress("Стирание памяти пульта...", 0.25);
@@ -1831,7 +1850,7 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
                 if (SerialService.isConnected && SerialService.usbPort != null) {
                   await SerialService.usbPort!.write(Uint8List.fromList([0x7F]));
                 }
-                onProgress("Запись прошивки пульта v3.15...", 0.65);
+                onProgress("Запись прошивки пульта v3.16...", 0.65);
                 await Future.delayed(const Duration(milliseconds: 1300));
                 onProgress("Проверка целостности...", 0.9);
                 await Future.delayed(const Duration(milliseconds: 500));
@@ -2008,7 +2027,7 @@ class KharchenkoSchematicPainter extends CustomPainter {
 }
 
 // ==========================================
-// УНИВЕРСАЛЬНЫЙ КАЛЬКУЛЯТОР ЛИНКА (ВНУТРИ КАНАЛОВ)
+// УНИВЕРСАЛЬНЫЙ КАЛЬКУЛЯТОР ЛИНКА (В ОБЩЕМ СТИЛЕ)
 // ==========================================
 class RtxLinkCalculatorCard extends StatelessWidget {
   final String title;
@@ -2032,56 +2051,53 @@ class RtxLinkCalculatorCard extends StatelessWidget {
     String distFormatted = distKm >= 1.0 ? "${distKm.toStringAsFixed(2)} км" : "${(distKm * 1000).toStringAsFixed(0)} м";
     String bitRateStr = bitRate >= 1000 ? "${(bitRate / 1000).toStringAsFixed(1)} kbps" : "${bitRate.toStringAsFixed(0)} bps";
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Container(
-        padding: const EdgeInsets.all(14.0),
-        decoration: BoxDecoration(
-          color: const Color(0xFF141416),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: themeColor.withOpacity(0.4)),
-        ),
-        child: Column(
-          children: [
-            Text("ЧАСТОТА: ${currentFreqMhz.toStringAsFixed(0)} МГц", style: TextStyle(fontSize: 10, color: themeColor, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
-            const SizedBox(height: 8),
-            Text(distFormatted, style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: themeColor)),
-            const SizedBox(height: 12),
-            const Divider(color: Colors.white12),
-            const SizedBox(height: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Flexible(child: Text("Чувствительность приемника (Sensitivity):", style: TextStyle(fontSize: 11, color: Colors.white70), overflow: TextOverflow.ellipsis)),
-                    const SizedBox(width: 8),
-                    Text("${sensitivity.toStringAsFixed(1)} dBm", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                LinearProgressIndicator(value: sensitivityProgress, color: Colors.cyanAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Flexible(child: Text("Скорость по воздуху (Air Data Rate):", style: TextStyle(fontSize: 11, color: Colors.white70), overflow: TextOverflow.ellipsis)),
-                    const SizedBox(width: 8),
-                    Text(bitRateStr, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                LinearProgressIndicator(value: bitRateProgress, color: Colors.blueAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
-              ],
-            ),
-          ],
-        ),
+    return Container(
+      padding: const EdgeInsets.all(14.0),
+      decoration: BoxDecoration(
+        color: const Color(0xFF141416),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: themeColor.withOpacity(0.4)),
+      ),
+      child: Column(
+        children: [
+          Text("ЧАСТОТА: ${currentFreqMhz.toStringAsFixed(0)} МГц", style: TextStyle(fontSize: 10, color: themeColor, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+          const SizedBox(height: 8),
+          Text(distFormatted, style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: themeColor)),
+          const SizedBox(height: 12),
+          const Divider(color: Colors.white12),
+          const SizedBox(height: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Flexible(child: Text("Чувствительность приемника (Sensitivity):", style: TextStyle(fontSize: 11, color: Colors.white70), overflow: TextOverflow.ellipsis)),
+                  const SizedBox(width: 8),
+                  Text("${sensitivity.toStringAsFixed(1)} dBm", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
+                ],
+              ),
+              const SizedBox(height: 4),
+              LinearProgressIndicator(value: sensitivityProgress, color: Colors.cyanAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Flexible(child: Text("Скорость по воздуху (Air Data Rate):", style: TextStyle(fontSize: 11, color: Colors.white70), overflow: TextOverflow.ellipsis)),
+                  const SizedBox(width: 8),
+                  Text(bitRateStr, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                ],
+              ),
+              const SizedBox(height: 4),
+              LinearProgressIndicator(value: bitRateProgress, color: Colors.blueAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
+            ],
+          ),
+        ],
       ),
     );
   }
