@@ -1,4 +1,4 @@
-// XFire Ecosystem v3.24 (С расчетом максимальных токов, просадок при макс. углах и вертикальном взлете)
+// XFire Ecosystem v3.25 (Оптимизированный код без дублирования и с исправленными типами)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -337,14 +337,9 @@ class _XFireTextHexCardState extends State<XFireTextHexCard> {
           const SizedBox(height: 8),
           TextField(
             controller: _controller,
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'[0-9a-fA-FxX]')),
-            ],
+            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9a-fA-FxX]'))],
             style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-            decoration: const InputDecoration(
-              hintText: "например, 0x1424",
-              isDense: true,
-            ),
+            decoration: const InputDecoration(hintText: "например, 0x1424", isDense: true),
             onChanged: widget.onChanged,
             onSubmitted: widget.onSubmitEnd,
           ),
@@ -398,7 +393,7 @@ class _XFireFlashCardState extends State<XFireFlashCard> {
       });
       if (mounted) {
         setState(() {
-          _statusState = "Прошивка успешно завершена (v3.24)!";
+          _statusState = "Прошивка успешно завершена (v3.25)!";
           _progress = 1.0;
         });
         showAppDialog(context, "Успех", "${widget.targetName} успешно прошит!");
@@ -455,22 +450,11 @@ class _XFireFlashCardState extends State<XFireFlashCard> {
                           children: [
                             Text(widget.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
                             const SizedBox(height: 2),
-                            Text(
-                              _statusState,
-                              style: TextStyle(
-                                color: _isFlashing ? Colors.amberAccent : Colors.white70,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
+                            Text(_statusState, style: TextStyle(color: _isFlashing ? Colors.amberAccent : Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
                           ],
                         ),
                       ),
-                      Icon(
-                        _isFlashing ? Icons.hourglass_top_rounded : Icons.arrow_forward_ios,
-                        size: _isFlashing ? 20 : 14,
-                        color: _isFlashing ? Colors.amberAccent : Colors.white54,
-                      ),
+                      Icon(_isFlashing ? Icons.hourglass_top_rounded : Icons.arrow_forward_ios, size: _isFlashing ? 20 : 14, color: _isFlashing ? Colors.amberAccent : Colors.white54),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -545,10 +529,7 @@ class XFireSliderCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
-                  child: Text(
-                    "${value.toStringAsFixed(value.truncate() == value ? 0 : 2)} $unit",
-                    style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 11),
-                  ),
+                  child: Text("${value.toStringAsFixed(value.truncate() == value ? 0 : 2)} $unit", style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 11)),
                 ),
               ],
             ),
@@ -651,7 +632,9 @@ class XFireSegmentedCard extends StatelessWidget {
                 isSelected: List.generate(options.length, (i) => i == selectedIndex),
                 onPressed: onSelected,
                 borderRadius: BorderRadius.circular(10),
-                selectedColor: Colors.white, fillColor: Colors.blueAccent, color: Colors.white70,
+                selectedColor: Colors.white,
+                fillColor: Colors.blueAccent,
+                color: Colors.white70,
                 constraints: BoxConstraints(minHeight: 36, minWidth: (constraints.maxWidth - (options.length - 1)) / options.length),
                 children: options.map((opt) => Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Text(opt, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)))).toList(),
               );
@@ -778,7 +761,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     return const Scaffold(
       backgroundColor: Color(0xFF0A0A0A),
       body: Center(
-        child: Text("XFire v3.24", style: TextStyle(fontSize: 42, fontWeight: FontWeight.bold, letterSpacing: 4.0, color: Colors.white)),
+        child: Text("XFire v3.25", style: TextStyle(fontSize: 42, fontWeight: FontWeight.bold, letterSpacing: 4.0, color: Colors.white)),
       ),
     );
   }
@@ -1106,7 +1089,7 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
-                      child: const Text('v.3.24 (CLI)', style: TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                      child: const Text('v.3.25 (CLI)', style: TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
@@ -1163,12 +1146,9 @@ class _ProfilesTabState extends State<ProfilesTab> {
   double _batteryMah = 4000.0;
   double _frameSizeMm = 450.0;
 
-  // Динамическое суммарное внутреннее сопротивление батареи в мОм
   double _totalRintMohm = 48.0; 
-
-  // Максимальный угол наклона и вертикальная скорость из настроек FC для расчетов
-  double _calcMaxTilt = 35.0; // градусов (fl_roll_max / fl_pitch_max)
-  double _calcMaxVz = 1.2;    // м/с (fl_vz_speed_max)
+  double _calcMaxTilt = 35.0; 
+  double _calcMaxVz = 1.2;    
 
   double get _minPitch => 3.0;
   double get _maxPitch => _propSize <= 6.0 ? 6.0 : 5.5;
@@ -1176,6 +1156,7 @@ class _ProfilesTabState extends State<ProfilesTab> {
   double get _minKv => _propSize <= 6.0 ? 1500.0 : (_propSize <= 8.0 ? 1000.0 : 350.0);
   double get _maxKv => _propSize <= 6.0 ? 2800.0 : (_propSize <= 8.0 ? 1800.0 : 950.0);
 
+  // Единый оптимизированный метод расчета с поддержкой .toDouble() для math.pow
   Map<String, dynamic> calculateOptimalSettings() {
     double ocVoltage = _batteryCells * 3.7;
     double totalWeightKg = _auwGrams / 1000.0;
@@ -1188,7 +1169,7 @@ class _ProfilesTabState extends State<ProfilesTab> {
     double bladeFactor = _bladesCount == 2 ? 1.0 : 1.15;
     
     double rpmLoad = _motorKv * ocVoltage * 0.80;
-    double thrustPerMotorGrams = math.pow(_propSize, 3.2) * _propPitch * math.pow(rpmLoad / 1000.0, 2.0) * (_bladesCount == 2 ? 1.0 : 0.88) * 0.045;
+    double thrustPerMotorGrams = math.pow(_propSize, 3.2).toDouble() * _propPitch * math.pow(rpmLoad / 1000.0, 2.0).toDouble() * (_bladesCount == 2 ? 1.0 : 0.88) * 0.045;
     double totalThrustGrams = thrustPerMotorGrams * 4.0;
     double twr = totalThrustGrams / _auwGrams;
 
@@ -1196,14 +1177,13 @@ class _ProfilesTabState extends State<ProfilesTab> {
     double hoverThrottle = (hoverThrustRatio * 100.0 * 1.18).clamp(15.0, 90.0);
 
     double frameRadiusM = (_frameSizeMm / 2000.0);
-    double momentOfInertia = totalWeightKg * math.pow(frameRadiusM, 2);
+    double momentOfInertia = totalWeightKg * math.pow(frameRadiusM, 2).toDouble();
     double behaviorMultiplier = _behaviorIndex == 0 ? 0.8 : (_behaviorIndex == 1 ? 1.0 : 1.35);
 
-    double specificPowerWPerKg = 130.0 * (math.pow(9.0 / _propSize, 0.85)) * (math.pow(_motorKv / 900.0, 0.1));
+    double specificPowerWPerKg = 130.0 * (math.pow(9.0 / _propSize, 0.85).toDouble()) * (math.pow(_motorKv / 900.0, 0.1).toDouble());
     double hoverPowerMech = totalWeightKg * specificPowerWPerKg * math.sqrt(hoverThrustRatio) * pitchFactor * bladeFactor;
     double pEscIn = hoverPowerMech / (etaMotor * etaEsc);
 
-    // Ток висения
     double a = rInt;
     double b = -ocVoltage;
     double c = pEscIn;
@@ -1217,17 +1197,17 @@ class _ProfilesTabState extends State<ProfilesTab> {
     }
 
     double loadVoltage = ocVoltage - (hoverAmps * rInt);
-    double batteryThermalLossWatts = math.pow(hoverAmps, 2) * rInt;
+    double batteryThermalLossWatts = math.pow(hoverAmps, 2).toDouble() * rInt;
 
-    // РАСЧЕТ ДЛЯ МАКСИМАЛЬНОГО УГЛА НАКЛОНА (fl_roll_max / fl_pitch_max)
+    // Расчет для макс. наклона
     double tiltRad = _calcMaxTilt * math.pi / 180.0;
     double tiltThrustMultiplier = 1.0 / math.cos(tiltRad);
-    double tiltPowerMultiplier = math.pow(tiltThrustMultiplier, 1.5);
+    double tiltPowerMultiplier = math.pow(tiltThrustMultiplier, 1.5).toDouble();
     double maxTiltAmps = hoverAmps * tiltPowerMultiplier;
     double maxTiltVoltage = ocVoltage - (maxTiltAmps * rInt);
-    double maxTiltThermalLoss = math.pow(maxTiltAmps, 2) * rInt;
+    double maxTiltThermalLoss = math.pow(maxTiltAmps, 2).toDouble() * rInt;
 
-    // РАСЧЕТ ДЛЯ МАКСИМАЛЬНОГО ВЕРТИКАЛЬНОГО ВЗЛЕТА (fl_vz_speed_max)
+    // Расчет для макс. вертикального взлета
     double climbPowerMech = totalWeightKg * 9.81 * _calcMaxVz;
     double totalClimbEscPower = pEscIn + (climbPowerMech / (etaMotor * etaEsc));
     
@@ -1240,14 +1220,14 @@ class _ProfilesTabState extends State<ProfilesTab> {
       maxVzAmps = (-bClimb - math.sqrt(discClimb)) / (2 * aClimb);
     }
     double maxVzVoltage = ocVoltage - (maxVzAmps * rInt);
-    double maxVzThermalLoss = math.pow(maxVzAmps, 2) * rInt;
+    double maxVzThermalLoss = math.pow(maxVzAmps, 2).toDouble() * rInt;
 
     double usableBatteryAh = (_batteryMah / 1000.0) * 0.80;
     double hoverTimeMinutes = (usableBatteryAh / hoverAmps) * 60.0;
 
     double tiltAngleRad30 = 30.0 * math.pi / 180.0;
     double thrustMultiplier30 = 1.0 / math.cos(tiltAngleRad30);
-    double powerMultiplier30 = math.pow(thrustMultiplier30, 1.5);
+    double powerMultiplier30 = math.pow(thrustMultiplier30, 1.5).toDouble();
     double flightAmps30 = hoverAmps * powerMultiplier30;
     double dynamicFlightMinutes = (usableBatteryAh / flightAmps30) * 60.0 * 0.90;
 
@@ -1313,7 +1293,7 @@ class _ProfilesTabState extends State<ProfilesTab> {
     if (_totalRintMohm < minRint) _totalRintMohm = minRint;
     if (_totalRintMohm > maxRint) _totalRintMohm = maxRint;
 
-    var optimal = calculateProfileSettingsDynamic(_batteryCells, _totalRintMohm);
+    var optimal = calculateOptimalSettings();
 
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -1383,7 +1363,7 @@ class _ProfilesTabState extends State<ProfilesTab> {
                   children: [
                     Expanded(
                       child: Text(
-                        "ФИЗИЧЕСКИЙ РАСЧЕТ И НАГРУЗКИ (v.3.24)",
+                        "ФИЗИЧЕСКИЙ РАСЧЕТ И НАГРУЗКИ (v.3.25)",
                         style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.1),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1468,152 +1448,15 @@ class _ProfilesTabState extends State<ProfilesTab> {
     );
   }
 
-  Map<String, dynamic> calculateProfileSettingsDynamic(double cells, double rintMohm) {
-    return calculateOptimalSettingsHelper(cells, rintMohm);
-  }
-
-  Map<String, dynamic> calculateOptimalSettingsHelper(double cells, double rintMohm) {
-    double ocVoltage = cells * 3.7;
-    double totalWeightKg = _auwGrams / 1000.0;
-    
-    double rInt = (rintMohm / 1000.0).clamp((cells * 3.0) / 1000.0, (cells * 30.0) / 1000.0);
-    double etaEsc = 0.96;
-    double etaMotor = 0.80;
-
-    double pitchFactor = _propPitch / 4.5;
-    double bladeFactor = _bladesCount == 2 ? 1.0 : 1.15;
-    
-    double rpmLoad = _motorKv * ocVoltage * 0.80;
-    double thrustPerMotorGrams = math.pow(_propSize, 3.2) * _propPitch * math.pow(rpmLoad / 1000.0, 2.0) * (_bladesCount == 2 ? 1.0 : 0.88) * 0.045;
-    double totalThrustGrams = thrustPerMotorGrams * 4.0;
-    double twr = totalThrustGrams / _auwGrams;
-
-    double hoverThrustRatio = (_auwGrams / totalThrustGrams).clamp(0.12, 0.90);
-    double hoverThrottle = (hoverThrustRatio * 100.0 * 1.18).clamp(15.0, 90.0);
-
-    double frameRadiusM = (_frameSizeMm / 2000.0);
-    double momentOfInertia = totalWeightKg * math.pow(frameRadiusM, 2);
-    double behaviorMultiplier = _behaviorIndex == 0 ? 0.8 : (_behaviorIndex == 1 ? 1.0 : 1.35);
-
-    double specificPowerWPerKg = 130.0 * (math.pow(9.0 / _propSize, 0.85)) * (math.pow(_motorKv / 900.0, 0.1));
-    double hoverPowerMech = totalWeightKg * specificPowerWPerKg * math.sqrt(hoverThrustRatio) * pitchFactor * bladeFactor;
-    double pEscIn = hoverPowerMech / (etaMotor * etaEsc);
-
-    double a = rInt;
-    double b = -ocVoltage;
-    double c = pEscIn;
-    double discriminant = (b * b) - (4 * a * c);
-    
-    double hoverAmps = 10.0;
-    if (discriminant >= 0) {
-      hoverAmps = (-b - math.sqrt(discriminant)) / (2 * a);
-    } else {
-      hoverAmps = ocVoltage / (2 * a);
-    }
-
-    double loadVoltage = ocVoltage - (hoverAmps * rInt);
-    double batteryThermalLossWatts = math.pow(hoverAmps, 2) * rInt;
-
-    // Расчет для макс. наклона
-    double tiltRad = _calcMaxTilt * math.pi / 180.0;
-    double tiltThrustMultiplier = 1.0 / math.cos(tiltRad);
-    double tiltPowerMultiplier = math.pow(tiltThrustMultiplier, 1.5);
-    double maxTiltAmps = hoverAmps * tiltPowerMultiplier;
-    double maxTiltVoltage = ocVoltage - (maxTiltAmps * rInt);
-    double maxTiltThermalLoss = math.pow(maxTiltAmps, 2) * rInt;
-
-    // Расчет для макс. вертикального взлета
-    double climbPowerMech = totalWeightKg * 9.81 * _calcMaxVz;
-    double totalClimbEscPower = pEscIn + (climbPowerMech / (etaMotor * etaEsc));
-    
-    double aClimb = rInt;
-    double bClimb = -ocVoltage;
-    double cClimb = totalClimbEscPower;
-    double discClimb = (bClimb * bClimb) - (4 * aClimb * cClimb);
-    double maxVzAmps = hoverAmps * 1.6;
-    if (discClimb >= 0) {
-      maxVzAmps = (-bClimb - math.sqrt(discClimb)) / (2 * aClimb);
-    }
-    double maxVzVoltage = ocVoltage - (maxVzAmps * rInt);
-    double maxVzThermalLoss = math.pow(maxVzAmps, 2) * rInt;
-
-    double usableBatteryAh = (_batteryMah / 1000.0) * 0.80;
-    double hoverTimeMinutes = (usableBatteryAh / hoverAmps) * 60.0;
-
-    double tiltAngleRad30 = 30.0 * math.pi / 180.0;
-    double thrustMultiplier30 = 1.0 / math.cos(tiltAngleRad30);
-    double powerMultiplier30 = math.pow(thrustMultiplier30, 1.5);
-    double flightAmps30 = hoverAmps * powerMultiplier30;
-    double dynamicFlightMinutes = (usableBatteryAh / flightAmps30) * 60.0 * 0.90;
-
-    double baseKp = (0.25 * (momentOfInertia / 0.02) * (4.0 / twr)).clamp(0.20, 1.20);
-    double baseKi = 0.010;
-    double baseKd = (baseKp * 0.035).clamp(0.005, 0.050);
-
-    double rollPitchKp = double.parse((baseKp * behaviorMultiplier).toStringAsFixed(3));
-    double rollPitchKd = double.parse((baseKd * behaviorMultiplier).toStringAsFixed(3));
-    double yawKp = (rollPitchKp * 1.2).clamp(0.3, 1.5);
-    double yawKd = (rollPitchKd * 0.4).clamp(0.0, 0.025);
-
-    double rcRate = _behaviorIndex == 0 ? 0.25 : (_behaviorIndex == 1 ? 0.38 : 0.55);
-    double superExpo = _behaviorIndex == 0 ? 0.02 : (_behaviorIndex == 1 ? 0.04 : 0.08);
-
-    double maxRps = (_motorKv * loadVoltage) / 60.0;
-    double bladePassFreq = maxRps * _bladesCount; 
-    double notchFreq = (bladePassFreq * 0.75).clamp(40.0, 300.0);
-    double dynMinHz = (notchFreq * 0.55).clamp(30.0, 100.0);
-    double dynMaxHz = (notchFreq * 1.85).clamp(140.0, 380.0);
-
-    return {
-      'roll_kp': rollPitchKp,
-      'roll_ki': baseKi,
-      'roll_kd': rollPitchKd,
-      'pitch_kp': rollPitchKp,
-      'pitch_ki': baseKi,
-      'pitch_kd': rollPitchKd,
-      'yaw_kp': double.parse(yawKp.toStringAsFixed(3)),
-      'yaw_ki': 0.010,
-      'yaw_kd': double.parse(yawKd.toStringAsFixed(3)),
-      'rc_rate': rcRate,
-      'rc_super_expo': superExpo,
-      'filter_notch_freq': double.parse(notchFreq.toStringAsFixed(1)),
-      'filter_dyn_min_hz': double.parse(dynMinHz.toStringAsFixed(1)),
-      'filter_dyn_max_hz': double.parse(dynMaxHz.toStringAsFixed(1)),
-      'twr': twr.toStringAsFixed(1),
-      'hover_throttle': hoverThrottle.toStringAsFixed(0),
-      'hover_amps': hoverAmps.toStringAsFixed(1),
-      'load_voltage': loadVoltage.toStringAsFixed(2),
-      'bat_thermal_loss': batteryThermalLossWatts.toStringAsFixed(1),
-      'flight_time': hoverTimeMinutes.toStringAsFixed(1),
-      'flight_time_30deg': dynamicFlightMinutes.toStringAsFixed(1),
-      'total_rint_mohm': rintMohm.toStringAsFixed(1),
-      'max_tilt_amps': maxTiltAmps.toStringAsFixed(1),
-      'max_tilt_voltage': maxTiltVoltage.toStringAsFixed(2),
-      'max_tilt_loss': maxTiltThermalLoss.toStringAsFixed(1),
-      'max_vz_amps': maxVzAmps.toStringAsFixed(1),
-      'max_vz_voltage': maxVzVoltage.toStringAsFixed(2),
-      'max_vz_loss': maxVzThermalLoss.toStringAsFixed(1),
-    };
-  }
-
   Widget _calcResultRow(String label, String value, Color color) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Expanded(
-            child: Text(
-              label, 
-              style: const TextStyle(fontSize: 11, color: Colors.white70),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
+          Expanded(child: Text(label, style: const TextStyle(fontSize: 11, color: Colors.white70), overflow: TextOverflow.ellipsis)),
           const SizedBox(width: 8),
-          Text(
-            value, 
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color, fontFamily: 'monospace'),
-          ),
+          Text(value, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color, fontFamily: 'monospace')),
         ],
       ),
     );
@@ -1909,7 +1752,7 @@ class _SettingsTabState extends State<SettingsTab> {
               icon: Icons.memory,
               children: [
                 XFireFlashCard(
-                  title: "Прошить полетный контроллер (v3.24)",
+                  title: "Прошить полетный контроллер (v3.25)",
                   targetName: "Полетный контроллер FC",
                   onFlash: (onProgress) async {
                     onProgress("Стирание флеш-памяти STM32...", 0.2);
@@ -1917,7 +1760,7 @@ class _SettingsTabState extends State<SettingsTab> {
                     if (SerialService.isConnected && SerialService.usbPort != null) {
                       await SerialService.usbPort!.write(Uint8List.fromList([0x7F]));
                     }
-                    onProgress("Запись блоков прошивки v3.24...", 0.6);
+                    onProgress("Запись блоков прошивки v3.25...", 0.6);
                     await Future.delayed(const Duration(milliseconds: 1200));
                     onProgress("Проверка контрольной суммы CRC...", 0.9);
                     await Future.delayed(const Duration(milliseconds: 600));
@@ -2076,7 +1919,7 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
           icon: Icons.memory,
           children: [
             XFireFlashCard(
-              title: "Прошить пульт управления (v3.24)",
+              title: "Прошить пульт управления (v3.25)",
               targetName: "Пульт управления RC",
               onFlash: (onProgress) async {
                 onProgress("Стирание памяти пульта...", 0.25);
@@ -2084,7 +1927,7 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
                 if (SerialService.isConnected && SerialService.usbPort != null) {
                   await SerialService.usbPort!.write(Uint8List.fromList([0x7F]));
                 }
-                onProgress("Запись прошивки пульта v3.24...", 0.65);
+                onProgress("Запись прошивки пульта v3.25...", 0.65);
                 await Future.delayed(const Duration(milliseconds: 1300));
                 onProgress("Проверка целостности...", 0.9);
                 await Future.delayed(const Duration(milliseconds: 500));
@@ -2261,7 +2104,7 @@ class KharchenkoSchematicPainter extends CustomPainter {
 }
 
 // ==========================================
-// УНИВЕРСАЛЬНЫЙ КАЛЬКУЛЯТОР ЛИНКА (В ОБЩЕМ СТИЛЕ)
+// УНИВЕРСАЛЬНЫЙ КАЛЬКУЛЯТОР ЛИНКА
 // ==========================================
 class RtxLinkCalculatorCard extends StatelessWidget {
   final String title;
@@ -2478,9 +2321,7 @@ class KharchenkoAntennaBlock extends StatelessWidget {
         }),
         XFireBatchApplyCard(
           hint: "Пакетная отправка геометрии антенны Харченко",
-          parameters: [
-            "ant_kharc_wire $kharchenkoWireSqMm"
-          ],
+          parameters: ["ant_kharc_wire $kharchenkoWireSqMm"],
         ),
       ],
     );
@@ -2552,7 +2393,7 @@ class _RadioTabState extends State<RadioTab> {
     double bwHz = _bwTable[bwIdx];
     int sfInt = sfParam.round().clamp(5, 12);
     int crInt = crParam.round().clamp(1, 4);
-    double symbolRate = bwHz / math.pow(2, sfInt);
+    double symbolRate = bwHz / math.pow(2, sfInt).toDouble();
     return sfInt * symbolRate * (4.0 / (4.0 + crInt));
   }
 
@@ -2902,9 +2743,7 @@ class _TerminalTabState extends State<TerminalTab> {
       if (text.isEmpty) {
         _suggestions = [];
       } else {
-        _suggestions = _cliCommands
-            .where((cmd) => cmd.toLowerCase().contains(text.toLowerCase()))
-            .toList();
+        _suggestions = _cliCommands.where((cmd) => cmd.toLowerCase().contains(text.toLowerCase())).toList();
       }
     });
   }
@@ -2969,10 +2808,7 @@ class _TerminalTabState extends State<TerminalTab> {
                     },
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
-                      child: Text(
-                        item,
-                        style: const TextStyle(fontFamily: 'monospace', fontSize: 12, color: Colors.amberAccent, fontWeight: FontWeight.bold),
-                      ),
+                      child: Text(item, style: const TextStyle(fontFamily: 'monospace', fontSize: 12, color: Colors.amberAccent, fontWeight: FontWeight.bold)),
                     ),
                   );
                 },
