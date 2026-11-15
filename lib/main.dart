@@ -1,4 +1,4 @@
-// XFire Ecosystem v3.16 (Единый стиль, Hex-only ввод, динамический калькулятор сетапа без переполнения)
+// XFire Ecosystem v3.20 (Учет КПД ESC, потерь на 15 мОм батареи, КПД моторов, крен 30°, Hex-only ввод)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -270,7 +270,6 @@ class XFireBatchApplyCard extends StatelessWidget {
   }
 }
 
-// Карточка с вводом ТОЛЬКО HEX значений
 class XFireTextHexCard extends StatefulWidget {
   final String title;
   final String commandName;
@@ -329,7 +328,7 @@ class _XFireTextHexCardState extends State<XFireTextHexCard> {
                   children: [
                     Text(widget.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
                     const SizedBox(height: 2),
-                    Text(widget.commandName, style: const TextStyle(color: Colors.white70, fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
+                    Text(widget.commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
                   ],
                 ),
               ),
@@ -399,7 +398,7 @@ class _XFireFlashCardState extends State<XFireFlashCard> {
       });
       if (mounted) {
         setState(() {
-          _statusState = "Прошивка успешно завершена (v3.16)!";
+          _statusState = "Прошивка успешно завершена (v3.20)!";
           _progress = 1.0;
         });
         showAppDialog(context, "Успех", "${widget.targetName} успешно прошит!");
@@ -779,7 +778,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     return const Scaffold(
       backgroundColor: Color(0xFF0A0A0A),
       body: Center(
-        child: Text("XFire v3.16", style: TextStyle(fontSize: 42, fontWeight: FontWeight.bold, letterSpacing: 4.0, color: Colors.white)),
+        child: Text("XFire v3.20", style: TextStyle(fontSize: 42, fontWeight: FontWeight.bold, letterSpacing: 4.0, color: Colors.white)),
       ),
     );
   }
@@ -1107,7 +1106,7 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
-                      child: const Text('v.3.16 (CLI)', style: TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                      child: const Text('v.3.20 (CLI)', style: TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
@@ -1171,36 +1170,83 @@ class _ProfilesTabState extends State<ProfilesTab> {
   double get _maxKv => _propSize <= 6.0 ? 2800.0 : (_propSize <= 8.0 ? 1800.0 : 950.0);
 
   Map<String, dynamic> calculateOptimalSettings() {
+    double ocVoltage = _batteryCells * 3.7; // Напряжение холостого хода (Open Circuit Voltage)
+    double totalWeightKg = _auwGrams / 1000.0;
+    
+    // Электрические и термические параметры силовой цепи
+    double rInt = 0.015;     // 15 мОм внутреннее сопротивление батареи
+    double etaEsc = 0.96;    // 96% КПД ESC (модифицированные MOSFET с PWM 24-48кГц)
+    double etaMotor = 0.80;  // 80% общий КПД мотора (включая медь I^2*R и железо)
+
+    // Обороты под нагрузкой (~80% от холостых)
+    double rpmLoad = _motorKv * ocVoltage * 0.80;
+    
+    // Аэродинамика тяги с учетом лопастей
+    double bladeFactor = _bladesCount == 2 ? 1.0 : 0.88;
+    double thrustPerMotorGrams = math.pow(_propSize, 3.2) * _propPitch * math.pow(rpmLoad / 1000.0, 2.0) * bladeFactor * 0.045;
+    double totalThrustGrams = thrustPerMotorGrams * 4.0;
+    double twr = totalThrustGrams / _auwGrams;
+
+    // Момент инерции рамы: J ~ m * R^2
+    double frameRadiusM = (_frameSizeMm / 2000.0);
+    double momentOfInertia = totalWeightKg * math.pow(frameRadiusM, 2);
+    double behaviorMultiplier = _behaviorIndex == 0 ? 0.8 : (_behaviorIndex == 1 ? 1.0 : 1.35);
+    double stabilizationPowerRatio = 1.04 + (0.08 * (momentOfInertia / 0.05)) * behaviorMultiplier;
+
+    double hoverThrustRatio = (_auwGrams / totalThrustGrams).clamp(0.12, 0.90);
+    double hoverThrottle = (hoverThrustRatio * 100.0 * 1.18 * stabilizationPowerRatio).clamp(15.0, 90.0);
+
+    // Механическая мощность на валу пропеллеров (Вт)
+    double specificPowerWPerKg = 130.0 * (math.pow(9.0 / _propSize, 0.85)) * (math.pow(_motorKv / 900.0, 0.1));
+    double hoverPowerMech = totalWeightKg * specificPowerWPerKg * math.sqrt(hoverThrustRatio) * stabilizationPowerRatio;
+
+    // Потребная электрическая мощность на входе ESC (с учетом КПД мотора и ESC)
+    double pEscIn = hoverPowerMech / (etaMotor * etaEsc);
+
+    // Расчет тока висения с учетом просадки напряжения батареи по квадратному уравнению:
+    // I^2 * R_int - I * U_oc + P_esc_in = 0
+    double a = rInt;
+    double b = -ocVoltage;
+    double c = pEscIn;
+    double discriminant = (b * b) - (4 * a * c);
+    
+    double hoverAmps = 10.0;
+    if (discriminant >= 0) {
+      hoverAmps = (-b - math.sqrt(discriminant)) / (2 * a);
+    } else {
+      hoverAmps = ocVoltage / (2 * a);
+    }
+
+    double loadVoltage = ocVoltage - (hoverAmps * rInt);
+    double batteryThermalLossWatts = math.pow(hoverAmps, 2) * rInt;
+
+    // Полезная емкость аккумулятора (80% от номинала для LiPo)
+    double usableBatteryAh = (_batteryMah / 1000.0) * 0.80;
+    double hoverTimeMinutes = (usableBatteryAh / hoverAmps) * 60.0;
+
+    // Полет с наклоном 30° и штрафом -10% на взлеты/маневры
+    double tiltAngleRad = 30.0 * math.pi / 180.0;
+    double thrustMultiplier30 = 1.0 / math.cos(tiltAngleRad); // ~1.1547
+    double powerMultiplier30 = math.pow(thrustMultiplier30, 1.5) * stabilizationPowerRatio;
+    
+    double flightAmps30 = hoverAmps * powerMultiplier30;
+    double dynamicFlightMinutes = (usableBatteryAh / flightAmps30) * 60.0 * 0.90;
+
+    // ПИД и фильтры
     double inertiaFactor = math.pow(_propSize, 2) * _bladesCount;
     double baseKp = (15.0 / math.sqrt(inertiaFactor)).clamp(0.20, 0.90);
     double baseKi = 0.010;
     double baseKd = (baseKp * 0.04).clamp(0.005, 0.040);
 
-    double behaviorMultiplier = _behaviorIndex == 0 ? 0.8 : (_behaviorIndex == 1 ? 1.0 : 1.25);
-
     double rollPitchKp = double.parse((baseKp * behaviorMultiplier).toStringAsFixed(3));
     double rollPitchKd = double.parse((baseKd * behaviorMultiplier).toStringAsFixed(3));
-
     double yawKp = (rollPitchKp * (1.0 + (_frameSizeMm / 500.0))).clamp(0.3, 1.2);
     double yawKd = (rollPitchKd * 0.5).clamp(0.0, 0.02);
 
     double rcRate = _behaviorIndex == 0 ? 0.25 : (_behaviorIndex == 1 ? 0.38 : 0.55);
     double superExpo = _behaviorIndex == 0 ? 0.02 : (_behaviorIndex == 1 ? 0.04 : 0.08);
 
-    double voltage = _batteryCells * 3.7;
-    double kvFactor = _motorKv / 1000.0;
-    
-    // Динамический расчет тяги с учетом пропов, шага, KV и напряжения аккумулятора
-    double thrustPerMotor = math.pow(_propSize, 3.4) * _propPitch * math.pow(kvFactor, 1.6) * math.pow(voltage / 14.8, 1.5) * 16.0;
-    double totalThrust = thrustPerMotor * 4.0;
-    double twr = totalThrust / _auwGrams;
-
-    // Динамический газ висения и ток с учетом веса, напряжения и сетапа
-    double hoverThrottle = (_auwGrams / totalThrust * 100.0).clamp(10.0, 85.0);
-    double hoverAmps = (_auwGrams / 1000.0) * (14.8 / voltage) * (14.0 / math.pow(_propSize, 0.5)) * math.pow(1000.0 / _motorKv, 0.2);
-    double flightTimeMinutes = (_batteryMah / 1000.0 / hoverAmps) * 60.0 * 0.78;
-
-    double maxRps = (_motorKv * voltage) / 60.0;
+    double maxRps = (_motorKv * ocVoltage) / 60.0;
     double bladePassFreq = maxRps * _bladesCount; 
     double notchFreq = (bladePassFreq * 0.75).clamp(40.0, 250.0);
     double dynMinHz = (notchFreq * 0.6).clamp(30.0, 90.0);
@@ -1224,7 +1270,10 @@ class _ProfilesTabState extends State<ProfilesTab> {
       'twr': twr.toStringAsFixed(1),
       'hover_throttle': hoverThrottle.toStringAsFixed(0),
       'hover_amps': hoverAmps.toStringAsFixed(1),
-      'flight_time': flightTimeMinutes.toStringAsFixed(1),
+      'load_voltage': loadVoltage.toStringAsFixed(2),
+      'bat_thermal_loss': batteryThermalLossWatts.toStringAsFixed(1),
+      'flight_time': hoverTimeMinutes.toStringAsFixed(1),
+      'flight_time_30deg': dynamicFlightMinutes.toStringAsFixed(1),
     };
   }
 
@@ -1241,7 +1290,7 @@ class _ProfilesTabState extends State<ProfilesTab> {
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
         XFireExpansionCard(
-          title: "Калькулятор сетапа, веса и времени полета",
+          title: "Калькулятор сетапа и полета",
           subtitle: "Подбор PID, фильтров, TWR и расчет расхода батареи",
           icon: Icons.tune_rounded,
           children: [
@@ -1257,7 +1306,7 @@ class _ProfilesTabState extends State<ProfilesTab> {
           ],
         ),
 
-        // Карточка результатов (приведена к общему стилю, с защитой текста от уезда за границы)
+        // Карточка результатов
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 4.0),
           child: Container(
@@ -1273,15 +1322,25 @@ class _ProfilesTabState extends State<ProfilesTab> {
                 const Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text("РАСЧЕТ ЛЕТНЫХ ХАРАКТЕРИСТИК И СЕТАПА", style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+                    Expanded(
+                      child: Text(
+                        "РАСЧЕТ ЛЕТНЫХ ХАРАКТЕРИСТИК (КПД + Rint)",
+                        style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.1),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    SizedBox(width: 8),
                     Icon(Icons.insights, color: Colors.amberAccent, size: 16),
                   ],
                 ),
                 const SizedBox(height: 12),
                 _calcResultRow("Тяговооруженность (TWR):", "${optimal['twr']} : 1", Colors.greenAccent),
                 _calcResultRow("Газ висения (Hover Throttle):", "${optimal['hover_throttle']} %", Colors.cyanAccent),
-                _calcResultRow("Ток в режиме висения:", "${optimal['hover_amps']} А", Colors.amberAccent),
-                _calcResultRow("Прогнозируемое время полета:", "${optimal['flight_time']} мин", Colors.greenAccent),
+                _calcResultRow("Ток висения (с учетом КПД ESC/моторов):", "${optimal['hover_amps']} А", Colors.amberAccent),
+                _calcResultRow("Напряжение под нагрузкой (15 мОм):", "${optimal['load_voltage']} В", Colors.white70),
+                _calcResultRow("Тепловые потери в батарее (нагрев):", "${optimal['bat_thermal_loss']} Вт", Colors.redAccent.shade200),
+                _calcResultRow("Время висения (80% емкости):", "${optimal['flight_time']} мин", Colors.white70),
+                _calcResultRow("Время в полете (наклон 30° + взлеты -10%):", "${optimal['flight_time_30deg']} мин", Colors.greenAccent),
                 const Divider(color: Colors.white12, height: 16),
                 _calcResultRow("Roll/Pitch Kp / Ki / Kd:", "${optimal['roll_kp']} / ${optimal['roll_ki']} / ${optimal['roll_kd']}", Colors.white),
                 _calcResultRow("Yaw Kp / Ki / Kd (по раме):", "${optimal['yaw_kp']} / ${optimal['yaw_ki']} / ${optimal['yaw_kd']}", Colors.white),
@@ -1675,7 +1734,7 @@ class _SettingsTabState extends State<SettingsTab> {
               icon: Icons.memory,
               children: [
                 XFireFlashCard(
-                  title: "Прошить полетный контроллер (v3.16)",
+                  title: "Прошить полетный контроллер (v3.20)",
                   targetName: "Полетный контроллер FC",
                   onFlash: (onProgress) async {
                     onProgress("Стирание флеш-памяти STM32...", 0.2);
@@ -1683,7 +1742,7 @@ class _SettingsTabState extends State<SettingsTab> {
                     if (SerialService.isConnected && SerialService.usbPort != null) {
                       await SerialService.usbPort!.write(Uint8List.fromList([0x7F]));
                     }
-                    onProgress("Запись блоков прошивки v3.16...", 0.6);
+                    onProgress("Запись блоков прошивки v3.20...", 0.6);
                     await Future.delayed(const Duration(milliseconds: 1200));
                     onProgress("Проверка контрольной суммы CRC...", 0.9);
                     await Future.delayed(const Duration(milliseconds: 600));
@@ -1842,7 +1901,7 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
           icon: Icons.memory,
           children: [
             XFireFlashCard(
-              title: "Прошить пульт управления (v3.16)",
+              title: "Прошить пульт управления (v3.20)",
               targetName: "Пульт управления RC",
               onFlash: (onProgress) async {
                 onProgress("Стирание памяти пульта...", 0.25);
@@ -1850,7 +1909,7 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
                 if (SerialService.isConnected && SerialService.usbPort != null) {
                   await SerialService.usbPort!.write(Uint8List.fromList([0x7F]));
                 }
-                onProgress("Запись прошивки пульта v3.16...", 0.65);
+                onProgress("Запись прошивки пульта v3.20...", 0.65);
                 await Future.delayed(const Duration(milliseconds: 1300));
                 onProgress("Проверка целостности...", 0.9);
                 await Future.delayed(const Duration(milliseconds: 500));
@@ -2128,69 +2187,61 @@ class DipoleAntennaBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 11.0, vertical: 4.0),
-      child: Card(
-        margin: EdgeInsets.zero,
-        child: ExpansionTile(
-          title: const Text("Дипольная антенна (Расчет и геометрия)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.cyanAccent)),
-          subtitle: const Text("Расчет плеч штыревого диполя и диэлектрической усадки", style: TextStyle(fontSize: 10, color: Colors.white70)),
-          iconColor: Colors.cyanAccent,
-          collapsedIconColor: Colors.white54,
-          children: [
-            XFireCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text("Графический расчет плеч диполя", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.cyanAccent)),
-                  const SizedBox(height: 12),
-                  Center(
-                    child: SizedBox(
-                      width: 220,
-                      child: Column(
-                        children: [
-                          const Text("Штыревой диполь", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
-                          const SizedBox(height: 6),
-                          Container(
-                            height: 120,
-                            decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
-                            child: CustomPaint(painter: DipoleSchematicPainter(hasSleeve: hasProtectiveSleeve), size: const Size(double.infinity, 120)),
-                          ),
-                          const SizedBox(height: 6),
-                          Text("Верхнее плечо: ${(antResults['dipoleArmTopMm'] as double).toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 10, color: Colors.white70)),
-                          Text("Нижнее плечо: ${(antResults['dipoleArmBotMm'] as double).toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
-                        ],
+    return XFireExpansionCard(
+      title: "Дипольная антенна (Расчет и геометрия)",
+      subtitle: "Расчет плеч штыревого диполя и диэлектрической усадки",
+      icon: Icons.wifi_tethering,
+      children: [
+        XFireCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text("Графический расчет плеч диполя", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.cyanAccent)),
+              const SizedBox(height: 12),
+              Center(
+                child: SizedBox(
+                  width: 220,
+                  child: Column(
+                    children: [
+                      const Text("Штыревой диполь", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
+                      const SizedBox(height: 6),
+                      Container(
+                        height: 120,
+                        decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
+                        child: CustomPaint(painter: DipoleSchematicPainter(hasSleeve: hasProtectiveSleeve), size: const Size(double.infinity, 120)),
                       ),
-                    ),
+                      const SizedBox(height: 6),
+                      Text("Верхнее плечо: ${(antResults['dipoleArmTopMm'] as double).toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 10, color: Colors.white70)),
+                      Text("Нижнее плечо: ${(antResults['dipoleArmBotMm'] as double).toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
-            XFireSwitchCard(title: "Защитная трубка / термоусадка на диполе", commandName: "ant_sleeve_en", value: hasProtectiveSleeve, onChanged: onSleeveToggle),
-            if (hasProtectiveSleeve)
-              XFireSliderCard(title: "Толщина стенки трубки (чехла)", commandName: "ant_sleeve_thick", value: sleeveThicknessMm, min: 0.5, max: 3.0, divisions: 25, unit: "мм", onChanged: onSleeveThickChanged, onChangeEnd: (_) {}),
-            XFireSliderCard(title: "Диаметр трубки диполя (нижн.)", commandName: "ant_tube_diam", value: dipoleTubeDiameterMm, min: 2.0, max: 5.0, divisions: 6, unit: "мм", onChanged: onTubeDiamChanged, onChangeEnd: (_) {}),
-            XFireSliderCard(title: "Сечение провода диполя (верхн.)", commandName: "ant_top_wire", value: dipoleTopWireSqMm, min: 0.5, max: 2.5, divisions: 20, unit: "мм²", onChanged: onTopWireChanged, onChangeEnd: (_) {}),
-            XFireResetCard(hint: "Сброс геометрии диполя по умолчанию", onReset: () {
-              onSleeveToggle(true);
-              onSleeveThickChanged(1.0);
-              onTubeDiamChanged(3.0);
-              onTopWireChanged(1.0);
-              SerialService.sendCommand("default dipole");
-            }),
-            XFireBatchApplyCard(
-              hint: "Пакетная отправка геометрии штыревого диполя",
-              parameters: [
-                "ant_sleeve_en ${hasProtectiveSleeve ? 1 : 0}",
-                "ant_sleeve_thick $sleeveThicknessMm",
-                "ant_tube_diam $dipoleTubeDiameterMm",
-                "ant_top_wire $dipoleTopWireSqMm"
-              ],
-            ),
-            const SizedBox(height: 12),
+            ],
+          ),
+        ),
+        XFireSwitchCard(title: "Защитная трубка / термоусадка на диполе", commandName: "ant_sleeve_en", value: hasProtectiveSleeve, onChanged: onSleeveToggle),
+        if (hasProtectiveSleeve)
+          XFireSliderCard(title: "Толщина стенки трубки (чехла)", commandName: "ant_sleeve_thick", value: sleeveThicknessMm, min: 0.5, max: 3.0, divisions: 25, unit: "мм", onChanged: onSleeveThickChanged, onChangeEnd: (_) {}),
+        XFireSliderCard(title: "Диаметр трубки диполя (нижн.)", commandName: "ant_tube_diam", value: dipoleTubeDiameterMm, min: 2.0, max: 5.0, divisions: 6, unit: "мм", onChanged: onTubeDiamChanged, onChangeEnd: (_) {}),
+        XFireSliderCard(title: "Сечение провода диполя (верхн.)", commandName: "ant_top_wire", value: dipoleTopWireSqMm, min: 0.5, max: 2.5, divisions: 20, unit: "мм²", onChanged: onTopWireChanged, onChangeEnd: (_) {}),
+        XFireResetCard(hint: "Сброс геометрии диполя по умолчанию", onReset: () {
+          onSleeveToggle(true);
+          onSleeveThickChanged(1.0);
+          onTubeDiamChanged(3.0);
+          onTopWireChanged(1.0);
+          SerialService.sendCommand("default dipole");
+        }),
+        XFireBatchApplyCard(
+          hint: "Пакетная отправка геометрии штыревого диполя",
+          parameters: [
+            "ant_sleeve_en ${hasProtectiveSleeve ? 1 : 0}",
+            "ant_sleeve_thick $sleeveThicknessMm",
+            "ant_tube_diam $dipoleTubeDiameterMm",
+            "ant_top_wire $dipoleTopWireSqMm"
           ],
         ),
-      ),
+      ],
     );
   }
 }
@@ -2212,59 +2263,51 @@ class KharchenkoAntennaBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 11.0, vertical: 4.0),
-      child: Card(
-        margin: EdgeInsets.zero,
-        child: ExpansionTile(
-          title: const Text("Антенна Харченко (Расчет и геометрия)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amberAccent)),
-          subtitle: const Text("Расчет стороны ромба и геометрии биквадрата", style: TextStyle(fontSize: 10, color: Colors.white70)),
-          iconColor: Colors.amberAccent,
-          collapsedIconColor: Colors.white54,
-          children: [
-            XFireCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text("Графический расчет антенны Харченко", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amberAccent)),
-                  const SizedBox(height: 12),
-                  Center(
-                    child: SizedBox(
-                      width: 220,
-                      child: Column(
-                        children: [
-                          const Text("Антенна Харченко", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
-                          const SizedBox(height: 6),
-                          Container(
-                            height: 120,
-                            decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
-                            child: CustomPaint(painter: KharchenkoSchematicPainter(), size: const Size(double.infinity, 120)),
-                          ),
-                          const SizedBox(height: 6),
-                          const Text("Сторона ромба", style: TextStyle(fontSize: 10, color: Colors.white70)),
-                          Text("Сторона: ${(antResults['kharchenkoSideMm'] as double).toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
-                        ],
+    return XFireExpansionCard(
+      title: "Антенна Харченко (Расчет и геометрия)",
+      subtitle: "Расчет стороны ромба и геометрии биквадрата",
+      icon: Icons.hub,
+      children: [
+        XFireCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text("Графический расчет антенны Харченко", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amberAccent)),
+              const SizedBox(height: 12),
+              Center(
+                child: SizedBox(
+                  width: 220,
+                  child: Column(
+                    children: [
+                      const Text("Антенна Харченко", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
+                      const SizedBox(height: 6),
+                      Container(
+                        height: 120,
+                        decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
+                        child: CustomPaint(painter: KharchenkoSchematicPainter(), size: const Size(double.infinity, 120)),
                       ),
-                    ),
+                      const SizedBox(height: 6),
+                      const Text("Сторона ромба", style: TextStyle(fontSize: 10, color: Colors.white70)),
+                      Text("Сторона: ${(antResults['kharchenkoSideMm'] as double).toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
-            XFireSliderCard(title: "Сечение провода Харченко", commandName: "ant_kharc_wire", value: kharchenkoWireSqMm, min: 1.0, max: 4.0, divisions: 15, unit: "мм²", onChanged: onKharcChanged, onChangeEnd: (_) {}),
-            XFireResetCard(hint: "Сброс геометрии антенны Харченко по умолчанию", onReset: () {
-              onKharcChanged(2.0);
-              SerialService.sendCommand("default kharchenko");
-            }),
-            XFireBatchApplyCard(
-              hint: "Пакетная отправка геометрии антенны Харченко",
-              parameters: [
-                "ant_kharc_wire $kharchenkoWireSqMm"
-              ],
-            ),
-            const SizedBox(height: 12),
+            ],
+          ),
+        ),
+        XFireSliderCard(title: "Сечение провода Харченко", commandName: "ant_kharc_wire", value: kharchenkoWireSqMm, min: 1.0, max: 4.0, divisions: 15, unit: "мм²", onChanged: onKharcChanged, onChangeEnd: (_) {}),
+        XFireResetCard(hint: "Сброс геометрии антенны Харченко по умолчанию", onReset: () {
+          onKharcChanged(2.0);
+          SerialService.sendCommand("default kharchenko");
+        }),
+        XFireBatchApplyCard(
+          hint: "Пакетная отправка геометрии антенны Харченко",
+          parameters: [
+            "ant_kharc_wire $kharchenkoWireSqMm"
           ],
         ),
-      ),
+      ],
     );
   }
 }
@@ -2282,28 +2325,24 @@ class RadioTab extends StatefulWidget {
 class _RadioTabState extends State<RadioTab> {
   double _rtxEn = 1;
 
-  // ОБЩИЕ НАСТРОЙКИ (Общий диапазон, класс PA и комбинация антенн)
-  double _rtxBand = 9.0; // 9 = 900 МГц (общий для обоих каналов)
-  double _rtxAmpTier = 22.0; // 22, 29, 30, 33 дБм
+  double _rtxBand = 9.0;
+  double _rtxAmpTier = 22.0;
   int _antennaComboIndex = 1;
 
-  // ОСНОВНОЙ КАНАЛ (~5.4 кбит/с)
   double _priChan = 15.0; 
   double _priSf = 7.0;
-  double _priBw = 7.0; // 125 кГц
+  double _priBw = 7.0;
   double _priCr = 1.0;
   double _priPower = 22.0;
   double _priFadeMargin = 15.0;
 
-  // ЗАПАСНОЙ КАНАЛ (~1.0 кбит/с)
   double _bakChan = 25.0;
   double _bakSf = 10.0;
-  double _bakBw = 4.0; // 31.25 кГц
+  double _bakBw = 4.0;
   double _bakCr = 1.0;
   double _bakPower = 22.0;
   double _bakFadeMargin = 15.0;
 
-  // ОБЩИЕ ПАРАМЕТРЫ ПАКЕТОВ И ПРОТОКОЛА
   bool _rtxAfcEn = false;
   bool _rtxHwCrcEn = true;
   bool _rtxSwCrcEn = false;
@@ -2313,7 +2352,6 @@ class _RadioTabState extends State<RadioTab> {
   bool _rtxLbtEn = false;
   bool _rtxIqInv = false;
 
-  // ФИЗИЧЕСКИЕ ПАРАМЕТРЫ АНТЕНН
   bool _hasProtectiveSleeve = true;
   double _sleeveThicknessMm = 1.0; 
   double _dipoleTubeDiameterMm = 3.0; 
@@ -2398,7 +2436,6 @@ class _RadioTabState extends State<RadioTab> {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
-        // 1. ОБЩИЕ НАСТРОЙКИ (Диапазон, PA Tier, Антенны, Протокол)
         XFireExpansionCard(
           title: "Общие настройки радиомодуля",
           subtitle: "Диапазон частот, мощность усилителя (PA Tier) и протокол",
@@ -2509,7 +2546,6 @@ class _RadioTabState extends State<RadioTab> {
           ],
         ),
 
-        // 2. ОСНОВНОЙ КАНАЛ СВЯЗИ (~5.4 кбит/с) С ИНТЕГРИРОВАННЫМ КАЛЬКУЛЯТОРОМ
         XFireExpansionCard(
           title: "Основной канал связи (~5.4 кбит/с)",
           subtitle: "Штатный режим с малой задержкой (SF7, BW 125 кГц)",
@@ -2532,7 +2568,6 @@ class _RadioTabState extends State<RadioTab> {
             ),
             XFireSliderCard(title: "Запас на условия (Fade Margin)", commandName: "rtx_pri_fade", value: _priFadeMargin, min: 5.0, max: 30.0, divisions: 25, unit: "dB", onChanged: (v) => setState(() => _priFadeMargin = v), onChangeEnd: (_) {}),
             
-            // Интегрированный калькулятор дальности основного канала
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 4.0),
               child: RtxLinkCalculatorCard(
@@ -2565,7 +2600,6 @@ class _RadioTabState extends State<RadioTab> {
           ],
         ),
 
-        // 3. ЗАПАСНОЙ КАНАЛ СВЯЗИ (~1.0 кбит/с) С ИНТЕГРИРОВАННЫМ КАЛЬКУЛЯТОРОМ
         XFireExpansionCard(
           title: "Запасной канал связи (~1.0 кбит/с)",
           subtitle: "Ультра-дальний резервный линк (SF10, BW 31.25 кГц)",
@@ -2588,7 +2622,6 @@ class _RadioTabState extends State<RadioTab> {
             ),
             XFireSliderCard(title: "Запас на условия (Fade Margin)", commandName: "rtx_bak_fade", value: _bakFadeMargin, min: 5.0, max: 30.0, divisions: 25, unit: "dB", onChanged: (v) => setState(() => _bakFadeMargin = v), onChangeEnd: (_) {}),
             
-            // Интегрированный калькулятор дальности запасного канала
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 4.0),
               child: RtxLinkCalculatorCard(
@@ -2621,7 +2654,6 @@ class _RadioTabState extends State<RadioTab> {
           ],
         ),
 
-        // 4. БЛОК ДИПОЛЬНОЙ АНТЕННЫ
         DipoleAntennaBlock(
           hasProtectiveSleeve: _hasProtectiveSleeve,
           sleeveThicknessMm: _sleeveThicknessMm,
@@ -2634,7 +2666,6 @@ class _RadioTabState extends State<RadioTab> {
           onTopWireChanged: (v) => setState(() => _dipoleTopWireSqMm = v),
         ),
 
-        // 5. БЛОК АНТЕННЫ ХАРЧЕНКО
         KharchenkoAntennaBlock(
           kharchenkoWireSqMm: _kharchenkoWireSqMm,
           antResults: antResults,
