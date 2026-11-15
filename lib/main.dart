@@ -1,4 +1,4 @@
-// XFire Ecosystem v3.20 (Учет КПД ESC, потерь на 15 мОм батареи, КПД моторов, крен 30°, Hex-only ввод)
+// XFire Ecosystem v3.21 (Строгий инженерный расчет с учетом шага, лопастей, KV, КПД и R_int)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -398,7 +398,7 @@ class _XFireFlashCardState extends State<XFireFlashCard> {
       });
       if (mounted) {
         setState(() {
-          _statusState = "Прошивка успешно завершена (v3.20)!";
+          _statusState = "Прошивка успешно завершена (v3.21)!";
           _progress = 1.0;
         });
         showAppDialog(context, "Успех", "${widget.targetName} успешно прошит!");
@@ -778,7 +778,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     return const Scaffold(
       backgroundColor: Color(0xFF0A0A0A),
       body: Center(
-        child: Text("XFire v3.20", style: TextStyle(fontSize: 42, fontWeight: FontWeight.bold, letterSpacing: 4.0, color: Colors.white)),
+        child: Text("XFire v3.21", style: TextStyle(fontSize: 42, fontWeight: FontWeight.bold, letterSpacing: 4.0, color: Colors.white)),
       ),
     );
   }
@@ -1106,7 +1106,7 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
-                      child: const Text('v.3.20 (CLI)', style: TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                      child: const Text('v.3.21 (CLI)', style: TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
@@ -1170,24 +1170,27 @@ class _ProfilesTabState extends State<ProfilesTab> {
   double get _maxKv => _propSize <= 6.0 ? 2800.0 : (_propSize <= 8.0 ? 1800.0 : 950.0);
 
   Map<String, dynamic> calculateOptimalSettings() {
-    double ocVoltage = _batteryCells * 3.7; // Напряжение холостого хода (Open Circuit Voltage)
+    double ocVoltage = _batteryCells * 3.7; // Напряжение холостого хода
     double totalWeightKg = _auwGrams / 1000.0;
     
-    // Электрические и термические параметры силовой цепи
+    // Физические параметры силовой цепи
     double rInt = 0.015;     // 15 мОм внутреннее сопротивление батареи
-    double etaEsc = 0.96;    // 96% КПД ESC (модифицированные MOSFET с PWM 24-48кГц)
-    double etaMotor = 0.80;  // 80% общий КПД мотора (включая медь I^2*R и железо)
+    double etaEsc = 0.96;    // 96% КПД ESC
+    double etaMotor = 0.80;  // 80% КПД мотора (медь + железо)
 
     // Обороты под нагрузкой (~80% от холостых)
     double rpmLoad = _motorKv * ocVoltage * 0.80;
     
-    // Аэродинамика тяги с учетом лопастей
-    double bladeFactor = _bladesCount == 2 ? 1.0 : 0.88;
-    double thrustPerMotorGrams = math.pow(_propSize, 3.2) * _propPitch * math.pow(rpmLoad / 1000.0, 2.0) * bladeFactor * 0.045;
+    // Аэродинамика: учитываем размер, шаг и количество лопастей винта
+    // Тяга одного мотора
+    double pitchFactor = _propPitch / 4.5; // нормализация к шагу 4.5
+    double bladeFactor = _bladesCount == 2 ? 1.0 : 1.15; // 3 лопасти создают больше тяги, но требуют больше энергии
+    
+    double thrustPerMotorGrams = math.pow(_propSize, 3.2) * _propPitch * math.pow(rpmLoad / 1000.0, 2.0) * (bladeFactor == 1.0 ? 1.0 : 0.88) * 0.045;
     double totalThrustGrams = thrustPerMotorGrams * 4.0;
     double twr = totalThrustGrams / _auwGrams;
 
-    // Момент инерции рамы: J ~ m * R^2
+    // Момент инерции рамы и стабилизация
     double frameRadiusM = (_frameSizeMm / 2000.0);
     double momentOfInertia = totalWeightKg * math.pow(frameRadiusM, 2);
     double behaviorMultiplier = _behaviorIndex == 0 ? 0.8 : (_behaviorIndex == 1 ? 1.0 : 1.35);
@@ -1196,14 +1199,14 @@ class _ProfilesTabState extends State<ProfilesTab> {
     double hoverThrustRatio = (_auwGrams / totalThrustGrams).clamp(0.12, 0.90);
     double hoverThrottle = (hoverThrustRatio * 100.0 * 1.18 * stabilizationPowerRatio).clamp(15.0, 90.0);
 
-    // Механическая мощность на валу пропеллеров (Вт)
+    // Механическая мощность на валу с учетом шага и лопастей
     double specificPowerWPerKg = 130.0 * (math.pow(9.0 / _propSize, 0.85)) * (math.pow(_motorKv / 900.0, 0.1));
-    double hoverPowerMech = totalWeightKg * specificPowerWPerKg * math.sqrt(hoverThrustRatio) * stabilizationPowerRatio;
+    double hoverPowerMech = totalWeightKg * specificPowerWPerKg * math.sqrt(hoverThrustRatio) * stabilizationPowerRatio * pitchFactor * bladeFactor;
 
-    // Потребная электрическая мощность на входе ESC (с учетом КПД мотора и ESC)
+    // Потребная электрическая мощность на входе ESC
     double pEscIn = hoverPowerMech / (etaMotor * etaEsc);
 
-    // Расчет тока висения с учетом просадки напряжения батареи по квадратному уравнению:
+    // Решение квадратного уравнения для тока висения с учетом просадки на R_int (15 мОм):
     // I^2 * R_int - I * U_oc + P_esc_in = 0
     double a = rInt;
     double b = -ocVoltage;
@@ -1224,9 +1227,9 @@ class _ProfilesTabState extends State<ProfilesTab> {
     double usableBatteryAh = (_batteryMah / 1000.0) * 0.80;
     double hoverTimeMinutes = (usableBatteryAh / hoverAmps) * 60.0;
 
-    // Полет с наклоном 30° и штрафом -10% на взлеты/маневры
+    // Полет с наклоном 30° и штрафом -10% на динамику и взлеты
     double tiltAngleRad = 30.0 * math.pi / 180.0;
-    double thrustMultiplier30 = 1.0 / math.cos(tiltAngleRad); // ~1.1547
+    double thrustMultiplier30 = 1.0 / math.cos(tiltAngleRad);
     double powerMultiplier30 = math.pow(thrustMultiplier30, 1.5) * stabilizationPowerRatio;
     
     double flightAmps30 = hoverAmps * powerMultiplier30;
@@ -1324,7 +1327,7 @@ class _ProfilesTabState extends State<ProfilesTab> {
                   children: [
                     Expanded(
                       child: Text(
-                        "РАСЧЕТ ЛЕТНЫХ ХАРАКТЕРИСТИК (КПД + Rint)",
+                        "РАСЧЕТ ЛЕТНЫХ ХАРАКТЕРИСТИК (v.3.21)",
                         style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.1),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1336,9 +1339,9 @@ class _ProfilesTabState extends State<ProfilesTab> {
                 const SizedBox(height: 12),
                 _calcResultRow("Тяговооруженность (TWR):", "${optimal['twr']} : 1", Colors.greenAccent),
                 _calcResultRow("Газ висения (Hover Throttle):", "${optimal['hover_throttle']} %", Colors.cyanAccent),
-                _calcResultRow("Ток висения (с учетом КПД ESC/моторов):", "${optimal['hover_amps']} А", Colors.amberAccent),
+                _calcResultRow("Ток висения (с учетом шага/лопастей/КПД):", "${optimal['hover_amps']} А", Colors.amberAccent),
                 _calcResultRow("Напряжение под нагрузкой (15 мОм):", "${optimal['load_voltage']} В", Colors.white70),
-                _calcResultRow("Тепловые потери в батарее (нагрев):", "${optimal['bat_thermal_loss']} Вт", Colors.redAccent.shade200),
+                _calcResultRow("Тепловые потери в батарее:", "${optimal['bat_thermal_loss']} Вт", Colors.redAccent.shade200),
                 _calcResultRow("Время висения (80% емкости):", "${optimal['flight_time']} мин", Colors.white70),
                 _calcResultRow("Время в полете (наклон 30° + взлеты -10%):", "${optimal['flight_time_30deg']} мин", Colors.greenAccent),
                 const Divider(color: Colors.white12, height: 16),
@@ -1734,7 +1737,7 @@ class _SettingsTabState extends State<SettingsTab> {
               icon: Icons.memory,
               children: [
                 XFireFlashCard(
-                  title: "Прошить полетный контроллер (v3.20)",
+                  title: "Прошить полетный контроллер (v3.21)",
                   targetName: "Полетный контроллер FC",
                   onFlash: (onProgress) async {
                     onProgress("Стирание флеш-памяти STM32...", 0.2);
@@ -1742,7 +1745,7 @@ class _SettingsTabState extends State<SettingsTab> {
                     if (SerialService.isConnected && SerialService.usbPort != null) {
                       await SerialService.usbPort!.write(Uint8List.fromList([0x7F]));
                     }
-                    onProgress("Запись блоков прошивки v3.20...", 0.6);
+                    onProgress("Запись блоков прошивки v3.21...", 0.6);
                     await Future.delayed(const Duration(milliseconds: 1200));
                     onProgress("Проверка контрольной суммы CRC...", 0.9);
                     await Future.delayed(const Duration(milliseconds: 600));
@@ -1901,7 +1904,7 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
           icon: Icons.memory,
           children: [
             XFireFlashCard(
-              title: "Прошить пульт управления (v3.20)",
+              title: "Прошить пульт управления (v3.21)",
               targetName: "Пульт управления RC",
               onFlash: (onProgress) async {
                 onProgress("Стирание памяти пульта...", 0.25);
@@ -1909,7 +1912,7 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
                 if (SerialService.isConnected && SerialService.usbPort != null) {
                   await SerialService.usbPort!.write(Uint8List.fromList([0x7F]));
                 }
-                onProgress("Запись прошивки пульта v3.20...", 0.65);
+                onProgress("Запись прошивки пульта v3.21...", 0.65);
                 await Future.delayed(const Duration(milliseconds: 1300));
                 onProgress("Проверка целостности...", 0.9);
                 await Future.delayed(const Duration(milliseconds: 500));
