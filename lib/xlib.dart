@@ -12,7 +12,7 @@ import 'dart:math' as math;
 class SerialService {
   static bool isConnected = false;
   static UsbPort? usbPort;
-  static StreamSubscription<Uint8List>? _usbSubscription;
+  static StreamSubscription<Uint8List>? usbSubscription; // Сделано публичным
 
   static String lastResponse = "Ready. Connect via USB OTG.";
   static String terminalLog = "";
@@ -60,7 +60,7 @@ class SerialService {
   }
 
   static Future<void> disconnect() async {
-    await _usbSubscription?.cancel();
+    await usbSubscription?.cancel();
     await usbPort?.close();
     usbPort = null;
     isConnected = false;
