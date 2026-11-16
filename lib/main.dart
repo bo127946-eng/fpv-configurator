@@ -146,7 +146,7 @@ class _MainContainerState extends State<MainContainer> {
             await SerialService.usbPort!.setPortParameters(115200, UsbPort.DATABITS_8, UsbPort.STOPBITS_1, UsbPort.PARITY_NONE);
             SerialService.isConnected = true;
             SerialService.appendLog(">> USB Connected: ${devices[0].deviceName}\n");
-            SerialService._usbSubscription = SerialService.usbPort!.inputStream!.listen((data) => SerialService.handleIncomingData(data));
+            SerialService.usbSubscription = SerialService.usbPort!.inputStream!.listen((data) => SerialService.handleIncomingData(data));
           }
         }
       } catch (e) {
@@ -404,7 +404,7 @@ class _ProfilesTabState extends State<ProfilesTab> {
     if (vPerCell >= 3.6) return Colors.lightGreenAccent;
     if (vPerCell >= 3.4) return Colors.yellowAccent;
     if (vPerCell >= 3.3) return Colors.orangeAccent;
-    return Colors.redAccent; // Ниже 3.3В — критическая просадка под нагрузкой
+    return Colors.redAccent;
   }
 
   Color _getTimeColor(double minutes) {
