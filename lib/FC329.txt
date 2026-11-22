@@ -1,0 +1,4182 @@
+/*
+ * ==============================================================================
+ * Project: FPV Flight Controller Firmware (FC v3.29.0 / ESC Protocols: PWM & Oneshot125)
+ * Target: STM32F103C8 (Blue Pill) + Multi-IMU + Multi-Baro + Multi-Mag + Multi-ToF + RTX(SPI2) + VTX (SA/Tramp)
+ * Structure:
+ *   1. Initialization & Hardware/Config Setup
+ *   2. CLI Driver
+ *   3. Packet RX & Parsing
+ *   4. Sensor & Peripherals Polling
+ *   5. Flight Engine & Motor Output
+ * ==============================================================================
+ */
+
+#include <Wire.h>
+#include <EEPROM.h>
+#include <SPI.h>
+#include <math.h>
+#include <string.h>
+
+// ==============================================================================
+// 1. ИНИЦИАЛИЗАЦИИ: КОНСТАНТЫ, ТИПЫ, КОНФИГ, СОСТОЯНИЯ, RTX, VTX, SETUP
+// ==============================================================================
+constexpr uint32_t POWER_ON_SETTLE_MS = 500;
+constexpr uint32_t LOOP_INTERVAL_US = 4000;
+constexpr uint32_t LOOP_OVERRUN_MARGIN_US = 200;
+constexpr float DT = 0.004f;
+constexpr uint32_t TIM2_TICK_HZ = 8000000UL;
+
+constexpr uint32_t AUX_SENSOR_PERIOD_MS = 40;
+constexpr uint32_t MS5611_CONV_DELAY_MS = 10;
+constexpr uint32_t BMP180_TEMP_DELAY_MS = 5;
+constexpr uint32_t BMP180_PRESS_DELAY_MS = 8;
+
+constexpr uint32_t RTX_TX_TIMEOUT_PRI_MS = 50;
+constexpr uint32_t RTX_TX_TIMEOUT_BAK_MS = 220;
+constexpr uint8_t RTX_SCAN_CHANNELS_PER_TICK = 10;
+constexpr uint32_t RTX_SCAN_BUSY_TIMEOUT_US = 40;
+constexpr uint32_t RTX_BUSY_SHORT_TIMEOUT_US = 30;
+constexpr uint8_t RTX_MIN_RESP_DELAY_TICKS = 2;
+constexpr uint8_t RTX_RESP_QUEUE_SIZE = 4;
+
+constexpr uint32_t ERR_202_REPEAT_MS = 1000;
+constexpr uint32_t SA_CMD_INTERVAL_MS = 70;
+constexpr uint32_t SA_PROBE_INTERVAL_MS = 2000;
+constexpr uint32_t VTX_PROBE_TIMEOUT_MS = 220;
+constexpr uint8_t RTX_RX_MAX_PAYLOAD_BYTES = 32;
+constexpr uint8_t VTX_MAX_POWER_TABLE_ITEMS = 8;
+constexpr uint32_t MAG_CAL_DURATION_MS = 8000;
+constexpr uint32_t MAG_CAL_SAMPLE_MS = 20;
+
+constexpr uint32_t MON_STREAM_PERIOD_MS = 80;
+constexpr uint32_t BENCH_TEST_DURATION_MS = 10000;
+constexpr float BENCH_TEST_THROTTLE = 100.0f;
+
+constexpr uint8_t MOTOR1_PIN = PA0;
+constexpr uint8_t MOTOR2_PIN = PA1;
+constexpr uint8_t MOTOR3_PIN = PA2;
+constexpr uint8_t MOTOR4_PIN = PA3;
+constexpr uint8_t BATTERY_PIN = PA4;
+constexpr uint8_t CURRENT_PIN = PA5;
+constexpr float SHUNT_RESISTANCE_OHM = 0.01f;
+
+constexpr uint8_t RTX_SCK_PIN = PB13;
+constexpr uint8_t RTX_MISO_PIN = PB14;
+constexpr uint8_t RTX_MOSI_PIN = PB15;
+constexpr uint8_t RTX_NSS_PIN = PB12;
+constexpr uint8_t RTX_RESET_PIN = PB0;
+constexpr uint8_t RTX_BUSY_PIN = PB1;
+
+constexpr uint32_t EEPROM_MAGIC_MARKER = 0xFACE1362L;
+constexpr uint32_t SERIAL_BAUD_RATE = 115200;
+constexpr uint32_t SMARTAUDIO_BAUD_RATE = 4800;
+constexpr uint32_t TRAMP_BAUD_RATE = 9600;
+constexpr uint8_t TELEMETRY_NO_SIGNAL = 255;
+
+constexpr float STICK_CENTER = 500.0f;
+constexpr float INITIAL_BASE_HOVER = 150.0f;
+constexpr float OUTPUT_MIN = 0.0f;
+constexpr float OUTPUT_MAX = 1000.0f;
+constexpr float MAX_RATE_DPS_PER_UNIT = 500.0f;
+constexpr float MADGWICK_BETA = 0.1f;
+constexpr float MADGWICK_BETA_MIN = 0.02f;
+constexpr float PID_D_ALPHA = 0.4f;
+constexpr float GRAVITY_MPS2 = 9.81f;
+constexpr float DEG_TO_RAD = (float)M_PI / 180.0f;
+constexpr float RAD_TO_DEG = 180.0f / (float)M_PI;
+constexpr float SIN_45 = 0.70710678f;
+constexpr float COS_45 = 0.70710678f;
+
+constexpr uint32_t FAILSAFE_TIMEOUT_MS = 1000;
+constexpr uint8_t I2C_MAX_ERRORS = 10;
+constexpr uint8_t RTX_MAX_ERRORS = 10;
+
+constexpr uint16_t RX5808_FREQS_MHZ[40] = {
+  5865, 5845, 5825, 5805, 5785, 5765, 5745, 5725,
+  5733, 5752, 5771, 5790, 5809, 5828, 5847, 5866,
+  5705, 5685, 5665, 5645, 5885, 5905, 5925, 5945,
+  5740, 5760, 5780, 5800, 5820, 5840, 5860, 5880,
+  5658, 5695, 5732, 5769, 5806, 5843, 5880, 5917
+};
+
+enum FcErrorCode : uint8_t {
+  FC_ERR_NONE = 0,
+  FC_ERR_LOOP_OVERRUN = 1,
+  FC_ERR_IMU_FAIL = 2,
+  FC_ERR_I2C_BUS = 3,
+  FC_ERR_SPI_RTX = 4,
+  FC_ERR_RC_LOSS = 5,
+  FC_ERR_BAT_LOW = 6,
+  FC_ERR_TILT_DISARM = 7,
+  FC_ERR_RTX_TX_TIMEOUT = 8,
+  FC_ERR_NAN_INF_MATH = 9,
+  FC_ERR_BARO_FAIL = 10,
+  FC_ERR_LIDAR_FAIL = 11,
+  FC_ERR_MAG_FAIL = 12,
+  FC_ERR_EEPROM_RESET = 13,
+  FC_ERR_BAT_SENSOR_FAIL = 14,
+  FC_ERR_SA_VTX_FAIL = 16,
+  FC_ERR_CALIB_MISSING = 18
+};
+
+enum VtxConfigMode : uint8_t {
+  VTX_MODE_OFF = 0,
+  VTX_MODE_AUTO = 1,
+  VTX_MODE_SMARTAUDIO = 2,
+  VTX_MODE_TRAMP = 3
+};
+
+enum RtxProtocolId : uint8_t {
+  RTX_PROT_AUTO = 0,
+  RTX_PROT_TRAMP = 1,
+  RTX_PROT_SMARTAUDIO = 2
+};
+
+enum RtxChipId : uint8_t {
+  RTX_CHIP_AUTO = 0,
+  RTX_CHIP_SX1262 = 1,
+  RTX_CHIP_SX1268 = 2,
+  RTX_CHIP_LLCC68 = 3
+};
+
+enum VtxProbeStep : uint8_t {
+  VTX_STEP_IDLE = 0,
+  VTX_STEP_WAIT_SA,
+  VTX_STEP_WAIT_TRAMP,
+  VTX_STEP_WAIT_CMD_ACK
+};
+
+enum DelayedRtxRespType : uint8_t {
+  RTX_RESP_NONE = 0,
+  RTX_RESP_202_ERR_EVENT = 202,
+  RTX_RESP_230_SCAN_BEST = 230,
+  RTX_RESP_240_CHAN_SW = 240,
+  RTX_RESP_250_SA_ACK = 250
+};
+
+enum BenchTestMode : uint8_t {
+  BENCH_TEST_NONE = 0,
+  BENCH_TEST_MOTORS = 1,
+  BENCH_TEST_PID = 2
+};
+
+struct DelayedRtxRespItem {
+  DelayedRtxRespType type = RTX_RESP_NONE;
+  uint8_t ch = 0;
+  uint8_t tier = 0;
+  uint16_t power_mw = 0;
+};
+
+constexpr uint8_t DEFAULT_ESC_PROTOCOL = 0;
+constexpr uint8_t DEFAULT_IMU_ALIGN = 0;
+constexpr uint8_t DEFAULT_COM_ALIGN = 0;
+constexpr uint8_t DEFAULT_IMU_ID = 0;
+constexpr uint8_t DEFAULT_BAR_ID = 0;
+constexpr uint8_t DEFAULT_COM_ID = 0;
+constexpr uint8_t DEFAULT_LID_ID = 0;
+constexpr uint8_t DEFAULT_RTX_PROT_ID = RTX_PROT_AUTO;
+constexpr uint8_t DEFAULT_RTX_ID = RTX_CHIP_AUTO;
+
+constexpr uint8_t DEFAULT_VTX_MODE = VTX_MODE_AUTO;
+constexpr uint8_t DEFAULT_SA_UART_PORT = 3;
+constexpr uint8_t DEFAULT_VTX_CH_IDX = 32;
+constexpr uint8_t DEFAULT_VTX_TIER_IDX = 0;
+constexpr uint16_t DEFAULT_VTX_POWER_MW = 25;
+
+constexpr float DEFAULT_GYRO_BIAS_X = 0.0f;
+constexpr float DEFAULT_GYRO_BIAS_Y = 0.0f;
+constexpr float DEFAULT_GYRO_BIAS_Z = 0.0f;
+constexpr float DEFAULT_BASE_TEMP = 25.0f;
+constexpr float DEFAULT_TEMP_COEFF_X = 0.0005f;
+constexpr float DEFAULT_TEMP_COEFF_Y = 0.0005f;
+constexpr float DEFAULT_TEMP_COEFF_Z = 0.0005f;
+constexpr float DEFAULT_ACC_BIAS_X = 0.0f;
+constexpr float DEFAULT_ACC_BIAS_Y = 0.0f;
+constexpr float DEFAULT_ACC_BIAS_Z = 0.0f;
+constexpr float DEFAULT_MAG_BIAS_X = 0.0f;
+constexpr float DEFAULT_MAG_BIAS_Y = 0.0f;
+constexpr float DEFAULT_MAG_BIAS_Z = 0.0f;
+constexpr float DEFAULT_LIDAR_OFFSET_M = 0.0f;
+constexpr float DEFAULT_BAT_VOLTAGE_SCALE = 4.85f;
+constexpr float DEFAULT_CURR_ZERO_A = 0.0f;
+constexpr float DEFAULT_CURR_SCALE = 1.0f;
+constexpr uint8_t DEFAULT_FC_ERROR = FC_ERR_NONE;
+
+constexpr uint8_t DEFAULT_FL_MODE = 1;
+constexpr float DEFAULT_FL_ROLL_MAX = 25.0f;
+constexpr float DEFAULT_FL_PITCH_MAX = 25.0f;
+constexpr float DEFAULT_FL_VZ_SPEED_MAX = 1.2f;
+
+constexpr float DEFAULT_RC_RATE = 0.35f;
+constexpr float DEFAULT_RC_SUPER_EXPO = 0.03f;
+constexpr float DEFAULT_RC_STICK_EXPO = 0.45f;
+constexpr float DEFAULT_RC_YAW_RATE = 0.30f;
+constexpr float DEFAULT_RC_YAW_SUPER_EXPO = 0.03f;
+constexpr float DEFAULT_RC_YAW_EXPO = 0.35f;
+constexpr float DEFAULT_RC_DEADBAND = 15.0f;
+constexpr float DEFAULT_RC_HORIZON_TRANS = 0.75f;
+constexpr float DEFAULT_RC_SMOOTH = 0.35f;
+
+constexpr uint8_t DEFAULT_FS_BAT_EN = 1;
+constexpr uint8_t DEFAULT_FS_RTX_EN = 1;
+constexpr float DEFAULT_FS_VZ_SPEED = 0.5f;
+
+constexpr float DEFAULT_BAT_FS_V = 13.8f;
+constexpr float DEFAULT_BAT_FILTER_ALPHA = 0.05f;
+
+constexpr uint8_t DEFAULT_LIDAR_EN = 1;
+constexpr float DEFAULT_LIDAR_FIL_ALPHA = 0.15f;
+constexpr uint8_t DEFAULT_BARO_EN = 1;
+constexpr uint8_t DEFAULT_COM_EN = 0;
+
+constexpr uint8_t DEFAULT_FILTER_MODE = 3;
+constexpr float DEFAULT_GYRO_FILTER_ALPHA = 0.10f;
+constexpr float DEFAULT_ACC_FILTER_ALPHA = 0.10f;
+constexpr float DEFAULT_NOTCH_FREQ = 120.0f;
+constexpr float DEFAULT_NOTCH_BW = 20.0f;
+constexpr float DEFAULT_DYN_MIN = 70.0f;
+constexpr float DEFAULT_DYN_MAX = 220.0f;
+
+constexpr uint8_t DEFAULT_RTX_EN = 1;
+constexpr uint8_t DEFAULT_RTX_BAND = 9;
+constexpr uint8_t DEFAULT_RTX_HW_CRC = 1;
+constexpr uint8_t DEFAULT_RTX_ADDR_EN = 1;
+constexpr uint16_t DEFAULT_RTX_ADDR = 0x0000;
+constexpr uint16_t DEFAULT_RTX_SYNC = 0x1424;
+constexpr uint8_t DEFAULT_RTX_IQ_INV = 0;
+constexpr uint8_t DEFAULT_RTX_PRI_CHAN = 15;
+constexpr uint8_t DEFAULT_RTX_PRI_SF = 7;
+constexpr uint8_t DEFAULT_RTX_PRI_BW = 7;
+constexpr uint8_t DEFAULT_RTX_PRI_CR = 1;
+constexpr int8_t DEFAULT_RTX_PRI_POWER = 22;
+constexpr uint8_t DEFAULT_RTX_BAK_CHAN = 25;
+constexpr uint8_t DEFAULT_RTX_BAK_SF = 9;
+constexpr uint8_t DEFAULT_RTX_BAK_BW = 7;
+constexpr uint8_t DEFAULT_RTX_BAK_CR = 1;
+constexpr int8_t DEFAULT_RTX_BAK_POWER = 22;
+
+constexpr float PID_ROLL_KP_DEF = 0.45f;
+constexpr float PID_ROLL_KI_DEF = 0.010f;
+constexpr float PID_ROLL_KD_DEF = 0.018f;
+constexpr float PID_PITCH_KP_DEF = 0.45f;
+constexpr float PID_PITCH_KI_DEF = 0.010f;
+constexpr float PID_PITCH_KD_DEF = 0.018f;
+constexpr float PID_YAW_KP_DEF = 0.60f;
+constexpr float PID_YAW_KI_DEF = 0.010f;
+constexpr float PID_YAW_KD_DEF = 0.0f;
+constexpr float PID_VZ_KP_DEF = 7.0f;
+constexpr float PID_VZ_KI_DEF = 1.2f;
+constexpr float PID_VZ_KD_DEF = 0.30f;
+
+struct PIDConfig {
+  float kp, ki, kd;
+};
+
+struct __attribute__((aligned(4))) FlightConfig {
+  uint32_t magic_marker;
+  float gyro_bias_x, gyro_bias_y, gyro_bias_z;
+  float base_temperature;
+  float temp_coeff_x, temp_coeff_y, temp_coeff_z;
+  float acc_bias_x, acc_bias_y, acc_bias_z;
+  float mag_bias_x, mag_bias_y, mag_bias_z;
+  float lidar_offset_m;
+  float bat_voltage_scale;
+  float curr_zero_offset_a;
+  float curr_scale;
+  float fl_roll_max;
+  float fl_pitch_max;
+  float fl_vz_speed_max;
+  float gyro_filter_alpha;
+  float acc_filter_alpha;
+  float filter_notch_freq;
+  float filter_notch_bw;
+  float filter_dyn_min_hz;
+  float filter_dyn_max_hz;
+  float fs_vz_speed;
+  float rc_rate, rc_super_expo, rc_stick_expo;
+  float rc_yaw_rate, rc_yaw_super_expo, rc_yaw_expo;
+  float rc_deadband;
+  float rc_horizon_transition;
+  float rc_filter_smoothing;
+  float bat_fs_v;
+  float bat_filter_alpha;
+  float lidar_filter_alpha;
+  PIDConfig roll_pid;
+  PIDConfig pitch_pid;
+  PIDConfig yaw_pid;
+  PIDConfig vz_pid;
+  uint16_t vtx_power_mw;
+  uint16_t rtx_addr;
+  uint16_t rtx_sync_word;
+  uint16_t vtx_power_table[VTX_MAX_POWER_TABLE_ITEMS];
+  uint8_t esc_protocol;
+  uint8_t imu_align;
+  uint8_t com_align;
+  uint8_t fc_error;
+  uint8_t vtx_mode;
+  uint8_t sa_uart_port;
+  uint8_t vtx_ch_idx;
+  uint8_t vtx_tier_idx;
+  uint8_t vtx_power_count;
+  uint8_t vtx_detected_proto_saved;
+  uint8_t fl_mode;
+  uint8_t filter_mode;
+  uint8_t fs_bat_en;
+  uint8_t fs_rtx_en;
+  uint8_t lidar_en;
+  uint8_t baro_en;
+  uint8_t com_en;
+  uint8_t rtx_en;
+  uint8_t rtx_band;
+  uint8_t rtx_hw_crc_en;
+  uint8_t rtx_addr_en;
+  uint8_t rtx_iq_inv;
+  uint8_t rtx_pri_chan;
+  uint8_t rtx_pri_sf;
+  uint8_t rtx_pri_bw;
+  uint8_t rtx_pri_cr;
+  int8_t rtx_pri_power;
+  uint8_t rtx_bak_chan;
+  uint8_t rtx_bak_sf;
+  uint8_t rtx_bak_bw;
+  uint8_t rtx_bak_cr;
+  int8_t rtx_bak_power;
+  uint8_t rtx_prot_id;
+  uint8_t rtx_id;
+  uint8_t imu_id;
+  uint8_t bar_id;
+  uint8_t com_id;
+  uint8_t lid_id;
+  uint8_t _pad0;
+  uint8_t _pad1;
+};
+
+static_assert((sizeof(FlightConfig) % 4) == 0, "FlightConfig size must be multiple of 4 bytes");
+static_assert(sizeof(FlightConfig) <= 2048, "FlightConfig exceeds safe STM32F103C8 EEPROM page budget");
+
+struct Quaternion {
+  float q0 = 1.0f, q1 = 0.0f, q2 = 0.0f, q3 = 0.0f;
+  void normalize() {
+    if (isnan(q0) || isnan(q1) || isnan(q2) || isnan(q3) ||
+        isinf(q0) || isinf(q1) || isinf(q2) || isinf(q3)) {
+      q0 = 1.0f; q1 = 0.0f; q2 = 0.0f; q3 = 0.0f;
+      return;
+    }
+    float norm_sq = q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3;
+    if (norm_sq > 0.0f && !isnan(norm_sq) && !isinf(norm_sq)) {
+      float inv_norm = 1.0f / sqrtf(norm_sq);
+      if (!isnan(inv_norm) && !isinf(inv_norm)) {
+        q0 *= inv_norm; q1 *= inv_norm; q2 *= inv_norm; q3 *= inv_norm;
+        return;
+      }
+    }
+    q0 = 1.0f; q1 = 0.0f; q2 = 0.0f; q3 = 0.0f;
+  }
+};
+
+struct LowPassFilter {
+  float alpha;
+  float output = 0.0f;
+  float update(float input) {
+    if (isnan(input) || isinf(input)) return output;
+    output = alpha * input + (1.0f - alpha) * output;
+    return isnan(output) ? 0.0f : output;
+  }
+};
+
+struct BiquadNotchFilter {
+  float b0 = 1.0f, b1 = 0.0f, b2 = 0.0f, a1 = 0.0f, a2 = 0.0f;
+  float x1 = 0.0f, x2 = 0.0f, y1 = 0.0f, y2 = 0.0f;
+  float last_freq = -1.0f;
+  float last_bw = -1.0f;
+  void setParameters(float sampleRate, float freq, float bandwidth, bool force = false) {
+    if (!force && fabsf(freq - last_freq) < 1.5f && fabsf(bandwidth - last_bw) < 0.5f) return;
+    last_freq = freq;
+    last_bw = bandwidth;
+    if (freq <= 0.0f || bandwidth <= 0.0f || sampleRate <= 0.0f) {
+      b0 = 1.0f; b1 = 0.0f; b2 = 0.0f; a1 = 0.0f; a2 = 0.0f;
+      return;
+    }
+    float omega = 2.0f * (float)M_PI * freq / sampleRate;
+    float sn = sinf(omega);
+    float cs = cosf(omega);
+    float sn_safe = (fabsf(sn) < 1e-6f) ? ((sn >= 0.0f) ? 1e-6f : -1e-6f) : sn;
+    float alpha = sn * sinhf(logf(2.0f) / 2.0f * bandwidth * omega / sn_safe);
+    float a0 = 1.0f + alpha;
+    b0 = 1.0f / a0;
+    b1 = (-2.0f * cs) / a0;
+    b2 = (1.0f - alpha) / a0;
+    a1 = (-2.0f * cs) / a0;
+    a2 = (1.0f - alpha) / a0;
+  }
+  float update(float input) {
+    if (b0 == 1.0f && b1 == 0.0f && a1 == 0.0f && a2 == 0.0f) return input;
+    float output = b0 * input + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+    x2 = x1; x1 = input;
+    y2 = y1; y1 = output;
+    return (isnan(output) || isinf(output)) ? input : output;
+  }
+};
+
+struct AdaptiveLidarFilter {
+  float output = 0.0f;
+  bool initialized = false;
+  float history[3] = {0.0f, 0.0f, 0.0f};
+  void reset() {
+    output = 0.0f;
+    initialized = false;
+    history[0] = 0.0f; history[1] = 0.0f; history[2] = 0.0f;
+  }
+  float update(float raw_val, float base_alpha) {
+    if (isnan(raw_val) || isinf(raw_val)) return output;
+    if (!initialized) {
+      output = raw_val;
+      history[0] = raw_val; history[1] = raw_val; history[2] = raw_val;
+      initialized = true;
+      return output;
+    }
+    history[0] = history[1];
+    history[1] = history[2];
+    history[2] = raw_val;
+    float median = history[1];
+    if ((history[0] >= history[1] && history[0] <= history[2]) || (history[0] <= history[1] && history[0] >= history[2]))
+      median = history[0];
+    else if ((history[2] >= history[0] && history[2] <= history[1]) || (history[2] <= history[0] && history[2] >= history[1]))
+      median = history[2];
+    output = base_alpha * median + (1.0f - base_alpha) * output;
+    return isnan(output) ? raw_val : output;
+  }
+};
+
+struct PID {
+  float kp, ki, kd;
+  float integral = 0.0f;
+  float last_measurement = 0.0f;
+  float last_derivative = 0.0f;
+  float int_limit = 200.0f;
+  void init(const PIDConfig &cfg, float limit) {
+    kp = cfg.kp; ki = cfg.ki; kd = cfg.kd;
+    int_limit = limit;
+    reset();
+  }
+  void reset() {
+    integral = 0.0f;
+    last_measurement = 0.0f;
+    last_derivative = 0.0f;
+  }
+  void updateConfig(const PIDConfig &cfg) {
+    kp = cfg.kp; ki = cfg.ki; kd = cfg.kd;
+  }
+  float update(float error, float measurement, float dt, bool is_saturated = false) {
+    if (isnan(error) || isnan(measurement) || isnan(dt) || isinf(error) || isinf(measurement)) return 0.0f;
+    if (isnan(integral) || isinf(integral)) integral = 0.0f;
+    if (!is_saturated && int_limit > 0.0f && dt > 0.0f) {
+      integral += error * dt;
+      integral = constrain(integral, -int_limit, int_limit);
+    }
+    float raw_derivative = (dt > 0.0f) ? -(measurement - last_measurement) / dt : 0.0f;
+    if (isnan(raw_derivative) || isinf(raw_derivative)) raw_derivative = 0.0f;
+    last_measurement = measurement;
+    float derivative = PID_D_ALPHA * raw_derivative + (1.0f - PID_D_ALPHA) * last_derivative;
+    if (isnan(derivative) || isinf(derivative)) derivative = 0.0f;
+    last_derivative = derivative;
+    float output = (kp * error) + (ki * integral) + (kd * derivative);
+    return (isnan(output) || isinf(output)) ? 0.0f : output;
+  }
+};
+
+void loadSettings();
+void saveSettings();
+void resetToFactoryDefaults();
+void applyFilterConfig();
+void updatePidTunings();
+void applyRtxConfiguration(bool use_backup_settings);
+void rtx_set_rx_mode();
+void startChannelScanNonBlocking();
+void stepChannelScanNonBlocking();
+void startTelemetryNonBlocking();
+void pollTelemetryTxState();
+void queueDelayedRtxResponse(DelayedRtxRespType type, uint8_t ch, uint8_t tier, uint16_t power_mw);
+bool hasQueuedRtxResponse();
+bool popDelayedRtxResponse(DelayedRtxRespItem &out);
+void setupHardwareTimers();
+void setMotorsPower(float m1, float m2, float m3, float m4);
+void flightControlTask();
+void parseCli();
+void executeCommand(const char* cmd);
+float calculateSuperExpoRate(float in, float r, float s, float e);
+void setFcErrorRam(uint8_t err_code);
+void handleMotorArmStateAndEepromError();
+bool isVtxEnabled();
+void setVtxMode(uint8_t mode);
+void syncVtxProtoWithRtxProtId();
+void vtxInit();
+void vtxQueueChannelAndPower(uint8_t ch_idx, uint8_t tier_idx, uint16_t power_mw);
+void vtxStepNonBlocking(uint32_t now_ms);
+void startMagCalibrationNonBlocking();
+void stepMagCalibrationNonBlocking(uint32_t now_ms);
+void stepMonitorStreamNonBlocking(uint32_t now_ms);
+void stopBenchTest();
+void stepBenchTestNonBlocking(uint32_t now_ms, float gx_rad, float gy_rad, float gz_rad, float &m1, float &m2, float &m3, float &m4);
+
+FlightConfig currentConfig;
+Quaternion orientation;
+
+SPIClass rtxSpi(RTX_MOSI_PIN, RTX_MISO_PIN, RTX_SCK_PIN);
+SPISettings rtxSpiSettings(8000000, MSBFIRST, SPI_MODE0);
+
+uint8_t fc_error_ram = FC_ERR_NONE;
+uint8_t fc_latched_error_ram = FC_ERR_NONE;
+uint8_t last_sent_202_err = FC_ERR_NONE;
+uint32_t last_202_send_ms = 0;
+
+bool prev_armed_state = false;
+uint32_t fc_tick_count = 0;
+uint32_t last_rc_rx_tick = 0;
+
+DelayedRtxRespItem rtx_resp_queue[RTX_RESP_QUEUE_SIZE];
+uint8_t rtx_resp_head = 0;
+uint8_t rtx_resp_tail = 0;
+uint8_t rtx_resp_count = 0;
+
+float cpu_load_pct = 0.0f;
+float cpu_max_load_pct = 0.0f;
+float vibration_index = 0.0f;
+
+float last_cal_gx_dps = 0.0f, last_cal_gy_dps = 0.0f, last_cal_gz_dps = 0.0f;
+float last_cal_ax_g = 0.0f, last_cal_ay_g = 0.0f, last_cal_az_g = 1.0f;
+
+bool mon_stream_active = false;
+uint32_t mon_last_send_ms = 0;
+
+BenchTestMode bench_test_mode = BENCH_TEST_NONE;
+uint32_t bench_test_start_ms = 0;
+
+LowPassFilter lpf_ax, lpf_ay, lpf_az;
+LowPassFilter lpf_gx, lpf_gy, lpf_gz;
+LowPassFilter lpf_temp{0.05f};
+LowPassFilter lpf_battery{0.05f};
+LowPassFilter lpf_current{0.15f};
+LowPassFilter lpf_baro_alt{0.12f};
+LowPassFilter lpf_baro_vz{0.25f};
+AdaptiveLidarFilter adaptive_lidar;
+BiquadNotchFilter notch_gx, notch_gy, notch_gz;
+
+float base_hover_throttle = INITIAL_BASE_HOVER;
+float current_vz = 0.0f;
+float baro_alt_m = 0.0f;
+float baro_ground_alt_m = 0.0f;
+bool baro_cal_ready = false;
+float baro_vz_mps = 0.0f;
+
+float v_batt = 14.8f;
+bool batt_valid = false;
+float current_a = 0.0f;
+float power_w = 0.0f;
+float consumed_wh = 0.0f;
+uint8_t current_link_quality = 100;
+float current_chip_temp = DEFAULT_BASE_TEMP;
+
+bool sa_initialized = false;
+bool sa_hw_unavailable = false;
+bool sa_vtx_ok = false;
+bool vtx_initial_probe_done = false;
+bool sa_pending_freq = false;
+bool sa_pending_power = false;
+uint16_t sa_target_freq_mhz = 5658;
+uint8_t sa_target_tier_idx = 0;
+uint16_t sa_target_power_mw = 25;
+uint16_t vtx_actual_power_mw = 0;
+uint8_t vtx_actual_tier_idx = 0;
+uint32_t sa_last_tx_ms = 0;
+uint32_t sa_last_probe_ms = 0;
+uint32_t vtx_current_baud = 0;
+uint8_t vtx_detected_proto = 0;
+VtxProbeStep vtx_probe_step = VTX_STEP_IDLE;
+uint32_t vtx_step_start_ms = 0;
+uint8_t tramp_rx_buf[16];
+uint8_t tramp_rx_idx = 0;
+uint8_t sa_rx_buf[16];
+uint8_t sa_rx_idx = 0;
+
+uint8_t rtx_active_chip_id = RTX_CHIP_SX1262;
+
+bool mag_cal_active = false;
+uint32_t mag_cal_start_ms = 0;
+uint32_t mag_cal_last_sample_ms = 0;
+float mag_cal_min_x = 1e9f, mag_cal_max_x = -1e9f;
+float mag_cal_min_y = 1e9f, mag_cal_max_y = -1e9f;
+float mag_cal_min_z = 1e9f, mag_cal_max_z = -1e9f;
+
+uint8_t rtx_sa_ack_ch = DEFAULT_VTX_CH_IDX;
+uint8_t rtx_sa_ack_tier = DEFAULT_VTX_TIER_IDX;
+uint16_t rtx_sa_ack_mw = DEFAULT_VTX_POWER_MW;
+
+float compass_heading_deg = 0.0f;
+bool compass_valid = false;
+
+uint8_t i2c_error_counter = 0;
+uint8_t rtx_error_counter = 0;
+uint8_t rtx_noise_floor[100];
+uint8_t rtx_scan_cursor = 0;
+uint8_t rtx_best_clean_chan = DEFAULT_RTX_PRI_CHAN;
+bool rtx_scan_active = false;
+bool rtx_switched_flag = false;
+uint8_t rtx_new_switched_chan = DEFAULT_RTX_PRI_CHAN;
+
+uint8_t main_rtx_chan = DEFAULT_RTX_PRI_CHAN;
+uint8_t active_rtx_chan = DEFAULT_RTX_PRI_CHAN;
+bool is_on_backup = false;
+bool pending_channel_switch = false;
+uint8_t target_pending_chan = DEFAULT_RTX_PRI_CHAN;
+
+bool rtx_tx_in_flight = false;
+uint32_t rtx_tx_start_ms = 0;
+uint32_t rtx_tx_timeout_ms = RTX_TX_TIMEOUT_PRI_MS;
+bool rtx_apply_switch_after_tx = false;
+uint8_t rtx_post_tx_chan = DEFAULT_RTX_PRI_CHAN;
+bool rtx_post_tx_backup = false;
+
+PID vzPID, rollRatePID, pitchRatePID, yawRatePID;
+HardwareTimer tim2(TIM2);
+
+bool is_armed = false;
+bool is_failsafe = false;
+float arm_ramp_factor = 0.0f;
+float smooth_throttle = 0.0f, smooth_roll = STICK_CENTER, smooth_pitch = STICK_CENTER, smooth_yaw = STICK_CENTER;
+uint8_t mpu_dma_buffer[14];
+uint32_t last_rc_packet_ms = 0;
+bool send_telemetry_pending = false;
+
+bool err_rc_loss = false;
+bool err_batt_low = false;
+bool err_imu_fail = false;
+bool err_aux_i2c_fail = false;
+
+float dbg_lidar_m = 0.0f;
+uint32_t last_lidar_packet_ms = 0;
+
+// Ошибки и EEPROM
+inline bool isCriticalErrorCode(uint8_t err_code) {
+  switch (err_code) {
+    case FC_ERR_IMU_FAIL:
+    case FC_ERR_RC_LOSS:
+    case FC_ERR_BAT_LOW:
+    case FC_ERR_TILT_DISARM:
+    case FC_ERR_NAN_INF_MATH:
+      return true;
+    default:
+      return false;
+  }
+}
+
+inline bool hasBlockingArmError(uint8_t err_code) {
+  return (err_code == FC_ERR_IMU_FAIL || err_code == FC_ERR_CALIB_MISSING || err_code == FC_ERR_NAN_INF_MATH);
+}
+
+void setFcErrorRam(uint8_t err_code) {
+  if (err_code == FC_ERR_NONE) return;
+  fc_error_ram = err_code;
+  fc_latched_error_ram = err_code;
+  if (err_code != last_sent_202_err) {
+    uint8_t flags = (isCriticalErrorCode(err_code) ? 0x01 : 0x00) | (is_armed ? 0x02 : 0x00);
+    queueDelayedRtxResponse(RTX_RESP_202_ERR_EVENT, err_code, flags, 0);
+    last_sent_202_err = err_code;
+    last_202_send_ms = millis();
+  }
+}
+
+void serviceError202Event(uint32_t now_ms) {
+  if (fc_error_ram == FC_ERR_NONE) {
+    last_sent_202_err = FC_ERR_NONE;
+    return;
+  }
+  if (isCriticalErrorCode(fc_error_ram) && (now_ms - last_202_send_ms) >= ERR_202_REPEAT_MS) {
+    uint8_t flags = 0x01 | (is_armed ? 0x02 : 0x00);
+    queueDelayedRtxResponse(RTX_RESP_202_ERR_EVENT, fc_error_ram, flags, 0);
+    last_sent_202_err = fc_error_ram;
+    last_202_send_ms = now_ms;
+  }
+}
+
+void handleMotorArmStateAndEepromError() {
+  if (!prev_armed_state && is_armed) {
+    stopBenchTest();
+    if (hasBlockingArmError(fc_error_ram) || hasBlockingArmError(fc_latched_error_ram)) {
+      is_armed = false;
+      setMotorsPower(OUTPUT_MIN, OUTPUT_MIN, OUTPUT_MIN, OUTPUT_MIN);
+      prev_armed_state = false;
+      return;
+    }
+    fc_error_ram = FC_ERR_NONE;
+    fc_latched_error_ram = FC_ERR_NONE;
+    last_sent_202_err = FC_ERR_NONE;
+    consumed_wh = 0.0f;
+  } else if (prev_armed_state && !is_armed) {
+    if (fc_latched_error_ram != FC_ERR_NONE) {
+      currentConfig.fc_error = fc_latched_error_ram;
+      saveSettings();
+    }
+  }
+  prev_armed_state = is_armed;
+}
+
+void applyFilterConfig() {
+  lpf_gx.alpha = currentConfig.gyro_filter_alpha;
+  lpf_gy.alpha = currentConfig.gyro_filter_alpha;
+  lpf_gz.alpha = currentConfig.gyro_filter_alpha;
+  lpf_ax.alpha = currentConfig.acc_filter_alpha;
+  lpf_ay.alpha = currentConfig.acc_filter_alpha;
+  lpf_az.alpha = currentConfig.acc_filter_alpha;
+  lpf_battery.alpha = currentConfig.bat_filter_alpha;
+  notch_gx.setParameters(250.0f, currentConfig.filter_notch_freq, currentConfig.filter_notch_bw, true);
+  notch_gy.setParameters(250.0f, currentConfig.filter_notch_freq, currentConfig.filter_notch_bw, true);
+  notch_gz.setParameters(250.0f, currentConfig.filter_notch_freq, currentConfig.filter_notch_bw, true);
+}
+
+void updatePidTunings() {
+  rollRatePID.updateConfig(currentConfig.roll_pid);
+  pitchRatePID.updateConfig(currentConfig.pitch_pid);
+  yawRatePID.updateConfig(currentConfig.yaw_pid);
+  vzPID.updateConfig(currentConfig.vz_pid);
+}
+
+void resetToFactoryDefaults() {
+  currentConfig.magic_marker = EEPROM_MAGIC_MARKER;
+  currentConfig.esc_protocol = DEFAULT_ESC_PROTOCOL;
+  currentConfig.imu_align = DEFAULT_IMU_ALIGN;
+  currentConfig.com_align = DEFAULT_COM_ALIGN;
+  currentConfig.imu_id = DEFAULT_IMU_ID;
+  currentConfig.bar_id = DEFAULT_BAR_ID;
+  currentConfig.com_id = DEFAULT_COM_ID;
+  currentConfig.lid_id = DEFAULT_LID_ID;
+  currentConfig.rtx_prot_id = DEFAULT_RTX_PROT_ID;
+  currentConfig.rtx_id = DEFAULT_RTX_ID;
+  currentConfig._pad0 = 0;
+  currentConfig._pad1 = 0;
+
+  currentConfig.vtx_mode = DEFAULT_VTX_MODE;
+  currentConfig.sa_uart_port = DEFAULT_SA_UART_PORT;
+  currentConfig.vtx_ch_idx = DEFAULT_VTX_CH_IDX;
+  currentConfig.vtx_tier_idx = DEFAULT_VTX_TIER_IDX;
+  currentConfig.vtx_power_mw = DEFAULT_VTX_POWER_MW;
+  currentConfig.vtx_power_count = 0;
+  currentConfig.vtx_detected_proto_saved = 0;
+  for (uint8_t i = 0; i < VTX_MAX_POWER_TABLE_ITEMS; i++) currentConfig.vtx_power_table[i] = 0;
+
+  currentConfig.gyro_bias_x = DEFAULT_GYRO_BIAS_X;
+  currentConfig.gyro_bias_y = DEFAULT_GYRO_BIAS_Y;
+  currentConfig.gyro_bias_z = DEFAULT_GYRO_BIAS_Z;
+  currentConfig.base_temperature = DEFAULT_BASE_TEMP;
+  currentConfig.temp_coeff_x = DEFAULT_TEMP_COEFF_X;
+  currentConfig.temp_coeff_y = DEFAULT_TEMP_COEFF_Y;
+  currentConfig.temp_coeff_z = DEFAULT_TEMP_COEFF_Z;
+  currentConfig.acc_bias_x = DEFAULT_ACC_BIAS_X;
+  currentConfig.acc_bias_y = DEFAULT_ACC_BIAS_Y;
+  currentConfig.acc_bias_z = DEFAULT_ACC_BIAS_Z;
+  currentConfig.mag_bias_x = DEFAULT_MAG_BIAS_X;
+  currentConfig.mag_bias_y = DEFAULT_MAG_BIAS_Y;
+  currentConfig.mag_bias_z = DEFAULT_MAG_BIAS_Z;
+  currentConfig.lidar_offset_m = DEFAULT_LIDAR_OFFSET_M;
+  currentConfig.bat_voltage_scale = DEFAULT_BAT_VOLTAGE_SCALE;
+  currentConfig.curr_zero_offset_a = DEFAULT_CURR_ZERO_A;
+  currentConfig.curr_scale = DEFAULT_CURR_SCALE;
+  currentConfig.fc_error = DEFAULT_FC_ERROR;
+
+  currentConfig.fl_mode = DEFAULT_FL_MODE;
+  currentConfig.fl_roll_max = DEFAULT_FL_ROLL_MAX;
+  currentConfig.fl_pitch_max = DEFAULT_FL_PITCH_MAX;
+  currentConfig.fl_vz_speed_max = DEFAULT_FL_VZ_SPEED_MAX;
+
+  currentConfig.rc_rate = DEFAULT_RC_RATE;
+  currentConfig.rc_super_expo = DEFAULT_RC_SUPER_EXPO;
+  currentConfig.rc_stick_expo = DEFAULT_RC_STICK_EXPO;
+  currentConfig.rc_yaw_rate = DEFAULT_RC_YAW_RATE;
+  currentConfig.rc_yaw_super_expo = DEFAULT_RC_YAW_SUPER_EXPO;
+  currentConfig.rc_yaw_expo = DEFAULT_RC_YAW_EXPO;
+  currentConfig.rc_deadband = DEFAULT_RC_DEADBAND;
+  currentConfig.rc_horizon_transition = DEFAULT_RC_HORIZON_TRANS;
+  currentConfig.rc_filter_smoothing = DEFAULT_RC_SMOOTH;
+
+  currentConfig.fs_bat_en = DEFAULT_FS_BAT_EN;
+  currentConfig.fs_rtx_en = DEFAULT_FS_RTX_EN;
+  currentConfig.fs_vz_speed = DEFAULT_FS_VZ_SPEED;
+
+  currentConfig.bat_fs_v = DEFAULT_BAT_FS_V;
+  currentConfig.bat_filter_alpha = DEFAULT_BAT_FILTER_ALPHA;
+
+  currentConfig.lidar_en = DEFAULT_LIDAR_EN;
+  currentConfig.lidar_filter_alpha = DEFAULT_LIDAR_FIL_ALPHA;
+  currentConfig.baro_en = DEFAULT_BARO_EN;
+  currentConfig.com_en = DEFAULT_COM_EN;
+
+  currentConfig.filter_mode = DEFAULT_FILTER_MODE;
+  currentConfig.gyro_filter_alpha = DEFAULT_GYRO_FILTER_ALPHA;
+  currentConfig.acc_filter_alpha = DEFAULT_ACC_FILTER_ALPHA;
+  currentConfig.filter_notch_freq = DEFAULT_NOTCH_FREQ;
+  currentConfig.filter_notch_bw = DEFAULT_NOTCH_BW;
+  currentConfig.filter_dyn_min_hz = DEFAULT_DYN_MIN;
+  currentConfig.filter_dyn_max_hz = DEFAULT_DYN_MAX;
+
+  currentConfig.rtx_en = DEFAULT_RTX_EN;
+  currentConfig.rtx_band = DEFAULT_RTX_BAND;
+  currentConfig.rtx_hw_crc_en = DEFAULT_RTX_HW_CRC;
+  currentConfig.rtx_addr_en = DEFAULT_RTX_ADDR_EN;
+  currentConfig.rtx_addr = DEFAULT_RTX_ADDR;
+  currentConfig.rtx_sync_word = DEFAULT_RTX_SYNC;
+  currentConfig.rtx_iq_inv = DEFAULT_RTX_IQ_INV;
+  currentConfig.rtx_pri_chan = DEFAULT_RTX_PRI_CHAN;
+  currentConfig.rtx_pri_sf = DEFAULT_RTX_PRI_SF;
+  currentConfig.rtx_pri_bw = DEFAULT_RTX_PRI_BW;
+  currentConfig.rtx_pri_cr = DEFAULT_RTX_PRI_CR;
+  currentConfig.rtx_pri_power = DEFAULT_RTX_PRI_POWER;
+  currentConfig.rtx_bak_chan = DEFAULT_RTX_BAK_CHAN;
+  currentConfig.rtx_bak_sf = DEFAULT_RTX_BAK_SF;
+  currentConfig.rtx_bak_bw = DEFAULT_RTX_BAK_BW;
+  currentConfig.rtx_bak_cr = DEFAULT_RTX_BAK_CR;
+  currentConfig.rtx_bak_power = DEFAULT_RTX_BAK_POWER;
+
+  currentConfig.roll_pid = {PID_ROLL_KP_DEF, PID_ROLL_KI_DEF, PID_ROLL_KD_DEF};
+  currentConfig.pitch_pid = {PID_PITCH_KP_DEF, PID_PITCH_KI_DEF, PID_PITCH_KD_DEF};
+  currentConfig.yaw_pid = {PID_YAW_KP_DEF, PID_YAW_KI_DEF, PID_YAW_KD_DEF};
+  currentConfig.vz_pid = {PID_VZ_KP_DEF, PID_VZ_KI_DEF, PID_VZ_KD_DEF};
+
+  rollRatePID.init(currentConfig.roll_pid, 200.0f);
+  pitchRatePID.init(currentConfig.pitch_pid, 200.0f);
+  yawRatePID.init(currentConfig.yaw_pid, 200.0f);
+  vzPID.init(currentConfig.vz_pid, 300.0f);
+  adaptive_lidar.reset();
+  saveSettings();
+}
+
+void loadSettings() {
+  EEPROM.get(0, currentConfig);
+  if (currentConfig.magic_marker != EEPROM_MAGIC_MARKER) {
+    resetToFactoryDefaults();
+    setFcErrorRam(FC_ERR_EEPROM_RESET);
+    return;
+  }
+  if (currentConfig.imu_id > 6) currentConfig.imu_id = DEFAULT_IMU_ID;
+  if (currentConfig.bar_id > 7) currentConfig.bar_id = DEFAULT_BAR_ID;
+  if (currentConfig.com_id > 6) currentConfig.com_id = DEFAULT_COM_ID;
+  if (currentConfig.lid_id > 4) currentConfig.lid_id = DEFAULT_LID_ID;
+  if (currentConfig.rtx_prot_id > RTX_PROT_SMARTAUDIO) currentConfig.rtx_prot_id = DEFAULT_RTX_PROT_ID;
+  if (currentConfig.rtx_id > RTX_CHIP_LLCC68) currentConfig.rtx_id = DEFAULT_RTX_ID;
+
+  syncVtxProtoWithRtxProtId();
+
+  rollRatePID.init(currentConfig.roll_pid, 200.0f);
+  pitchRatePID.init(currentConfig.pitch_pid, 200.0f);
+  yawRatePID.init(currentConfig.yaw_pid, 200.0f);
+  vzPID.init(currentConfig.vz_pid, 300.0f);
+  if (currentConfig.fc_error != FC_ERR_NONE) {
+    fc_latched_error_ram = currentConfig.fc_error;
+  }
+}
+
+void saveSettings() {
+  if (is_armed) return;
+  currentConfig.magic_marker = EEPROM_MAGIC_MARKER;
+  EEPROM.put(0, currentConfig);
+}
+
+// Инициализация RTX (SPI2) и очереди ответов
+inline bool hasQueuedRtxResponse() {
+  return (rtx_resp_count > 0) && (rtx_resp_queue[rtx_resp_head].type != RTX_RESP_NONE);
+}
+
+void queueDelayedRtxResponse(DelayedRtxRespType type, uint8_t ch, uint8_t tier = 0, uint16_t power_mw = 0) {
+  if (type == RTX_RESP_NONE) return;
+  if (rtx_resp_count >= RTX_RESP_QUEUE_SIZE) {
+    if (type != RTX_RESP_202_ERR_EVENT) return;
+    rtx_resp_head = (rtx_resp_head + 1) % RTX_RESP_QUEUE_SIZE;
+    rtx_resp_count--;
+  }
+  rtx_resp_queue[rtx_resp_tail] = {type, ch, tier, power_mw};
+  rtx_resp_tail = (rtx_resp_tail + 1) % RTX_RESP_QUEUE_SIZE;
+  rtx_resp_count++;
+}
+
+bool popDelayedRtxResponse(DelayedRtxRespItem &out) {
+  if (rtx_resp_count == 0) {
+    out.type = RTX_RESP_NONE;
+    return false;
+  }
+  out = rtx_resp_queue[rtx_resp_head];
+  rtx_resp_queue[rtx_resp_head].type = RTX_RESP_NONE;
+  rtx_resp_head = (rtx_resp_head + 1) % RTX_RESP_QUEUE_SIZE;
+  rtx_resp_count--;
+  return true;
+}
+
+uint32_t getTelemetryTxTimeoutMs(bool backup_mode) {
+  uint8_t sf = backup_mode ? constrain(currentConfig.rtx_bak_sf, 5, 12) : constrain(currentConfig.rtx_pri_sf, 5, 12);
+  uint32_t base_timeout = backup_mode ? RTX_TX_TIMEOUT_BAK_MS : RTX_TX_TIMEOUT_PRI_MS;
+  if (sf >= 11) base_timeout += 140;
+  else if (sf >= 10) base_timeout += 70;
+  return base_timeout;
+}
+
+inline void rtx_spi_begin_tx() {
+  rtxSpi.beginTransaction(rtxSpiSettings);
+  digitalWrite(RTX_NSS_PIN, LOW);
+}
+
+inline void rtx_spi_end_tx() {
+  digitalWrite(RTX_NSS_PIN, HIGH);
+  rtxSpi.endTransaction();
+}
+
+void checkRtxBusAndRecover() {
+  if (rtx_error_counter >= RTX_MAX_ERRORS) {
+    setFcErrorRam(FC_ERR_SPI_RTX);
+    digitalWrite(RTX_RESET_PIN, LOW);
+    uint32_t start = micros();
+    while ((micros() - start) < 2000);
+    digitalWrite(RTX_RESET_PIN, HIGH);
+    rtx_tx_in_flight = false;
+    rtx_apply_switch_after_tx = false;
+    rtx_scan_active = false;
+    rtx_error_counter = 0;
+    applyRtxConfiguration(is_on_backup);
+  }
+}
+
+inline bool rtx_try_ready_short(uint32_t timeout_us = RTX_BUSY_SHORT_TIMEOUT_US) {
+  uint32_t start = micros();
+  while (digitalRead(RTX_BUSY_PIN) == HIGH) {
+    if ((micros() - start) >= timeout_us) {
+      rtx_error_counter++;
+      setFcErrorRam(FC_ERR_SPI_RTX);
+      if (rtx_error_counter >= RTX_MAX_ERRORS) {
+        checkRtxBusAndRecover();
+      }
+      return false;
+    }
+  }
+  return true;
+}
+
+void rtx_write_command(uint8_t cmd, const uint8_t *data, uint8_t len) {
+  if (!rtx_try_ready_short()) return;
+  rtx_spi_begin_tx();
+  rtxSpi.transfer(cmd);
+  for (uint8_t i = 0; i < len; i++) rtxSpi.transfer(data[i]);
+  rtx_spi_end_tx();
+  rtx_error_counter = 0;
+}
+
+void rtx_read_command(uint8_t cmd, uint8_t *data, uint8_t len) {
+  if (!rtx_try_ready_short()) return;
+  rtx_spi_begin_tx();
+  rtxSpi.transfer(cmd);
+  rtxSpi.transfer(0x00);
+  for (uint8_t i = 0; i < len; i++) data[i] = rtxSpi.transfer(0x00);
+  rtx_spi_end_tx();
+  rtx_error_counter = 0;
+}
+
+static uint8_t detectOrSelectRtxChip() {
+  uint8_t req = currentConfig.rtx_id;
+  if (req == RTX_CHIP_SX1262 || req == RTX_CHIP_SX1268 || req == RTX_CHIP_LLCC68) {
+    return req;
+  }
+  uint8_t st[2] = {0, 0};
+  rtx_read_command(0xC0, st, 2);
+  return (currentConfig.rtx_band <= 5) ? RTX_CHIP_SX1268 : RTX_CHIP_SX1262;
+}
+
+void rtx_init_hardware() {
+  pinMode(RTX_NSS_PIN, OUTPUT);
+  pinMode(RTX_RESET_PIN, OUTPUT);
+  pinMode(RTX_BUSY_PIN, INPUT);
+  digitalWrite(RTX_NSS_PIN, HIGH);
+  rtxSpi.begin();
+  digitalWrite(RTX_RESET_PIN, LOW);
+  delay(5);
+  digitalWrite(RTX_RESET_PIN, HIGH);
+  delay(10);
+  rtx_tx_in_flight = false;
+  rtx_apply_switch_after_tx = false;
+  rtx_scan_active = false;
+  rtx_active_chip_id = detectOrSelectRtxChip();
+}
+
+void applyRtxConfiguration(bool use_backup_settings = false) {
+  if (!currentConfig.rtx_en || !rtx_try_ready_short()) return;
+  rtx_tx_in_flight = false;
+  rtx_apply_switch_after_tx = false;
+  rtx_scan_active = false;
+  rtx_active_chip_id = detectOrSelectRtxChip();
+
+  uint8_t mode_stby = 0x00;
+  rtx_write_command(0x80, &mode_stby, 1);
+
+  uint8_t reg_mode = 0x01;
+  rtx_write_command(0x96, &reg_mode, 1);
+
+  uint8_t pkt_type = 0x01;
+  rtx_write_command(0x8A, &pkt_type, 1);
+
+  if (currentConfig.rtx_addr_en) {
+    uint8_t addr_buf[2] = {(uint8_t)(currentConfig.rtx_addr >> 8), (uint8_t)(currentConfig.rtx_addr & 0xFF)};
+    rtx_write_command(0x6C, addr_buf, 2);
+  }
+  uint8_t sync_buf[2] = {(uint8_t)(currentConfig.rtx_sync_word >> 8), (uint8_t)(currentConfig.rtx_sync_word & 0xFF)};
+  rtx_write_command(0x74, sync_buf, 2);
+
+  uint8_t band = constrain(currentConfig.rtx_band, 1, 9);
+  uint32_t base_freq_hz = (uint32_t)band * 100000000UL;
+  uint8_t channel = use_backup_settings ? constrain(currentConfig.rtx_bak_chan, 0, 99) : constrain(active_rtx_chan, 0, 99);
+  uint32_t freq_reg = (uint32_t)(((uint64_t)(base_freq_hz + ((uint32_t)channel * 1000000UL)) << 25) / 32000000UL);
+  uint8_t freq_buf[4] = {(uint8_t)(freq_reg >> 24), (uint8_t)(freq_reg >> 16), (uint8_t)(freq_reg >> 8), (uint8_t)freq_reg};
+  rtx_write_command(0x86, freq_buf, 4);
+
+  uint8_t sf = use_backup_settings ? constrain(currentConfig.rtx_bak_sf, 5, 12) : constrain(currentConfig.rtx_pri_sf, 5, 12);
+  uint8_t bw = use_backup_settings ? constrain(currentConfig.rtx_bak_bw, 0, 9) : constrain(currentConfig.rtx_pri_bw, 0, 9);
+  if (rtx_active_chip_id == RTX_CHIP_LLCC68) sf = constrain(sf, 5, 11);
+  uint8_t cr = use_backup_settings ? constrain(currentConfig.rtx_bak_cr, 1, 4) : constrain(currentConfig.rtx_pri_cr, 1, 4);
+  uint8_t mod_params[4] = {sf, bw, cr, 0x00};
+  rtx_write_command(0x8B, mod_params, 4);
+
+  uint8_t pkt_params[6] = {
+    0x00, 0x08, 0x00, RTX_RX_MAX_PAYLOAD_BYTES,
+    (uint8_t)(currentConfig.rtx_hw_crc_en ? 0x01 : 0x00),
+    (uint8_t)(currentConfig.rtx_iq_inv ? 0x01 : 0x00)
+  };
+  rtx_write_command(0x8C, pkt_params, 6);
+
+  int8_t pwr_dbm = use_backup_settings ? (int8_t)constrain(currentConfig.rtx_bak_power, -9, 22) : (int8_t)constrain(currentConfig.rtx_pri_power, -9, 22);
+  uint8_t pa_cfg[4] = {0x04, 0x07, 0x00, 0x01};
+  rtx_write_command(0x95, pa_cfg, 4);
+  uint8_t tx_pwr[2] = {(uint8_t)pwr_dbm, 0x02};
+  rtx_write_command(0x8E, tx_pwr, 2);
+
+  rtx_set_rx_mode();
+}
+
+void rtx_set_rx_mode() {
+  if (!currentConfig.rtx_en) return;
+  uint8_t rx_params[3] = {0xFF, 0xFF, 0xFF};
+  rtx_write_command(0x82, rx_params, 3);
+}
+
+// Инициализация VTX (SmartAudio / IRC Tramp)
+bool isVtxEnabled() {
+  return (currentConfig.vtx_mode != VTX_MODE_OFF);
+}
+
+void syncVtxProtoWithRtxProtId() {
+  if (currentConfig.rtx_prot_id > RTX_PROT_SMARTAUDIO) {
+    currentConfig.rtx_prot_id = RTX_PROT_AUTO;
+  }
+  if (currentConfig.rtx_prot_id == RTX_PROT_TRAMP) {
+    if (currentConfig.vtx_mode != VTX_MODE_OFF) currentConfig.vtx_mode = VTX_MODE_TRAMP;
+    vtx_detected_proto = VTX_MODE_TRAMP;
+    currentConfig.vtx_detected_proto_saved = VTX_MODE_TRAMP;
+  } else if (currentConfig.rtx_prot_id == RTX_PROT_SMARTAUDIO) {
+    if (currentConfig.vtx_mode != VTX_MODE_OFF) currentConfig.vtx_mode = VTX_MODE_SMARTAUDIO;
+    vtx_detected_proto = VTX_MODE_SMARTAUDIO;
+    currentConfig.vtx_detected_proto_saved = VTX_MODE_SMARTAUDIO;
+  }
+}
+
+void setVtxMode(uint8_t mode) {
+  uint8_t safe_mode = (mode <= VTX_MODE_TRAMP) ? mode : VTX_MODE_AUTO;
+  currentConfig.vtx_mode = safe_mode;
+
+  if (safe_mode == VTX_MODE_SMARTAUDIO) {
+    currentConfig.rtx_prot_id = RTX_PROT_SMARTAUDIO;
+    vtx_detected_proto = VTX_MODE_SMARTAUDIO;
+    currentConfig.vtx_detected_proto_saved = VTX_MODE_SMARTAUDIO;
+  } else if (safe_mode == VTX_MODE_TRAMP) {
+    currentConfig.rtx_prot_id = RTX_PROT_TRAMP;
+    vtx_detected_proto = VTX_MODE_TRAMP;
+    currentConfig.vtx_detected_proto_saved = VTX_MODE_TRAMP;
+  } else if (currentConfig.rtx_prot_id == RTX_PROT_SMARTAUDIO) {
+    vtx_detected_proto = VTX_MODE_SMARTAUDIO;
+    currentConfig.vtx_detected_proto_saved = VTX_MODE_SMARTAUDIO;
+  } else if (currentConfig.rtx_prot_id == RTX_PROT_TRAMP) {
+    vtx_detected_proto = VTX_MODE_TRAMP;
+    currentConfig.vtx_detected_proto_saved = VTX_MODE_TRAMP;
+  } else if (currentConfig.vtx_detected_proto_saved == VTX_MODE_SMARTAUDIO ||
+             currentConfig.vtx_detected_proto_saved == VTX_MODE_TRAMP) {
+    vtx_detected_proto = currentConfig.vtx_detected_proto_saved;
+  } else {
+    vtx_detected_proto = 0;
+  }
+}
+
+static HardwareSerial* getSaSerial() {
+#if defined(HAVE_HWSERIAL3) || defined(USART3)
+  if (currentConfig.sa_uart_port == 3) return &Serial3;
+#endif
+#if defined(HAVE_HWSERIAL2) || defined(USART2)
+  if (currentConfig.sa_uart_port == 2) return &Serial2;
+#endif
+#if defined(HAVE_HWSERIAL1) || defined(USART1)
+  if (currentConfig.sa_uart_port == 1) return &Serial1;
+#endif
+#if defined(HAVE_HWSERIAL3) || defined(USART3)
+  return &Serial3;
+#elif defined(HAVE_HWSERIAL2) || defined(USART2)
+  return &Serial2;
+#else
+  return nullptr;
+#endif
+}
+
+static void vtxEnsureBaud(HardwareSerial* ser, uint32_t baud) {
+  if (!ser) return;
+  if (!sa_initialized || vtx_current_baud != baud) {
+    if (sa_initialized) {
+      ser->flush();
+      ser->end();
+    }
+#if defined(USART3)
+    if (ser == &Serial3) {
+      Serial3.setTx(PB10);
+      Serial3.setRx(PB11);
+    }
+#endif
+    ser->begin(baud);
+    vtx_current_baud = baud;
+    sa_initialized = true;
+    tramp_rx_idx = 0;
+    sa_rx_idx = 0;
+    while (ser->available() > 0) (void)ser->read();
+  }
+}
+
+static uint8_t smartAudioCrc8(const uint8_t *data, uint8_t len) {
+  uint8_t crc = 0;
+  for (uint8_t i = 0; i < len; i++) {
+    crc ^= data[i];
+    for (uint8_t b = 0; b < 8; b++) {
+      crc = (crc & 0x80) ? (uint8_t)((crc << 1) ^ 0xD5) : (uint8_t)(crc << 1);
+    }
+  }
+  return crc;
+}
+
+static uint8_t trampCrc8(const uint8_t *f) {
+  uint16_t sum = 0;
+  for (uint8_t i = 1; i <= 13; i++) sum += f[i];
+  return (uint8_t)(sum & 0xFF);
+}
+
+static void trampBuildFrame(uint8_t *out16, char cmd, uint16_t param) {
+  memset(out16, 0, 16);
+  out16[0] = '$';
+  out16[1] = (uint8_t)cmd;
+  out16[2] = (uint8_t)(param & 0xFF);
+  out16[3] = (uint8_t)((param >> 8) & 0xFF);
+  out16[14] = trampCrc8(out16);
+  out16[15] = 0x00;
+}
+
+static void recordVtxNoResponse() {
+  sa_vtx_ok = false;
+  setFcErrorRam(FC_ERR_SA_VTX_FAIL);
+}
+
+static void vtxStorePowerTableAndProto(uint8_t proto_id, const uint16_t *vals, uint8_t count) {
+  bool first_time_save = false;
+  if (proto_id == VTX_MODE_SMARTAUDIO || proto_id == VTX_MODE_TRAMP) {
+    if (currentConfig.vtx_detected_proto_saved == 0) {
+      currentConfig.vtx_detected_proto_saved = proto_id;
+      first_time_save = true;
+    }
+  }
+  if (vals != nullptr && count > 0 && currentConfig.vtx_power_count == 0) {
+    uint8_t n = (count > VTX_MAX_POWER_TABLE_ITEMS) ? VTX_MAX_POWER_TABLE_ITEMS : count;
+    currentConfig.vtx_power_count = n;
+    for (uint8_t i = 0; i < VTX_MAX_POWER_TABLE_ITEMS; i++) {
+      currentConfig.vtx_power_table[i] = (i < n) ? vals[i] : 0;
+    }
+    first_time_save = true;
+  }
+  if (first_time_save) {
+    saveSettings();
+  }
+}
+
+static uint16_t vtx_power_mw_fallback() {
+  return currentConfig.vtx_power_mw;
+}
+
+static void vtxParseSmartAudioFrame(const uint8_t *buf, uint8_t total_len) {
+  uint8_t payload_len = buf[3];
+  if (payload_len >= 2 && (uint8_t)(4 + payload_len + 1) == total_len) {
+    uint8_t tier = buf[5];
+    vtx_actual_tier_idx = tier;
+    if (currentConfig.vtx_power_count == 0) {
+      static const uint16_t sa_default_mw[6] = {25, 100, 200, 400, 600, 800};
+      vtxStorePowerTableAndProto(VTX_MODE_SMARTAUDIO, sa_default_mw, 6);
+    }
+    if (tier < currentConfig.vtx_power_count && currentConfig.vtx_power_table[tier] > 0) {
+      vtx_actual_power_mw = currentConfig.vtx_power_table[tier];
+    } else {
+      vtx_actual_power_mw = vtx_power_mw_fallback();
+    }
+  }
+}
+
+static void vtxParseTrampFrame(const uint8_t *f) {
+  uint16_t val16 = (uint16_t)f[2] | ((uint16_t)f[3] << 8);
+  if ((f[1] == 'r' || f[1] == 'v') && val16 > 0 && val16 <= 5000) {
+    vtx_actual_power_mw = val16;
+    if (currentConfig.vtx_power_count == 0) {
+      uint16_t tramp_tbl[4] = {25, 100, 400, val16};
+      uint8_t cnt = 0;
+      for (uint8_t i = 0; i < 4; i++) {
+        bool dup = false;
+        for (uint8_t j = 0; j < cnt; j++) {
+          if (tramp_tbl[j] == tramp_tbl[i]) {
+            dup = true;
+            break;
+          }
+        }
+        if (!dup && cnt < VTX_MAX_POWER_TABLE_ITEMS) tramp_tbl[cnt++] = tramp_tbl[i];
+      }
+      vtxStorePowerTableAndProto(VTX_MODE_TRAMP, tramp_tbl, cnt);
+    }
+    for (uint8_t i = 0; i < currentConfig.vtx_power_count; i++) {
+      if (currentConfig.vtx_power_table[i] == vtx_actual_power_mw) {
+        vtx_actual_tier_idx = i;
+        break;
+      }
+    }
+  }
+}
+
+static void recordVtxResponseOk(uint8_t proto_id, uint32_t now_ms) {
+  vtx_detected_proto = proto_id;
+  sa_vtx_ok = true;
+  sa_last_probe_ms = now_ms;
+  vtx_initial_probe_done = true;
+  vtxStorePowerTableAndProto(proto_id, nullptr, 0);
+}
+
+static bool pollSmartAudioRx(HardwareSerial* ser) {
+  bool seen = false;
+  while (ser->available() > 0) {
+    uint8_t b = (uint8_t)ser->read();
+    if (sa_rx_idx == 0) {
+      if (b == 0xAA) sa_rx_buf[sa_rx_idx++] = b;
+    } else if (sa_rx_idx == 1) {
+      if (b == 0x55) sa_rx_buf[sa_rx_idx++] = b;
+      else sa_rx_idx = (b == 0xAA) ? 1 : 0;
+    } else {
+      sa_rx_buf[sa_rx_idx++] = b;
+      if (sa_rx_idx >= 4) {
+        uint8_t payload_len = sa_rx_buf[3];
+        if (payload_len > 10) {
+          sa_rx_idx = 0;
+          continue;
+        }
+        uint8_t total_len = (uint8_t)(4 + payload_len + 1);
+        if (sa_rx_idx == total_len) {
+          if (smartAudioCrc8(sa_rx_buf, (uint8_t)(total_len - 1)) == sa_rx_buf[total_len - 1]) {
+            vtxParseSmartAudioFrame(sa_rx_buf, total_len);
+            seen = true;
+          }
+          sa_rx_idx = 0;
+        }
+      }
+    }
+  }
+  return seen;
+}
+
+static bool pollTrampRx(HardwareSerial* ser) {
+  bool seen = false;
+  while (ser->available() > 0) {
+    uint8_t b = (uint8_t)ser->read();
+    if (tramp_rx_idx == 0) {
+      if (b == '$') tramp_rx_buf[tramp_rx_idx++] = b;
+    } else {
+      tramp_rx_buf[tramp_rx_idx++] = b;
+      if (tramp_rx_idx == 16) {
+        if (tramp_rx_buf[15] == 0x00 && tramp_rx_buf[14] == trampCrc8(tramp_rx_buf)) {
+          vtxParseTrampFrame(tramp_rx_buf);
+          seen = true;
+        }
+        tramp_rx_idx = 0;
+      }
+    }
+  }
+  return seen;
+}
+
+static bool sendSmartAudioFrame(uint8_t cmd_id, const uint8_t *payload, uint8_t payload_len) {
+  HardwareSerial* sa = getSaSerial();
+  if (!sa || !sa_initialized || sa_hw_unavailable) {
+    setFcErrorRam(FC_ERR_SA_VTX_FAIL);
+    return false;
+  }
+  vtxEnsureBaud(sa, SMARTAUDIO_BAUD_RATE);
+  sa_rx_idx = 0;
+  while (sa->available() > 0) (void)sa->read();
+  uint8_t frame[12];
+  uint8_t idx = 0;
+  frame[idx++] = 0xAA;
+  frame[idx++] = 0x55;
+  frame[idx++] = cmd_id;
+  frame[idx++] = payload_len;
+  for (uint8_t i = 0; i < payload_len && idx < sizeof(frame) - 1; i++) {
+    frame[idx++] = payload[i];
+  }
+  frame[idx] = smartAudioCrc8(frame, idx);
+  idx++;
+  if (sa->write(frame, idx) != idx) {
+    recordVtxNoResponse();
+    return false;
+  }
+  return true;
+}
+
+static bool sendTrampFrame(char cmd, uint16_t param) {
+  HardwareSerial* sa = getSaSerial();
+  if (!sa || !sa_initialized || sa_hw_unavailable) {
+    setFcErrorRam(FC_ERR_SA_VTX_FAIL);
+    return false;
+  }
+  vtxEnsureBaud(sa, TRAMP_BAUD_RATE);
+  tramp_rx_idx = 0;
+  while (sa->available() > 0) (void)sa->read();
+  uint8_t frame[16];
+  trampBuildFrame(frame, cmd, param);
+  if (sa->write(frame, 16) != 16) {
+    recordVtxNoResponse();
+    return false;
+  }
+  return true;
+}
+
+static uint8_t resolveEffectiveVtxProto() {
+  if (currentConfig.rtx_prot_id == RTX_PROT_TRAMP || currentConfig.vtx_mode == VTX_MODE_TRAMP) {
+    return VTX_MODE_TRAMP;
+  }
+  if (currentConfig.rtx_prot_id == RTX_PROT_SMARTAUDIO || currentConfig.vtx_mode == VTX_MODE_SMARTAUDIO) {
+    return VTX_MODE_SMARTAUDIO;
+  }
+  if (vtx_detected_proto == VTX_MODE_SMARTAUDIO || vtx_detected_proto == VTX_MODE_TRAMP) {
+    return vtx_detected_proto;
+  }
+  if (currentConfig.vtx_detected_proto_saved == VTX_MODE_SMARTAUDIO ||
+      currentConfig.vtx_detected_proto_saved == VTX_MODE_TRAMP) {
+    return currentConfig.vtx_detected_proto_saved;
+  }
+  return 0;
+}
+
+void vtxInit() {
+  sa_hw_unavailable = false;
+  sa_vtx_ok = false;
+  vtx_initial_probe_done = false;
+  vtx_probe_step = VTX_STEP_IDLE;
+  vtx_step_start_ms = 0;
+  vtx_current_baud = 0;
+  tramp_rx_idx = 0;
+  sa_rx_idx = 0;
+
+  syncVtxProtoWithRtxProtId();
+
+  if (currentConfig.vtx_mode > VTX_MODE_TRAMP) {
+    currentConfig.vtx_mode = VTX_MODE_AUTO;
+  }
+  if (currentConfig.vtx_power_count > VTX_MAX_POWER_TABLE_ITEMS) {
+    currentConfig.vtx_power_count = VTX_MAX_POWER_TABLE_ITEMS;
+  }
+  if (!isVtxEnabled()) {
+    sa_initialized = false;
+    sa_pending_freq = false;
+    sa_pending_power = false;
+    vtx_detected_proto = 0;
+    return;
+  }
+  if (currentConfig.sa_uart_port != 3 && currentConfig.sa_uart_port != 2 && currentConfig.sa_uart_port != 1) {
+    currentConfig.sa_uart_port = DEFAULT_SA_UART_PORT;
+  }
+  HardwareSerial* sa = getSaSerial();
+  if (!sa) {
+    sa_initialized = false;
+    sa_hw_unavailable = true;
+    setFcErrorRam(FC_ERR_SA_VTX_FAIL);
+    return;
+  }
+  uint8_t known_proto = resolveEffectiveVtxProto();
+  vtx_detected_proto = known_proto;
+  uint32_t initial_baud = (known_proto == VTX_MODE_TRAMP) ? TRAMP_BAUD_RATE : SMARTAUDIO_BAUD_RATE;
+  vtxEnsureBaud(sa, initial_baud);
+
+  uint8_t ch = constrain(currentConfig.vtx_ch_idx, (uint8_t)0, (uint8_t)39);
+  sa_target_freq_mhz = RX5808_FREQS_MHZ[ch];
+  uint8_t max_tier = (currentConfig.vtx_power_count > 0) ? (uint8_t)(currentConfig.vtx_power_count - 1) : 3;
+  sa_target_tier_idx = constrain(currentConfig.vtx_tier_idx, (uint8_t)0, max_tier);
+  sa_target_power_mw = currentConfig.vtx_power_mw;
+  sa_pending_freq = true;
+  sa_pending_power = true;
+  sa_last_probe_ms = millis();
+}
+
+void vtxQueueChannelAndPower(uint8_t ch_idx, uint8_t tier_idx, uint16_t power_mw) {
+  uint8_t safe_ch = constrain(ch_idx, (uint8_t)0, (uint8_t)39);
+  uint8_t max_tier = (currentConfig.vtx_power_count > 0) ? (uint8_t)(currentConfig.vtx_power_count - 1) : 7;
+  uint8_t safe_tier = constrain(tier_idx, (uint8_t)0, max_tier);
+  uint16_t safe_mw = power_mw;
+
+  if (currentConfig.vtx_power_count > 0) {
+    if (safe_mw > 0) {
+      int best_i = 0;
+      int best_diff = 32767;
+      for (uint8_t i = 0; i < currentConfig.vtx_power_count; i++) {
+        int diff = abs((int)currentConfig.vtx_power_table[i] - (int)safe_mw);
+        if (diff < best_diff) {
+          best_diff = diff;
+          best_i = i;
+        }
+      }
+      safe_tier = (uint8_t)best_i;
+      safe_mw = currentConfig.vtx_power_table[safe_tier];
+    } else {
+      safe_mw = currentConfig.vtx_power_table[safe_tier];
+    }
+  }
+  currentConfig.vtx_ch_idx = safe_ch;
+  currentConfig.vtx_tier_idx = safe_tier;
+  currentConfig.vtx_power_mw = safe_mw;
+  sa_target_freq_mhz = RX5808_FREQS_MHZ[safe_ch];
+  sa_target_tier_idx = safe_tier;
+  sa_target_power_mw = safe_mw;
+  sa_pending_freq = true;
+  sa_pending_power = true;
+  rtx_sa_ack_ch = safe_ch;
+  rtx_sa_ack_tier = safe_tier;
+  rtx_sa_ack_mw = safe_mw;
+}
+
+void vtxStepNonBlocking(uint32_t now_ms) {
+  if (!isVtxEnabled()) {
+    sa_vtx_ok = false;
+    vtx_probe_step = VTX_STEP_IDLE;
+    return;
+  }
+  if (sa_hw_unavailable) {
+    setFcErrorRam(FC_ERR_SA_VTX_FAIL);
+    return;
+  }
+  if (!sa_initialized) {
+    vtxInit();
+    if (!sa_initialized) return;
+  }
+  HardwareSerial* sa = getSaSerial();
+  if (!sa) {
+    sa_hw_unavailable = true;
+    setFcErrorRam(FC_ERR_SA_VTX_FAIL);
+    return;
+  }
+
+  uint8_t known_proto = resolveEffectiveVtxProto();
+  bool allow_auto_fallback = (currentConfig.rtx_prot_id == RTX_PROT_AUTO) &&
+                           (currentConfig.vtx_mode == VTX_MODE_AUTO) &&
+                           (known_proto == 0);
+
+  if (vtx_probe_step == VTX_STEP_WAIT_SA) {
+    if (pollSmartAudioRx(sa)) {
+      recordVtxResponseOk(VTX_MODE_SMARTAUDIO, now_ms);
+      vtx_probe_step = VTX_STEP_IDLE;
+      return;
+    }
+    if ((now_ms - vtx_step_start_ms) >= VTX_PROBE_TIMEOUT_MS) {
+      if (allow_auto_fallback && sendTrampFrame('v', 0)) {
+        sa_last_tx_ms = now_ms;
+        vtx_step_start_ms = now_ms;
+        vtx_probe_step = VTX_STEP_WAIT_TRAMP;
+      } else {
+        vtx_initial_probe_done = true;
+        sa_last_probe_ms = now_ms;
+        recordVtxNoResponse();
+        vtx_probe_step = VTX_STEP_IDLE;
+      }
+    }
+    return;
+  }
+
+  if (vtx_probe_step == VTX_STEP_WAIT_TRAMP) {
+    if (pollTrampRx(sa)) {
+      recordVtxResponseOk(VTX_MODE_TRAMP, now_ms);
+      vtx_probe_step = VTX_STEP_IDLE;
+      return;
+    }
+    if ((now_ms - vtx_step_start_ms) >= VTX_PROBE_TIMEOUT_MS) {
+      vtx_initial_probe_done = true;
+      sa_last_probe_ms = now_ms;
+      recordVtxNoResponse();
+      vtx_probe_step = VTX_STEP_IDLE;
+    }
+    return;
+  }
+
+  if (vtx_probe_step == VTX_STEP_WAIT_CMD_ACK) {
+    bool got_ack = (known_proto == VTX_MODE_TRAMP) ? pollTrampRx(sa) : pollSmartAudioRx(sa);
+    if (got_ack) {
+      recordVtxResponseOk(known_proto ? known_proto : VTX_MODE_SMARTAUDIO, now_ms);
+      vtx_probe_step = VTX_STEP_IDLE;
+      return;
+    }
+    if ((now_ms - vtx_step_start_ms) >= VTX_PROBE_TIMEOUT_MS) {
+      vtx_initial_probe_done = true;
+      sa_last_probe_ms = now_ms;
+      recordVtxNoResponse();
+      vtx_probe_step = VTX_STEP_IDLE;
+    }
+    return;
+  }
+
+  if (known_proto == VTX_MODE_TRAMP) {
+    if (pollTrampRx(sa)) recordVtxResponseOk(VTX_MODE_TRAMP, now_ms);
+  } else if (known_proto == VTX_MODE_SMARTAUDIO) {
+    if (pollSmartAudioRx(sa)) recordVtxResponseOk(VTX_MODE_SMARTAUDIO, now_ms);
+  }
+
+  if ((now_ms - sa_last_tx_ms) < SA_CMD_INTERVAL_MS) return;
+
+  if (sa_pending_freq || sa_pending_power) {
+    uint8_t use_proto = (known_proto != 0) ? known_proto : VTX_MODE_SMARTAUDIO;
+    if (sa_pending_freq) {
+      bool ok = (use_proto == VTX_MODE_TRAMP)
+                  ? sendTrampFrame('F', sa_target_freq_mhz)
+                  : sendSmartAudioFrame(0x04, (const uint8_t[]){
+                        (uint8_t)(sa_target_freq_mhz >> 8),
+                        (uint8_t)(sa_target_freq_mhz & 0xFF)
+                      }, 2);
+      if (ok) {
+        sa_pending_freq = false;
+        sa_last_tx_ms = now_ms;
+        vtx_step_start_ms = now_ms;
+        vtx_probe_step = VTX_STEP_WAIT_CMD_ACK;
+      }
+      return;
+    }
+    if (sa_pending_power) {
+      bool ok = (use_proto == VTX_MODE_TRAMP)
+                  ? sendTrampFrame('P', sa_target_power_mw)
+                  : sendSmartAudioFrame(0x02, &sa_target_tier_idx, 1);
+      if (ok) {
+        sa_pending_power = false;
+        sa_last_tx_ms = now_ms;
+        vtx_step_start_ms = now_ms;
+        vtx_probe_step = VTX_STEP_WAIT_CMD_ACK;
+      }
+      return;
+    }
+  }
+
+  bool should_probe = (!vtx_initial_probe_done) || ((now_ms - sa_last_probe_ms) >= SA_PROBE_INTERVAL_MS);
+  if (should_probe) {
+    if (known_proto == VTX_MODE_TRAMP) {
+      if (sendTrampFrame('v', 0)) {
+        sa_last_tx_ms = now_ms;
+        vtx_step_start_ms = now_ms;
+        vtx_probe_step = VTX_STEP_WAIT_TRAMP;
+      }
+    } else {
+      if (sendSmartAudioFrame(0x01, nullptr, 0)) {
+        sa_last_tx_ms = now_ms;
+        vtx_step_start_ms = now_ms;
+        vtx_probe_step = VTX_STEP_WAIT_SA;
+      }
+    }
+  }
+}
+
+void setupHardwareTimers() {
+  uint32_t clk_hz = tim2.getTimerClkFreq();
+  uint32_t prescaler = (clk_hz >= TIM2_TICK_HZ) ? ((clk_hz / TIM2_TICK_HZ) - 1) : 0;
+  uint32_t period_ticks = (TIM2_TICK_HZ / 250) - 1;
+  tim2.setPrescaleFactor(prescaler);
+  tim2.setOverflow(period_ticks, TICK_FORMAT);
+  tim2.setMode(1, TIMER_OUTPUT_COMPARE_PWM1, MOTOR1_PIN);
+  tim2.setMode(2, TIMER_OUTPUT_COMPARE_PWM1, MOTOR2_PIN);
+  tim2.setMode(3, TIMER_OUTPUT_COMPARE_PWM1, MOTOR3_PIN);
+  tim2.setMode(4, TIMER_OUTPUT_COMPARE_PWM1, MOTOR4_PIN);
+  tim2.resume();
+}
+
+// ==============================================================================
+// 2. CLI ДРАЙВЕР
+// ==============================================================================
+namespace SensorDriver {
+  void detectIMU();
+  void detectBaro();
+  void detectMag();
+  void detectLidar();
+  void initLidarHardware();
+  void calibrateGyro();
+  void calibrateAcc();
+  void calibrateBaro();
+  void calibrateLidar();
+  void calibrateBatVoltage(float actual_voltage);
+  void calibrateCurrent(bool has_value, float actual_current_a);
+  extern struct BaroCalib baroCal;
+  extern struct SensorStatus activeSensors;
+}
+
+enum CliValType : uint8_t {
+  CLI_U8 = 0,
+  CLI_I8 = 1,
+  CLI_U16 = 2,
+  CLI_F32 = 3
+};
+
+struct CliParam {
+  const char* name;
+  void* ptr;
+  CliValType type;
+  int min_v;
+  int max_v;
+};
+
+using CliSideEffectFn = void (*)();
+struct CliSideEffectRule {
+  const char* key;
+  CliSideEffectFn fn;
+};
+
+using CliActionFn = void (*)(const char* args);
+struct CliActionEntry {
+  const char* prefix;
+  bool requires_disarm;
+  CliActionFn fn;
+};
+
+const CliParam cliParams[] = {
+  {"esc_protocol", &currentConfig.esc_protocol, CLI_U8, 0, 1},
+  {"imu_align", &currentConfig.imu_align, CLI_U8, 0, 3},
+  {"com_align", &currentConfig.com_align, CLI_U8, 0, 3},
+  {"imu_id", &currentConfig.imu_id, CLI_U8, 0, 6},
+  {"bar_id", &currentConfig.bar_id, CLI_U8, 0, 7},
+  {"com_id", &currentConfig.com_id, CLI_U8, 0, 6},
+  {"lid_id", &currentConfig.lid_id, CLI_U8, 0, 4},
+  {"rtx_prot_id", &currentConfig.rtx_prot_id, CLI_U8, 0, 2},
+  {"rtx_id", &currentConfig.rtx_id, CLI_U8, 0, 3},
+  {"vtx_mode", &currentConfig.vtx_mode, CLI_U8, 0, 3},
+  {"sa_uart_port", &currentConfig.sa_uart_port, CLI_U8, 1, 3},
+  {"vtx_ch_idx", &currentConfig.vtx_ch_idx, CLI_U8, 0, 39},
+  {"vtx_tier_idx", &currentConfig.vtx_tier_idx, CLI_U8, 0, 7},
+  {"vtx_power_mw", &currentConfig.vtx_power_mw, CLI_U16, 0, 65535},
+  {"vtx_power_count", &currentConfig.vtx_power_count, CLI_U8, 0, 8},
+  {"vtx_pwr0", &currentConfig.vtx_power_table[0], CLI_U16, 0, 65535},
+  {"vtx_pwr1", &currentConfig.vtx_power_table[1], CLI_U16, 0, 65535},
+  {"vtx_pwr2", &currentConfig.vtx_power_table[2], CLI_U16, 0, 65535},
+  {"vtx_pwr3", &currentConfig.vtx_power_table[3], CLI_U16, 0, 65535},
+  {"vtx_pwr4", &currentConfig.vtx_power_table[4], CLI_U16, 0, 65535},
+  {"vtx_pwr5", &currentConfig.vtx_power_table[5], CLI_U16, 0, 65535},
+  {"vtx_pwr6", &currentConfig.vtx_power_table[6], CLI_U16, 0, 65535},
+  {"vtx_pwr7", &currentConfig.vtx_power_table[7], CLI_U16, 0, 65535},
+  {"bat_voltage_scale", &currentConfig.bat_voltage_scale, CLI_F32, 0, 0},
+  {"curr_zero_offset_a", &currentConfig.curr_zero_offset_a, CLI_F32, 0, 0},
+  {"curr_scale", &currentConfig.curr_scale, CLI_F32, 0, 0},
+  {"lidar_offset_m", &currentConfig.lidar_offset_m, CLI_F32, 0, 0},
+  {"mag_bias_x", &currentConfig.mag_bias_x, CLI_F32, 0, 0},
+  {"mag_bias_y", &currentConfig.mag_bias_y, CLI_F32, 0, 0},
+  {"mag_bias_z", &currentConfig.mag_bias_z, CLI_F32, 0, 0},
+  {"rtx_en", &currentConfig.rtx_en, CLI_U8, 0, 1},
+  {"rtx_band", &currentConfig.rtx_band, CLI_U8, 1, 9},
+  {"rtx_hw_crc_en", &currentConfig.rtx_hw_crc_en, CLI_U8, 0, 1},
+  {"rtx_addr_en", &currentConfig.rtx_addr_en, CLI_U8, 0, 1},
+  {"rtx_addr", &currentConfig.rtx_addr, CLI_U16, 0, 65535},
+  {"rtx_sync_word", &currentConfig.rtx_sync_word, CLI_U16, 0, 65535},
+  {"rtx_iq_inv", &currentConfig.rtx_iq_inv, CLI_U8, 0, 1},
+  {"rtx_pri_chan", &currentConfig.rtx_pri_chan, CLI_U8, 0, 99},
+  {"rtx_pri_sf", &currentConfig.rtx_pri_sf, CLI_U8, 5, 12},
+  {"rtx_pri_bw", &currentConfig.rtx_pri_bw, CLI_U8, 0, 9},
+  {"rtx_pri_cr", &currentConfig.rtx_pri_cr, CLI_U8, 1, 4},
+  {"rtx_pri_power", &currentConfig.rtx_pri_power, CLI_I8, -9, 22},
+  {"rtx_bak_chan", &currentConfig.rtx_bak_chan, CLI_U8, 0, 99},
+  {"rtx_bak_sf", &currentConfig.rtx_bak_sf, CLI_U8, 5, 12},
+  {"rtx_bak_bw", &currentConfig.rtx_bak_bw, CLI_U8, 0, 9},
+  {"rtx_bak_cr", &currentConfig.rtx_bak_cr, CLI_U8, 1, 4},
+  {"rtx_bak_power", &currentConfig.rtx_bak_power, CLI_I8, -9, 22},
+  {"fl_mode", &currentConfig.fl_mode, CLI_U8, 0, 3},
+  {"fl_roll_max", &currentConfig.fl_roll_max, CLI_F32, 0, 0},
+  {"fl_pitch_max", &currentConfig.fl_pitch_max, CLI_F32, 0, 0},
+  {"fl_vz_speed_max", &currentConfig.fl_vz_speed_max, CLI_F32, 0, 0},
+  {"rc_rate", &currentConfig.rc_rate, CLI_F32, 0, 0},
+  {"rc_super_expo", &currentConfig.rc_super_expo, CLI_F32, 0, 0},
+  {"rc_stick_expo", &currentConfig.rc_stick_expo, CLI_F32, 0, 0},
+  {"rc_yaw_rate", &currentConfig.rc_yaw_rate, CLI_F32, 0, 0},
+  {"rc_yaw_super_expo", &currentConfig.rc_yaw_super_expo, CLI_F32, 0, 0},
+  {"rc_yaw_expo", &currentConfig.rc_yaw_expo, CLI_F32, 0, 0},
+  {"rc_deadband", &currentConfig.rc_deadband, CLI_F32, 0, 0},
+  {"rc_horizon_transition", &currentConfig.rc_horizon_transition, CLI_F32, 0, 0},
+  {"rc_filter_smoothing", &currentConfig.rc_filter_smoothing, CLI_F32, 0, 0},
+  {"fs_bat_en", &currentConfig.fs_bat_en, CLI_U8, 0, 1},
+  {"fs_rtx_en", &currentConfig.fs_rtx_en, CLI_U8, 0, 1},
+  {"fs_vz_speed", &currentConfig.fs_vz_speed, CLI_F32, 0, 0},
+  {"bat_fs_v", &currentConfig.bat_fs_v, CLI_F32, 0, 0},
+  {"bat_filter_alpha", &currentConfig.bat_filter_alpha, CLI_F32, 0, 0},
+  {"lidar_en", &currentConfig.lidar_en, CLI_U8, 0, 1},
+  {"lidar_filter_alpha", &currentConfig.lidar_filter_alpha, CLI_F32, 0, 0},
+  {"baro_en", &currentConfig.baro_en, CLI_U8, 0, 1},
+  {"com_en", &currentConfig.com_en, CLI_U8, 0, 1},
+  {"filter_mode", &currentConfig.filter_mode, CLI_U8, 0, 3},
+  {"gyro_filter_alpha", &currentConfig.gyro_filter_alpha, CLI_F32, 0, 0},
+  {"acc_filter_alpha", &currentConfig.acc_filter_alpha, CLI_F32, 0, 0},
+  {"filter_notch_freq", &currentConfig.filter_notch_freq, CLI_F32, 0, 0},
+  {"filter_notch_bw", &currentConfig.filter_notch_bw, CLI_F32, 0, 0},
+  {"filter_dyn_min_hz", &currentConfig.filter_dyn_min_hz, CLI_F32, 0, 0},
+  {"filter_dyn_max_hz", &currentConfig.filter_dyn_max_hz, CLI_F32, 0, 0},
+  {"roll_kp", &currentConfig.roll_pid.kp, CLI_F32, 0, 0},
+  {"roll_ki", &currentConfig.roll_pid.ki, CLI_F32, 0, 0},
+  {"roll_kd", &currentConfig.roll_pid.kd, CLI_F32, 0, 0},
+  {"pitch_kp", &currentConfig.pitch_pid.kp, CLI_F32, 0, 0},
+  {"pitch_ki", &currentConfig.pitch_pid.ki, CLI_F32, 0, 0},
+  {"pitch_kd", &currentConfig.pitch_pid.kd, CLI_F32, 0, 0},
+  {"yaw_kp", &currentConfig.yaw_pid.kp, CLI_F32, 0, 0},
+  {"yaw_ki", &currentConfig.yaw_pid.ki, CLI_F32, 0, 0},
+  {"yaw_kd", &currentConfig.yaw_pid.kd, CLI_F32, 0, 0},
+  {"vz_kp", &currentConfig.vz_pid.kp, CLI_F32, 0, 0},
+  {"vz_ki", &currentConfig.vz_pid.ki, CLI_F32, 0, 0},
+  {"vz_kd", &currentConfig.vz_pid.kd, CLI_F32, 0, 0}
+};
+
+static void onVtxModeChanged() { setVtxMode(currentConfig.vtx_mode); vtxInit(); }
+static void onRtxProtChanged() { syncVtxProtoWithRtxProtId(); vtxInit(); }
+static void onRtxCfgChanged() { if (!is_armed && currentConfig.rtx_en) applyRtxConfiguration(is_on_backup); }
+static void onImuCfgChanged() { if (!is_armed) SensorDriver::detectIMU(); }
+static void onBaroCfgChanged() {
+  if (!is_armed) {
+    if (currentConfig.baro_en) SensorDriver::detectBaro();
+    else { SensorDriver::activeSensors.baro_found = false; SensorDriver::baroCal.valid = false; }
+  }
+}
+static void onMagCfgChanged() {
+  if (!is_armed) {
+    if (currentConfig.com_en) SensorDriver::detectMag();
+    else { SensorDriver::activeSensors.mag_found = false; compass_valid = false; }
+  }
+}
+static void onLidarCfgChanged() {
+  if (!is_armed) {
+    if (currentConfig.lidar_en) { SensorDriver::detectLidar(); SensorDriver::initLidarHardware(); }
+    else { SensorDriver::activeSensors.lidar_found = false; }
+  }
+}
+static void onDspOrPidChanged() { applyFilterConfig(); updatePidTunings(); }
+
+static const CliSideEffectRule cliSideEffects[] = {
+  {"vtx_mode", onVtxModeChanged},
+  {"rtx_prot_id", onRtxProtChanged},
+  {"sa_uart_port", vtxInit},
+  {"vtx_ch_idx", vtxInit},
+  {"vtx_tier_idx", vtxInit},
+  {"vtx_power_mw", vtxInit},
+  {"rtx_id", onRtxCfgChanged},
+  {"rtx_en", onRtxCfgChanged},
+  {"rtx_band", onRtxCfgChanged},
+  {"rtx_hw_crc_en", onRtxCfgChanged},
+  {"rtx_addr_en", onRtxCfgChanged},
+  {"rtx_addr", onRtxCfgChanged},
+  {"rtx_sync_word", onRtxCfgChanged},
+  {"rtx_iq_inv", onRtxCfgChanged},
+  {"rtx_pri_chan", onRtxCfgChanged},
+  {"rtx_pri_sf", onRtxCfgChanged},
+  {"rtx_pri_bw", onRtxCfgChanged},
+  {"rtx_pri_cr", onRtxCfgChanged},
+  {"rtx_pri_power", onRtxCfgChanged},
+  {"rtx_bak_chan", onRtxCfgChanged},
+  {"rtx_bak_sf", onRtxCfgChanged},
+  {"rtx_bak_bw", onRtxCfgChanged},
+  {"rtx_bak_cr", onRtxCfgChanged},
+  {"rtx_bak_power", onRtxCfgChanged},
+  {"imu_id", onImuCfgChanged},
+  {"bar_id", onBaroCfgChanged},
+  {"baro_en", onBaroCfgChanged},
+  {"com_id", onMagCfgChanged},
+  {"com_en", onMagCfgChanged},
+  {"lid_id", onLidarCfgChanged},
+  {"lidar_en", onLidarCfgChanged},
+  {"filter_mode", onDspOrPidChanged},
+  {"gyro_filter_alpha", onDspOrPidChanged},
+  {"acc_filter_alpha", onDspOrPidChanged},
+  {"filter_notch_freq", onDspOrPidChanged},
+  {"filter_notch_bw", onDspOrPidChanged},
+  {"bat_filter_alpha", onDspOrPidChanged},
+  {"roll_kp", onDspOrPidChanged}, {"roll_ki", onDspOrPidChanged}, {"roll_kd", onDspOrPidChanged},
+  {"pitch_kp", onDspOrPidChanged}, {"pitch_ki", onDspOrPidChanged}, {"pitch_kd", onDspOrPidChanged},
+  {"yaw_kp", onDspOrPidChanged}, {"yaw_ki", onDspOrPidChanged}, {"yaw_kd", onDspOrPidChanged},
+  {"vz_kp", onDspOrPidChanged}, {"vz_ki", onDspOrPidChanged}, {"vz_kd", onDspOrPidChanged}
+};
+
+static const CliParam* findCliParam(const char* name) {
+  constexpr size_t count = sizeof(cliParams) / sizeof(cliParams[0]);
+  for (size_t i = 0; i < count; i++) {
+    if (strcmp(name, cliParams[i].name) == 0) return &cliParams[i];
+  }
+  return nullptr;
+}
+
+static void printCliParam(const CliParam* p) {
+  if (!p) return;
+  Serial.print(p->name);
+  Serial.print("=");
+  switch (p->type) {
+    case CLI_F32: Serial.println(*(float*)p->ptr, 4); break;
+    case CLI_U8:  Serial.println((int)*(uint8_t*)p->ptr); break;
+    case CLI_I8:  Serial.println((int)*(int8_t*)p->ptr); break;
+    case CLI_U16: Serial.println((unsigned int)*(uint16_t*)p->ptr); break;
+  }
+}
+
+static void writeCliParamValue(const CliParam* p, float val) {
+  if (!p || isnan(val) || isinf(val)) return;
+  switch (p->type) {
+    case CLI_F32:
+      *(float*)p->ptr = val;
+      break;
+    case CLI_U8:
+      *(uint8_t*)p->ptr = (uint8_t)constrain((int)lroundf(val), p->min_v, p->max_v);
+      break;
+    case CLI_I8:
+      *(int8_t*)p->ptr = (int8_t)constrain((int)lroundf(val), p->min_v, p->max_v);
+      break;
+    case CLI_U16:
+      *(uint16_t*)p->ptr = (uint16_t)constrain((long)llroundf(val), (long)p->min_v, (long)p->max_v);
+      break;
+  }
+}
+
+static void applySideEffectsForKey(const char* key) {
+  constexpr size_t count = sizeof(cliSideEffects) / sizeof(cliSideEffects[0]);
+  for (size_t i = 0; i < count; i++) {
+    if (strcmp(key, cliSideEffects[i].key) == 0) {
+      cliSideEffects[i].fn();
+      return;
+    }
+  }
+}
+
+static uint8_t getActiveStatusErrorCode() {
+  return (fc_error_ram != FC_ERR_NONE) ? fc_error_ram : fc_latched_error_ram;
+}
+
+static const char* rtxChipName(uint8_t chip_id) {
+  switch (chip_id) {
+    case RTX_CHIP_SX1262: return "SX1262";
+    case RTX_CHIP_SX1268: return "SX1268";
+    case RTX_CHIP_LLCC68: return "LLCC68";
+    default: return "AUTO";
+  }
+}
+
+static const char* vtxProtoName(uint8_t proto_id) {
+  switch (proto_id) {
+    case VTX_MODE_SMARTAUDIO: return "SMARTAUDIO";
+    case VTX_MODE_TRAMP: return "TRAMP";
+    default: return "NONE";
+  }
+}
+
+static const char* vtxModeName(uint8_t mode_id) {
+  switch (mode_id) {
+    case VTX_MODE_OFF: return "OFF";
+    case VTX_MODE_AUTO: return "AUTO";
+    case VTX_MODE_SMARTAUDIO: return "SMARTAUDIO";
+    case VTX_MODE_TRAMP: return "TRAMP";
+    default: return "UNKNOWN";
+  }
+}
+
+static const char* imuChipName(uint8_t t) {
+  switch (t) {
+    case 1: return "MPU6050";
+    case 2: return "MPU6500";
+    case 3: return "MPU9250";
+    case 4: return "ICM20602";
+    case 5: return "BMI160";
+    case 6: return "QMI8658";
+    default: return "NONE";
+  }
+}
+
+static const char* magChipName(uint8_t t) {
+  switch (t) {
+    case 1: return "HMC5883L";
+    case 2: return "QMC5883L";
+    case 3: return "AK8963";
+    case 4: return "IST8310";
+    case 5: return "HSCDTD008A";
+    case 6: return "AK09911";
+    default: return "NONE";
+  }
+}
+
+static const char* baroChipName(uint8_t t) {
+  switch (t) {
+    case 1: return "BMP280";
+    case 2: return "BME280";
+    case 3: return "MS5611";
+    case 4: return "BMP180";
+    case 5: return "BMP388";
+    case 6: return "BMP390";
+    case 7: return "DPS310";
+    default: return "NONE";
+  }
+}
+
+static const char* lidarChipName(uint8_t t) {
+  switch (t) {
+    case 1: return "VL53L0X";
+    case 2: return "VL53L1X";
+    case 3: return "VL53L3CX";
+    case 4: return "VL53L4CX";
+    default: return "NONE";
+  }
+}
+
+static void actHelp(const char*) {
+  Serial.println("OK: set, get, dump, save, default, cal_gyro, cal_acc, cal_mag, cal_baro, cal_lidar, cal_bat, cal_curr, mon, test_imu, test_mag, test_bar, test_lid, test_bat, test_rtx, test_vtx, test_mot, test_pid");
+}
+
+static void actSet(const char* args) {
+  char key[48];
+  float val;
+  if (sscanf(args, "%47s %f", key, &val) != 2) {
+    Serial.println("ERR: set <k> <v>");
+    return;
+  }
+  const CliParam* p = findCliParam(key);
+  if (!p) {
+    Serial.println("ERR: param");
+    return;
+  }
+  writeCliParamValue(p, val);
+  applySideEffectsForKey(key);
+  printCliParam(p);
+}
+
+static void actGet(const char* args) {
+  const CliParam* p = findCliParam(args);
+  if (!p) {
+    Serial.println("ERR: param");
+    return;
+  }
+  printCliParam(p);
+}
+
+static void actDump(const char*) {
+  constexpr size_t count = sizeof(cliParams) / sizeof(cliParams[0]);
+  for (size_t i = 0; i < count; i++) printCliParam(&cliParams[i]);
+}
+
+static void actSave(const char*) {
+  saveSettings();
+  Serial.println("OK: save");
+}
+
+static void actDefault(const char*) {
+  resetToFactoryDefaults();
+  vtxInit();
+  if (currentConfig.rtx_en) applyRtxConfiguration(false);
+  Serial.println("OK: default");
+}
+
+static void actCalGyro(const char*) { SensorDriver::calibrateGyro(); }
+static void actCalAcc(const char*) { SensorDriver::calibrateAcc(); }
+static void actCalMag(const char*) { startMagCalibrationNonBlocking(); }
+static void actCalBaro(const char*) { SensorDriver::calibrateBaro(); }
+static void actCalLidar(const char*) { SensorDriver::calibrateLidar(); }
+
+static void actCalBat(const char* args) {
+  float v = 0.0f;
+  if (sscanf(args, "%f", &v) == 1) SensorDriver::calibrateBatVoltage(v);
+  else Serial.println("ERR: cal_bat <v>");
+}
+
+static void actCalCurr(const char* args) {
+  float a = 0.0f;
+  if (sscanf(args, "%f", &a) == 1) SensorDriver::calibrateCurrent(true, a);
+  else SensorDriver::calibrateCurrent(false, 0.0f);
+}
+
+static void actMon(const char*) {
+  mon_stream_active = true;
+  mon_last_send_ms = 0;
+  Serial.println("OK: mon");
+}
+
+static void actTestImu(const char*) {
+  float q0 = orientation.q0, q1 = orientation.q1, q2 = orientation.q2, q3 = orientation.q3;
+  float r = atan2f(2.0f * (q0 * q1 + q2 * q3), 1.0f - 2.0f * (q1 * q1 + q2 * q2)) * RAD_TO_DEG;
+  float p = asinf(constrain(2.0f * (q0 * q2 - q3 * q1), -1.0f, 1.0f)) * RAD_TO_DEG;
+  float y = atan2f(2.0f * (q0 * q3 + q1 * q2), 1.0f - 2.0f * (q2 * q2 + q3 * q3)) * RAD_TO_DEG;
+  Serial.print("TEST_IMU: found="); Serial.print(SensorDriver::activeSensors.imu_found ? 1 : 0);
+  Serial.print(" chip="); Serial.print(imuChipName((uint8_t)SensorDriver::activeSensors.imu_type));
+  Serial.print(" err="); Serial.print((int)getActiveStatusErrorCode());
+  Serial.print(" gyro="); Serial.print(last_cal_gx_dps, 2); Serial.print(","); Serial.print(last_cal_gy_dps, 2); Serial.print(","); Serial.print(last_cal_gz_dps, 2);
+  Serial.print(" acc="); Serial.print(last_cal_ax_g, 3); Serial.print(","); Serial.print(last_cal_ay_g, 3); Serial.print(","); Serial.print(last_cal_az_g, 3);
+  Serial.print(" rpy="); Serial.print(r, 1); Serial.print(","); Serial.print(p, 1); Serial.print(","); Serial.print(y, 1);
+  Serial.print(" temp="); Serial.println(current_chip_temp, 1);
+}
+
+static void actTestMag(const char*) {
+  Serial.print("TEST_MAG: en="); Serial.print(currentConfig.com_en ? 1 : 0);
+  Serial.print(" found="); Serial.print(SensorDriver::activeSensors.mag_found ? 1 : 0);
+  Serial.print(" chip="); Serial.print(magChipName((uint8_t)SensorDriver::activeSensors.mag_type));
+  Serial.print(" valid="); Serial.print(compass_valid ? 1 : 0);
+  Serial.print(" err="); Serial.print((int)getActiveStatusErrorCode());
+  Serial.print(" hdg="); Serial.println(compass_heading_deg, 1);
+}
+
+static void actTestBar(const char*) {
+  Serial.print("TEST_BAR: en="); Serial.print(currentConfig.baro_en ? 1 : 0);
+  Serial.print(" found="); Serial.print(SensorDriver::activeSensors.baro_found ? 1 : 0);
+  Serial.print(" chip="); Serial.print(baroChipName((uint8_t)SensorDriver::activeSensors.baro_type));
+  Serial.print(" cal="); Serial.print(baro_cal_ready ? 1 : 0);
+  Serial.print(" err="); Serial.print((int)getActiveStatusErrorCode());
+  Serial.print(" alt="); Serial.print(baro_alt_m, 2);
+  Serial.print(" vz="); Serial.println(baro_vz_mps, 2);
+}
+
+static void actTestLid(const char*) {
+  bool fresh = ((millis() - last_lidar_packet_ms) < 200);
+  Serial.print("TEST_LID: en="); Serial.print(currentConfig.lidar_en ? 1 : 0);
+  Serial.print(" found="); Serial.print(SensorDriver::activeSensors.lidar_found ? 1 : 0);
+  Serial.print(" chip="); Serial.print(lidarChipName((uint8_t)SensorDriver::activeSensors.lidar_type));
+  Serial.print(" fresh="); Serial.print(fresh ? 1 : 0);
+  Serial.print(" err="); Serial.print((int)getActiveStatusErrorCode());
+  Serial.print(" dist="); Serial.println(dbg_lidar_m, 3);
+}
+
+static void actTestBat(const char*) {
+  Serial.print("TEST_BAT: valid="); Serial.print(batt_valid ? 1 : 0);
+  Serial.print(" err="); Serial.print((int)getActiveStatusErrorCode());
+  Serial.print(" v="); Serial.print(v_batt, 2);
+  Serial.print(" i="); Serial.print(current_a, 2);
+  Serial.print(" p="); Serial.print(power_w, 2);
+  Serial.print(" wh="); Serial.println(consumed_wh, 3);
+}
+
+static void actTestRtx(const char*) {
+  uint8_t st[2] = {0, 0};
+  bool chip_ok = false;
+  const char* chip_str = "NONE";
+  if (currentConfig.rtx_en) {
+    rtx_read_command(0xC0, st, 2);
+    chip_ok = (rtx_error_counter < RTX_MAX_ERRORS) && (digitalRead(RTX_BUSY_PIN) == LOW);
+    chip_str = rtxChipName(rtx_active_chip_id);
+  }
+  Serial.print("TEST_RTX: en="); Serial.print(currentConfig.rtx_en ? 1 : 0);
+  Serial.print(" ok="); Serial.print(chip_ok ? 1 : 0);
+  Serial.print(" chip="); Serial.print(chip_str);
+  Serial.print(" st="); Serial.print(st[0], HEX); Serial.print(":"); Serial.print(st[1], HEX);
+  Serial.print(" ch="); Serial.print((int)active_rtx_chan);
+  Serial.print(" bak="); Serial.print(is_on_backup ? 1 : 0);
+  Serial.print(" lq="); Serial.print((int)current_link_quality);
+  Serial.print(" spi_err="); Serial.print((int)rtx_error_counter);
+  Serial.print(" err="); Serial.println((int)getActiveStatusErrorCode());
+}
+
+static void actTestVtx(const char*) {
+  uint8_t proto = (vtx_detected_proto != 0) ? vtx_detected_proto : currentConfig.vtx_detected_proto_saved;
+  uint8_t ch = constrain(currentConfig.vtx_ch_idx, (uint8_t)0, (uint8_t)39);
+  uint16_t pwr = (vtx_actual_power_mw > 0) ? vtx_actual_power_mw : currentConfig.vtx_power_mw;
+  Serial.print("TEST_VTX: mode="); Serial.print(vtxModeName(currentConfig.vtx_mode));
+  Serial.print(" proto="); Serial.print(vtxProtoName(proto));
+  Serial.print(" ok="); Serial.print(sa_vtx_ok ? 1 : 0);
+  Serial.print(" uart="); Serial.print((int)currentConfig.sa_uart_port);
+  Serial.print(" ch="); Serial.print((int)ch);
+  Serial.print(" freq="); Serial.print((int)RX5808_FREQS_MHZ[ch]);
+  Serial.print(" pwr="); Serial.print((int)pwr);
+  Serial.print(" err="); Serial.println((int)getActiveStatusErrorCode());
+}
+
+static void actTestMot(const char*) {
+  bench_test_mode = BENCH_TEST_MOTORS;
+  bench_test_start_ms = millis();
+  rollRatePID.reset();
+  pitchRatePID.reset();
+  yawRatePID.reset();
+  Serial.println("OK: test_mot");
+}
+
+static void actTestPid(const char*) {
+  bench_test_mode = BENCH_TEST_PID;
+  bench_test_start_ms = millis();
+  rollRatePID.reset();
+  pitchRatePID.reset();
+  yawRatePID.reset();
+  Serial.println("OK: test_pid");
+}
+
+static const CliActionEntry cliActions[] = {
+  {"help",      false, actHelp},
+  {"set ",      false, actSet},
+  {"get ",      false, actGet},
+  {"dump",      false, actDump},
+  {"save",      true,  actSave},
+  {"default",   true,  actDefault},
+  {"cal_gyro",  true,  actCalGyro},
+  {"cal_acc",   true,  actCalAcc},
+  {"cal_mag",   true,  actCalMag},
+  {"cal_baro",  true,  actCalBaro},
+  {"cal_lidar", true,  actCalLidar},
+  {"cal_bat ",  true,  actCalBat},
+  {"cal_curr",  true,  actCalCurr},
+  {"mon",       false, actMon},
+  {"test_imu",  false, actTestImu},
+  {"test_mag",  false, actTestMag},
+  {"test_bar",  false, actTestBar},
+  {"test_lid",  false, actTestLid},
+  {"test_bat",  false, actTestBat},
+  {"test_rtx",  false, actTestRtx},
+  {"test_vtx",  false, actTestVtx},
+  {"test_mot",  true,  actTestMot},
+  {"test_pid",  true,  actTestPid}
+};
+
+void executeCommand(const char* cmd) {
+  while (*cmd == ' ' || *cmd == '\t') cmd++;
+  if (*cmd == '\0') return;
+
+  if (strncmp(cmd, "mon", 3) != 0 || (cmd[3] != '\0' && cmd[3] != ' ')) {
+    mon_stream_active = false;
+  }
+  if (bench_test_mode != BENCH_TEST_NONE && strncmp(cmd, "test_mot", 8) != 0 && strncmp(cmd, "test_pid", 8) != 0) {
+    stopBenchTest();
+  }
+
+  constexpr size_t count = sizeof(cliActions) / sizeof(cliActions[0]);
+  for (size_t i = 0; i < count; i++) {
+    size_t plen = strlen(cliActions[i].prefix);
+    if (strncmp(cmd, cliActions[i].prefix, plen) == 0) {
+      if (cliActions[i].requires_disarm && is_armed) {
+        Serial.println("ERR: armed");
+        return;
+      }
+      const char* tail = cmd + plen;
+      while (*tail == ' ') tail++;
+      cliActions[i].fn(tail);
+      return;
+    }
+  }
+  Serial.println("ERR: cmd");
+}
+
+void parseCli() {
+  static char buffer[128];
+  static int index = 0;
+  while (Serial.available()) {
+    char c = Serial.read();
+    if (c == '\r') continue;
+    if (c == '\n') {
+      buffer[index] = '\0';
+      if (index > 0) executeCommand(buffer);
+      index = 0;
+    } else if (index < (int)sizeof(buffer) - 1) {
+      buffer[index++] = c;
+    }
+  }
+}
+
+// ==============================================================================
+// 3. ПРИЁМ ПАКЕТА И РАЗБОР (RTX SCAN, RX PARSER, TELEMETRY TX)
+// ==============================================================================
+void startChannelScanNonBlocking() {
+  if (!currentConfig.rtx_en || rtx_tx_in_flight) return;
+  rtx_scan_active = true;
+  rtx_scan_cursor = 0;
+}
+
+void stepChannelScanNonBlocking() {
+  if (!rtx_scan_active || !currentConfig.rtx_en || rtx_tx_in_flight) return;
+  if (digitalRead(RTX_BUSY_PIN) == HIGH) return;
+
+  uint8_t band = constrain(currentConfig.rtx_band, 1, 9);
+  uint32_t base_freq_hz = (uint32_t)band * 100000000UL;
+  uint32_t base_reg = (uint32_t)(((uint64_t)base_freq_hz << 25) / 32000000UL);
+  uint32_t step_reg = (uint32_t)(((uint64_t)1000000UL << 25) / 32000000UL);
+
+  uint8_t end_chan = rtx_scan_cursor + RTX_SCAN_CHANNELS_PER_TICK;
+  if (end_chan > 100) end_chan = 100;
+  uint32_t freq_reg = base_reg + ((uint32_t)rtx_scan_cursor * step_reg);
+
+  for (uint8_t c = rtx_scan_cursor; c < end_chan; c++) {
+    uint32_t w_start = micros();
+    while (digitalRead(RTX_BUSY_PIN) == HIGH) {
+      if ((micros() - w_start) > RTX_SCAN_BUSY_TIMEOUT_US) {
+        setFcErrorRam(FC_ERR_SPI_RTX);
+        rtx_scan_active = false;
+        applyRtxConfiguration(is_on_backup);
+        return;
+      }
+    }
+    uint8_t freq_buf[4] = {(uint8_t)(freq_reg >> 24), (uint8_t)(freq_reg >> 16), (uint8_t)(freq_reg >> 8), (uint8_t)freq_reg};
+    rtx_spi_begin_tx();
+    rtxSpi.transfer(0x86);
+    for (uint8_t i = 0; i < 4; i++) rtxSpi.transfer(freq_buf[i]);
+    rtx_spi_end_tx();
+
+    uint32_t r_start = micros();
+    while (digitalRead(RTX_BUSY_PIN) == HIGH) {
+      if ((micros() - r_start) > RTX_SCAN_BUSY_TIMEOUT_US) {
+        setFcErrorRam(FC_ERR_SPI_RTX);
+        rtx_scan_active = false;
+        applyRtxConfiguration(is_on_backup);
+        return;
+      }
+    }
+    rtx_spi_begin_tx();
+    rtxSpi.transfer(0x15);
+    rtxSpi.transfer(0x00);
+    rtx_noise_floor[c] = rtxSpi.transfer(0x00);
+    rtx_spi_end_tx();
+    freq_reg += step_reg;
+  }
+
+  rtx_scan_cursor = end_chan;
+  if (rtx_scan_cursor >= 100) {
+    uint8_t best_chan = 0, min_noise = 255;
+    for (uint8_t i = 0; i < 100; i++) {
+      if (rtx_noise_floor[i] < min_noise) {
+        min_noise = rtx_noise_floor[i];
+        best_chan = i;
+      }
+    }
+    rtx_best_clean_chan = best_chan;
+    rtx_scan_active = false;
+    queueDelayedRtxResponse(RTX_RESP_230_SCAN_BEST, rtx_best_clean_chan);
+
+    uint32_t work_freq_reg = base_reg + ((uint32_t)constrain(active_rtx_chan, 0, 99) * step_reg);
+    uint8_t work_freq_buf[4] = {(uint8_t)(work_freq_reg >> 24), (uint8_t)(work_freq_reg >> 16), (uint8_t)(work_freq_reg >> 8), (uint8_t)work_freq_reg};
+    rtx_write_command(0x86, work_freq_buf, 4);
+    rtx_set_rx_mode();
+  }
+}
+
+void readRx() {
+  if (!currentConfig.rtx_en || rtx_tx_in_flight || rtx_scan_active) return;
+  if (digitalRead(RTX_BUSY_PIN) == HIGH) return;
+
+  uint8_t irq_status[2] = {0, 0};
+  rtx_read_command(0x12, irq_status, 2);
+  uint16_t irq = ((uint16_t)irq_status[0] << 8) | irq_status[1];
+  if (irq & 0x02) {
+    uint8_t clear_irq[2] = {0x00, 0x02};
+    rtx_write_command(0x02, clear_irq, 2);
+    if (!rtx_try_ready_short()) { rtx_set_rx_mode(); return; }
+
+    uint8_t rx_buf_status[2] = {0, 0};
+    rtx_read_command(0x13, rx_buf_status, 2);
+    uint8_t payload_len = rx_buf_status[0];
+    uint8_t start_ptr = rx_buf_status[1];
+    if (payload_len == 0 || payload_len > RTX_RX_MAX_PAYLOAD_BYTES) {
+      rtx_set_rx_mode();
+      return;
+    }
+
+    rtx_spi_begin_tx();
+    rtxSpi.transfer(0x1E);
+    rtxSpi.transfer(start_ptr);
+    uint8_t raw_buf[RTX_RX_MAX_PAYLOAD_BYTES] = {0};
+    for (uint8_t i = 0; i < payload_len; i++) raw_buf[i] = rtxSpi.transfer(0x00);
+    rtx_spi_end_tx();
+
+    uint8_t idx = 0;
+    if (currentConfig.rtx_addr_en) {
+      if (payload_len < (idx + 2)) { rtx_set_rx_mode(); return; }
+      uint16_t pkt_adr = ((uint16_t)raw_buf[idx] << 8) | raw_buf[idx + 1];
+      idx += 2;
+      if (pkt_adr != currentConfig.rtx_addr) { rtx_set_rx_mode(); return; }
+    }
+    if (payload_len < (uint8_t)(idx + 2)) { rtx_set_rx_mode(); return; }
+
+    uint8_t cmd_type = raw_buf[idx++];
+    uint8_t lq_val = raw_buf[idx++];
+    uint8_t rem_bytes = payload_len - idx;
+
+    switch (cmd_type) {
+      case 110: {
+        if (rem_bytes < 4) { rtx_set_rx_mode(); return; }
+        current_link_quality = lq_val;
+        last_rc_rx_tick = fc_tick_count;
+        float t_val = (float)raw_buf[idx++] * 10.0f;
+        float r_val = (float)raw_buf[idx++] * 10.0f;
+        float p_val = (float)raw_buf[idx++] * 10.0f;
+        float y_val = (float)raw_buf[idx++] * 10.0f;
+        float alpha_rc = constrain(currentConfig.rc_filter_smoothing, 0.01f, 1.0f);
+        smooth_throttle = alpha_rc * t_val + (1.0f - alpha_rc) * smooth_throttle;
+        smooth_roll = alpha_rc * r_val + (1.0f - alpha_rc) * smooth_roll;
+        smooth_pitch = alpha_rc * p_val + (1.0f - alpha_rc) * smooth_pitch;
+        smooth_yaw = alpha_rc * y_val + (1.0f - alpha_rc) * smooth_yaw;
+        last_rc_packet_ms = millis();
+        send_telemetry_pending = true;
+        break;
+      }
+      case 120: {
+        if (rem_bytes < 1) { rtx_set_rx_mode(); return; }
+        current_link_quality = lq_val;
+        last_rc_rx_tick = fc_tick_count;
+        bool req_arm = (raw_buf[idx++] > 0);
+        if (!req_arm || !is_failsafe) is_armed = req_arm;
+        last_rc_packet_ms = millis();
+        break;
+      }
+      case 130: {
+        current_link_quality = lq_val;
+        last_rc_rx_tick = fc_tick_count;
+        startChannelScanNonBlocking();
+        last_rc_packet_ms = millis();
+        break;
+      }
+      case 140: {
+        if (rem_bytes < 1) { rtx_set_rx_mode(); return; }
+        current_link_quality = lq_val;
+        last_rc_rx_tick = fc_tick_count;
+        uint8_t target_chan = constrain(raw_buf[idx++], 0, 99);
+        target_pending_chan = target_chan;
+        pending_channel_switch = true;
+        rtx_switched_flag = true;
+        rtx_new_switched_chan = target_chan;
+        queueDelayedRtxResponse(RTX_RESP_240_CHAN_SW, target_chan);
+        last_rc_packet_ms = millis();
+        break;
+      }
+      case 150: {
+        if (rem_bytes < 4) { rtx_set_rx_mode(); return; }
+        current_link_quality = lq_val;
+        last_rc_rx_tick = fc_tick_count;
+        uint8_t ch_idx = raw_buf[idx++];
+        uint8_t tier_idx = raw_buf[idx++];
+        uint16_t pwr_mw = ((uint16_t)raw_buf[idx] << 8) | raw_buf[idx + 1];
+        vtxQueueChannelAndPower(ch_idx, tier_idx, pwr_mw);
+        queueDelayedRtxResponse(RTX_RESP_250_SA_ACK, rtx_sa_ack_ch, rtx_sa_ack_tier, rtx_sa_ack_mw);
+        last_rc_packet_ms = millis();
+        break;
+      }
+      default:
+        break;
+    }
+  }
+  rtx_set_rx_mode();
+}
+
+// ==============================================================================
+// 4. ОПРОС ДАТЧИКОВ И ПЕРИФЕРИИ + МОНИТОР `mon`
+// ==============================================================================
+namespace SensorDriver {
+  enum IMUType : uint8_t {
+    IMU_UNKNOWN = 0, IMU_MPU6050 = 1, IMU_MPU6500 = 2, IMU_MPU9250 = 3,
+    IMU_ICM20602 = 4, IMU_BMI160 = 5, IMU_QMI8658 = 6
+  };
+
+  enum BaroType : uint8_t {
+    BARO_UNKNOWN = 0, BARO_BMP280 = 1, BARO_BME280 = 2, BARO_MS5611 = 3,
+    BARO_BMP180 = 4, BARO_BMP388 = 5, BARO_BMP390 = 6, BARO_DPS310 = 7
+  };
+
+  enum MagType : uint8_t {
+    MAG_UNKNOWN = 0, MAG_HMC5883L = 1, MAG_QMC5883L = 2, MAG_AK8963 = 3,
+    MAG_IST8310 = 4, MAG_HSCDTD008A = 5, MAG_AK09911 = 6
+  };
+
+  enum LidarType : uint8_t {
+    LIDAR_NONE = 0, LIDAR_VL53L0X = 1, LIDAR_VL53L1X = 2, LIDAR_VL53L3CX = 3, LIDAR_VL53L4CX = 4
+  };
+
+  enum Ms5611Phase : uint8_t { MS_IDLE = 0, MS_WAIT_D1, MS_WAIT_D2 };
+  enum Bmp180Phase : uint8_t { B180_IDLE = 0, B180_WAIT_TEMP, B180_WAIT_PRESS };
+
+  struct BaroCalib {
+    uint16_t dig_T1 = 0; int16_t dig_T2 = 0; int16_t dig_T3 = 0;
+    uint16_t dig_P1 = 0; int16_t dig_P2 = 0; int16_t dig_P3 = 0; int16_t dig_P4 = 0;
+    int16_t dig_P5 = 0; int16_t dig_P6 = 0; int16_t dig_P7 = 0; int16_t dig_P8 = 0; int16_t dig_P9 = 0;
+    uint16_t ms_c[7] = {0};
+    int16_t ac1 = 0, ac2 = 0, ac3 = 0;
+    uint16_t ac4 = 0, ac5 = 0, ac6 = 0;
+    int16_t b1 = 0, b2 = 0, mc = 0, md = 0;
+    float b3_t1 = 0.0f, b3_t2 = 0.0f, b3_t3 = 0.0f;
+    float b3_p1 = 0.0f, b3_p2 = 0.0f, b3_p3 = 0.0f, b3_p4 = 0.0f, b3_p5 = 0.0f;
+    float b3_p6 = 0.0f, b3_p7 = 0.0f, b3_p8 = 0.0f, b3_p9 = 0.0f, b3_p10 = 0.0f, b3_p11 = 0.0f;
+    int32_t dps_c00 = 0, dps_c10 = 0;
+    int16_t dps_c01 = 0, dps_c11 = 0, dps_c20 = 0, dps_c21 = 0, dps_c30 = 0;
+    float dps_kp = 524288.0f, dps_kt = 524288.0f;
+    bool valid = false;
+  } baroCal;
+
+  struct MagCalib {
+    float asa_x = 1.0f, asa_y = 1.0f, asa_z = 1.0f;
+    float scale_x = 1.0f, scale_y = 1.0f, scale_z = 1.0f;
+  } magCal;
+
+  struct SensorStatus {
+    IMUType imu_type = IMU_UNKNOWN;
+    BaroType baro_type = BARO_UNKNOWN;
+    MagType mag_type = MAG_UNKNOWN;
+    LidarType lidar_type = LIDAR_NONE;
+    uint8_t imu_addr = 0x68;
+    uint8_t baro_addr = 0x76;
+    uint8_t mag_addr = 0x0C;
+    uint8_t lidar_addr = 0x29;
+    float gyro_scale = 131.0f;
+    float acc_scale = 16384.0f;
+    float temp_scale = 340.0f;
+    float temp_offset = 25.0f;
+    float lidar_max_m = 4.0f;
+    bool imu_found = false;
+    bool baro_found = false;
+    bool mag_found = false;
+    bool lidar_found = false;
+  } activeSensors;
+
+  Ms5611Phase ms5611_phase = MS_IDLE;
+  uint32_t ms5611_conv_start_ms = 0;
+  uint32_t ms5611_d1_raw = 0;
+  uint32_t ms5611_d2_raw = 0;
+
+  Bmp180Phase bmp180_phase = B180_IDLE;
+  uint32_t bmp180_conv_start_ms = 0;
+  int32_t bmp180_ut_raw = 0;
+
+  inline float getEffectiveLidarMaxM() { return activeSensors.lidar_max_m * 0.90f; }
+  inline float getBatScale() { return (currentConfig.bat_voltage_scale > 0.1f) ? currentConfig.bat_voltage_scale : DEFAULT_BAT_VOLTAGE_SCALE; }
+  inline float getCurrScale() { return (currentConfig.curr_scale > 0.01f) ? currentConfig.curr_scale : DEFAULT_CURR_SCALE; }
+
+  inline float computeCurrentAmpsFromAdc(int raw_adc) {
+    float pin_v = ((float)raw_adc / 4095.0f) * 3.3f;
+    float base_a = (pin_v / SHUNT_RESISTANCE_OHM) - currentConfig.curr_zero_offset_a;
+    float scaled_a = base_a * getCurrScale();
+    return (scaled_a > 0.0f) ? scaled_a : 0.0f;
+  }
+
+  inline float wrapDeg0To360(float deg) {
+    if (isnan(deg) || isinf(deg)) {
+      setFcErrorRam(FC_ERR_NAN_INF_MATH);
+      return 0.0f;
+    }
+    float wrapped = fmodf(deg, 360.0f);
+    if (wrapped < 0.0f) wrapped += 360.0f;
+    if (wrapped >= 360.0f || wrapped < 0.0f) wrapped = 0.0f;
+    return wrapped;
+  }
+
+  inline void rotateXYByYawAlign(float &x, float &y, uint8_t align) {
+    float ox = x, oy = y;
+    switch (align & 0x03) {
+      case 1: x = oy; y = -ox; break;
+      case 2: x = -ox; y = -oy; break;
+      case 3: x = -oy; y = ox; break;
+      case 0: default: break;
+    }
+  }
+
+  inline float extractTempFromImuBuf(const uint8_t *buf) {
+    int16_t raw_temp = (int16_t)(buf[6] << 8 | buf[7]);
+    return ((float)raw_temp / activeSensors.temp_scale) + activeSensors.temp_offset;
+  }
+
+  inline void packNormalizedImuToBuffer(uint8_t *out14, float ax_g, float ay_g, float az_g, float temp_c, float gx_dps, float gy_dps, float gz_dps) {
+    int16_t iax = (int16_t)constrain(ax_g * activeSensors.acc_scale, -32767.0f, 32767.0f);
+    int16_t iay = (int16_t)constrain(ay_g * activeSensors.acc_scale, -32767.0f, 32767.0f);
+    int16_t iaz = (int16_t)constrain(az_g * activeSensors.acc_scale, -32767.0f, 32767.0f);
+    int16_t itm = (int16_t)constrain((temp_c - activeSensors.temp_offset) * activeSensors.temp_scale, -32767.0f, 32767.0f);
+    int16_t igx = (int16_t)constrain(gx_dps * activeSensors.gyro_scale, -32767.0f, 32767.0f);
+    int16_t igy = (int16_t)constrain(gy_dps * activeSensors.gyro_scale, -32767.0f, 32767.0f);
+    int16_t igz = (int16_t)constrain(gz_dps * activeSensors.gyro_scale, -32767.0f, 32767.0f);
+    out14[0] = (uint8_t)((uint16_t)iax >> 8); out14[1] = (uint8_t)((uint16_t)iax & 0xFF);
+    out14[2] = (uint8_t)((uint16_t)iay >> 8); out14[3] = (uint8_t)((uint16_t)iay & 0xFF);
+    out14[4] = (uint8_t)((uint16_t)iaz >> 8); out14[5] = (uint8_t)((uint16_t)iaz & 0xFF);
+    out14[6] = (uint8_t)((uint16_t)itm >> 8); out14[7] = (uint8_t)((uint16_t)itm & 0xFF);
+    out14[8] = (uint8_t)((uint16_t)igx >> 8); out14[9] = (uint8_t)((uint16_t)igx & 0xFF);
+    out14[10] = (uint8_t)((uint16_t)igy >> 8); out14[11] = (uint8_t)((uint16_t)igy & 0xFF);
+    out14[12] = (uint8_t)((uint16_t)igz >> 8); out14[13] = (uint8_t)((uint16_t)igz & 0xFF);
+  }
+
+  void checkBusAndRecover() {
+    if (i2c_error_counter > I2C_MAX_ERRORS) {
+      setFcErrorRam(FC_ERR_I2C_BUS);
+      Wire.end();
+      Wire.setSCL(PB6);
+      Wire.setSDA(PB7);
+      Wire.begin();
+      Wire.setClock(400000);
+      ms5611_phase = MS_IDLE;
+      bmp180_phase = B180_IDLE;
+      i2c_error_counter = 0;
+    }
+  }
+
+  static bool recordI2cError() {
+    i2c_error_counter++;
+    setFcErrorRam(FC_ERR_I2C_BUS);
+    return false;
+  }
+
+  bool readReg(uint8_t addr, uint8_t reg, uint8_t *buf, uint8_t len) {
+    checkBusAndRecover();
+    Wire.beginTransmission(addr);
+    Wire.write(reg);
+    if (Wire.endTransmission(false) != 0) return recordI2cError();
+    if (Wire.requestFrom(addr, len, (uint8_t)true) == len) {
+      for (uint8_t i = 0; i < len; i++) buf[i] = Wire.read();
+      i2c_error_counter = 0;
+      return true;
+    }
+    return recordI2cError();
+  }
+
+  bool readReg16Addr(uint8_t addr, uint16_t reg16, uint8_t *buf, uint8_t len) {
+    checkBusAndRecover();
+    Wire.beginTransmission(addr);
+    Wire.write((uint8_t)(reg16 >> 8));
+    Wire.write((uint8_t)(reg16 & 0xFF));
+    if (Wire.endTransmission(false) != 0) return recordI2cError();
+    if (Wire.requestFrom(addr, len, (uint8_t)true) == len) {
+      for (uint8_t i = 0; i < len; i++) buf[i] = Wire.read();
+      i2c_error_counter = 0;
+      return true;
+    }
+    return recordI2cError();
+  }
+
+  bool writeReg(uint8_t addr, uint8_t reg, uint8_t val) {
+    checkBusAndRecover();
+    Wire.beginTransmission(addr);
+    Wire.write(reg);
+    Wire.write(val);
+    if (Wire.endTransmission() != 0) return recordI2cError();
+    return true;
+  }
+
+  bool writeReg16Addr8Val(uint8_t addr, uint16_t reg16, uint8_t val) {
+    checkBusAndRecover();
+    Wire.beginTransmission(addr);
+    Wire.write((uint8_t)(reg16 >> 8));
+    Wire.write((uint8_t)(reg16 & 0xFF));
+    Wire.write(val);
+    if (Wire.endTransmission() != 0) return recordI2cError();
+    return true;
+  }
+
+  void enableImuI2cBypass() {
+    if (!activeSensors.imu_found) return;
+    if (activeSensors.imu_type == IMU_MPU9250 || activeSensors.imu_type == IMU_MPU6500) {
+      writeReg(activeSensors.imu_addr, 0x6A, 0x00);
+      delay(2);
+      writeReg(activeSensors.imu_addr, 0x37, 0x02);
+      delay(5);
+    }
+  }
+
+  static void initSpecificImu(uint8_t addr, IMUType type) {
+    activeSensors.imu_addr = addr;
+    activeSensors.imu_type = type;
+    if (type == IMU_BMI160) {
+      activeSensors.acc_scale = 16384.0f;
+      activeSensors.gyro_scale = 131.0f;
+      activeSensors.temp_scale = 512.0f;
+      activeSensors.temp_offset = 23.0f;
+      writeReg(addr, 0x7E, 0x11); delay(5);
+      writeReg(addr, 0x7E, 0x15); delay(10);
+      writeReg(addr, 0x40, 0x16);
+      writeReg(addr, 0x41, 0x03);
+      writeReg(addr, 0x42, 0x17);
+      writeReg(addr, 0x43, 0x03);
+    } else if (type == IMU_QMI8658) {
+      activeSensors.acc_scale = 8192.0f;
+      activeSensors.gyro_scale = 128.0f;
+      activeSensors.temp_scale = 256.0f;
+      activeSensors.temp_offset = 0.0f;
+      writeReg(addr, 0x02, 0x60);
+      writeReg(addr, 0x03, 0x15);
+      writeReg(addr, 0x04, 0x45);
+      writeReg(addr, 0x05, 0x11);
+      writeReg(addr, 0x07, 0x03);
+    } else if (type == IMU_ICM20602) {
+      activeSensors.acc_scale = 16384.0f;
+      activeSensors.gyro_scale = 131.0f;
+      activeSensors.temp_scale = 326.8f;
+      activeSensors.temp_offset = 25.0f;
+      writeReg(addr, 0x6B, 0x01); delay(10);
+      writeReg(addr, 0x1A, 0x03);
+      writeReg(addr, 0x1B, 0x00);
+      writeReg(addr, 0x1C, 0x00);
+      writeReg(addr, 0x1D, 0x03);
+    } else {
+      activeSensors.acc_scale = 16384.0f;
+      activeSensors.gyro_scale = 131.0f;
+      activeSensors.temp_scale = 340.0f;
+      activeSensors.temp_offset = 25.0f;
+      writeReg(addr, 0x6B, 0x00); delay(10);
+      writeReg(addr, 0x1A, 0x03);
+      writeReg(addr, 0x1B, 0x00);
+      writeReg(addr, 0x1C, 0x00);
+      if (type == IMU_MPU6500 || type == IMU_MPU9250) {
+        writeReg(addr, 0x1D, 0x03);
+      }
+    }
+    activeSensors.imu_found = true;
+    err_imu_fail = false;
+    if ((type == IMU_MPU9250 || type == IMU_MPU6500) && currentConfig.com_en) {
+      enableImuI2cBypass();
+    }
+  }
+
+  void detectIMU() {
+    uint8_t id = 0;
+    uint8_t req_id = currentConfig.imu_id;
+    activeSensors.imu_found = false;
+    activeSensors.imu_type = IMU_UNKNOWN;
+    activeSensors.temp_offset = 25.0f;
+
+    if (req_id == IMU_BMI160) {
+      for (uint8_t addr : (const uint8_t[]){0x68, 0x69}) {
+        if (readReg(addr, 0x00, &id, 1) && id == 0xD1) { initSpecificImu(addr, IMU_BMI160); return; }
+      }
+    } else if (req_id == IMU_QMI8658) {
+      for (uint8_t addr : (const uint8_t[]){0x6A, 0x6B, 0x68, 0x69}) {
+        if (readReg(addr, 0x00, &id, 1) && id == 0x05) { initSpecificImu(addr, IMU_QMI8658); return; }
+      }
+    } else if (req_id == IMU_MPU6050 || req_id == IMU_MPU6500 || req_id == IMU_MPU9250 || req_id == IMU_ICM20602) {
+      for (uint8_t addr : (const uint8_t[]){0x68, 0x69}) {
+        if (!readReg(addr, 0x75, &id, 1)) continue;
+        if (req_id == IMU_MPU6050 && id == 0x68) { initSpecificImu(addr, IMU_MPU6050); return; }
+        if (req_id == IMU_MPU6500 && id == 0x70) { initSpecificImu(addr, IMU_MPU6500); return; }
+        if (req_id == IMU_MPU9250 && (id == 0x71 || id == 0x73 || id == 0x70)) { initSpecificImu(addr, IMU_MPU9250); return; }
+        if (req_id == IMU_ICM20602 && id == 0x12) { initSpecificImu(addr, IMU_ICM20602); return; }
+      }
+    } else {
+      for (uint8_t addr : (const uint8_t[]){0x68, 0x69}) {
+        if (readReg(addr, 0x00, &id, 1) && id == 0xD1) { initSpecificImu(addr, IMU_BMI160); return; }
+      }
+      for (uint8_t addr : (const uint8_t[]){0x6A, 0x6B, 0x68, 0x69}) {
+        if (readReg(addr, 0x00, &id, 1) && id == 0x05) { initSpecificImu(addr, IMU_QMI8658); return; }
+      }
+      for (uint8_t addr : (const uint8_t[]){0x68, 0x69}) {
+        if (!readReg(addr, 0x75, &id, 1)) continue;
+        if (id == 0x68) { initSpecificImu(addr, IMU_MPU6050); return; }
+        if (id == 0x70) {
+          uint8_t ak_id = 0;
+          writeReg(addr, 0x6A, 0x00); delay(2);
+          writeReg(addr, 0x37, 0x02); delay(5);
+          IMUType t = (readReg(0x0C, 0x00, &ak_id, 1) && ak_id == 0x48) ? IMU_MPU9250 : IMU_MPU6500;
+          initSpecificImu(addr, t);
+          return;
+        }
+        if (id == 0x71 || id == 0x73) { initSpecificImu(addr, IMU_MPU9250); return; }
+        if (id == 0x12) { initSpecificImu(addr, IMU_ICM20602); return; }
+      }
+    }
+
+    err_imu_fail = true;
+    setFcErrorRam(FC_ERR_IMU_FAIL);
+  }
+
+  bool readMPU6050(uint8_t *buffer) {
+    if (!activeSensors.imu_found) return false;
+    if (activeSensors.imu_type == IMU_BMI160) {
+      uint8_t raw[14];
+      if (!readReg(activeSensors.imu_addr, 0x0C, raw, 14)) return false;
+      int16_t gx_raw = (int16_t)((uint16_t)raw[1] << 8 | raw[0]);
+      int16_t gy_raw = (int16_t)((uint16_t)raw[3] << 8 | raw[2]);
+      int16_t gz_raw = (int16_t)((uint16_t)raw[5] << 8 | raw[4]);
+      int16_t ax_raw = (int16_t)((uint16_t)raw[7] << 8 | raw[6]);
+      int16_t ay_raw = (int16_t)((uint16_t)raw[9] << 8 | raw[8]);
+      int16_t az_raw = (int16_t)((uint16_t)raw[11] << 8 | raw[10]);
+      int16_t t_raw = (int16_t)((uint16_t)raw[13] << 8 | raw[12]);
+      packNormalizedImuToBuffer(buffer,
+                                (float)ax_raw / activeSensors.acc_scale,
+                                (float)ay_raw / activeSensors.acc_scale,
+                                (float)az_raw / activeSensors.acc_scale,
+                                ((float)t_raw / activeSensors.temp_scale) + activeSensors.temp_offset,
+                                (float)gx_raw / activeSensors.gyro_scale,
+                                (float)gy_raw / activeSensors.gyro_scale,
+                                (float)gz_raw / activeSensors.gyro_scale);
+      return true;
+    }
+    if (activeSensors.imu_type == IMU_QMI8658) {
+      uint8_t t_buf[2], xyz_buf[12];
+      if (!readReg(activeSensors.imu_addr, 0x33, t_buf, 2)) return false;
+      if (!readReg(activeSensors.imu_addr, 0x35, xyz_buf, 12)) return false;
+      int16_t t_raw = (int16_t)((uint16_t)t_buf[1] << 8 | t_buf[0]);
+      int16_t ax_raw = (int16_t)((uint16_t)xyz_buf[1] << 8 | xyz_buf[0]);
+      int16_t ay_raw = (int16_t)((uint16_t)xyz_buf[3] << 8 | xyz_buf[2]);
+      int16_t az_raw = (int16_t)((uint16_t)xyz_buf[5] << 8 | xyz_buf[4]);
+      int16_t gx_raw = (int16_t)((uint16_t)xyz_buf[7] << 8 | xyz_buf[6]);
+      int16_t gy_raw = (int16_t)((uint16_t)xyz_buf[9] << 8 | xyz_buf[8]);
+      int16_t gz_raw = (int16_t)((uint16_t)xyz_buf[11] << 8 | xyz_buf[10]);
+      packNormalizedImuToBuffer(buffer,
+                                (float)ax_raw / activeSensors.acc_scale,
+                                (float)ay_raw / activeSensors.acc_scale,
+                                (float)az_raw / activeSensors.acc_scale,
+                                ((float)t_raw / activeSensors.temp_scale) + activeSensors.temp_offset,
+                                (float)gx_raw / activeSensors.gyro_scale,
+                                (float)gy_raw / activeSensors.gyro_scale,
+                                (float)gz_raw / activeSensors.gyro_scale);
+      return true;
+    }
+    return readReg(activeSensors.imu_addr, 0x3B, buffer, 14);
+  }
+
+  inline float pressureToAltitudeMeters(float pressure_pa) {
+    return 44330.0f * (1.0f - powf(pressure_pa / 101325.0f, 0.1903f));
+  }
+
+  inline bool isPressureValidPa(float pressure_pa) {
+    return (pressure_pa >= 30000.0f && pressure_pa <= 125000.0f && !isnan(pressure_pa) && !isinf(pressure_pa));
+  }
+
+  static void markBaroError() {
+    err_aux_i2c_fail = true;
+    setFcErrorRam(FC_ERR_BARO_FAIL);
+  }
+
+  static float dps310ScaleFromReg(uint8_t prc_code) {
+    switch (prc_code & 0x07) {
+      case 0: return 524288.0f; case 1: return 1572864.0f; case 2: return 3670016.0f; case 3: return 7864320.0f;
+      case 4: return 253952.0f; case 5: return 516096.0f; case 6: return 1040384.0f; case 7: return 2088960.0f;
+      default: return 524288.0f;
+    }
+  }
+
+  bool readBme280PressurePa(float &pressure_pa) {
+    uint8_t raw[6];
+    if (!readReg(activeSensors.baro_addr, 0xF7, raw, 6)) return false;
+    int32_t adc_P = ((int32_t)raw[0] << 12) | ((int32_t)raw[1] << 4) | ((int32_t)raw[2] >> 4);
+    int32_t adc_T = ((int32_t)raw[3] << 12) | ((int32_t)raw[4] << 4) | ((int32_t)raw[5] >> 4);
+    int32_t var1_t = ((((adc_T >> 3) - ((int32_t)baroCal.dig_T1 << 1))) * ((int32_t)baroCal.dig_T2)) >> 11;
+    int32_t var2_t = (((((adc_T >> 4) - ((int32_t)baroCal.dig_T1)) * ((adc_T >> 4) - ((int32_t)baroCal.dig_T1))) >> 12) * ((int32_t)baroCal.dig_T3)) >> 14;
+    int32_t t_fine = var1_t + var2_t;
+    int64_t var1_p = ((int64_t)t_fine) - 128000;
+    int64_t var2_p = var1_p * var1_p * (int64_t)baroCal.dig_P6 + ((var1_p * (int64_t)baroCal.dig_P5) << 17) + (((int64_t)baroCal.dig_P4) << 35);
+    var1_p = ((var1_p * var1_p * (int64_t)baroCal.dig_P3) >> 8) + ((var1_p * (int64_t)baroCal.dig_P2) << 12);
+    var1_p = (((((int64_t)1) << 47) + var1_p)) * ((int64_t)baroCal.dig_P1) >> 33;
+    if (var1_p == 0) return false;
+    int64_t p = 1048576 - adc_P;
+    p = (((p << 31) - var2_p) * 3125) / var1_p;
+    var1_p = (((int64_t)baroCal.dig_P9) * (p >> 13) * (p >> 13)) >> 25;
+    var2_p = (((int64_t)baroCal.dig_P8) * p) >> 19;
+    p = ((p + var1_p + var2_p) >> 8) + (((int64_t)baroCal.dig_P7) << 4);
+    pressure_pa = (float)p / 256.0f;
+    return isPressureValidPa(pressure_pa);
+  }
+
+  bool computeMs5611AltitudeFromRaw(uint32_t d1, uint32_t d2, float &raw_alt_m) {
+    if (d1 == 0 || d2 == 0) return false;
+    int32_t dT = (int32_t)d2 - ((int32_t)baroCal.ms_c[5] << 8);
+    int64_t temp = 2000LL + (((int64_t)dT * baroCal.ms_c[6]) >> 23);
+    int64_t off = ((int64_t)baroCal.ms_c[2] << 16) + (((int64_t)baroCal.ms_c[4] * dT) >> 7);
+    int64_t sens = ((int64_t)baroCal.ms_c[1] << 15) + (((int64_t)baroCal.ms_c[3] * dT) >> 8);
+    if (temp < 2000) {
+      int64_t t2 = ((int64_t)dT * dT) >> 31;
+      int64_t dt_sub = temp - 2000LL;
+      int64_t off2 = (5LL * dt_sub * dt_sub) >> 1;
+      int64_t sens2 = (5LL * dt_sub * dt_sub) >> 2;
+      if (temp < -1500) {
+        int64_t dt15 = temp + 1500LL;
+        off2 += 7LL * dt15 * dt15;
+        sens2 += (11LL * dt15 * dt15) >> 1;
+      }
+      temp -= t2; off -= off2; sens -= sens2;
+    }
+    int64_t press_x10 = (((((int64_t)d1 * sens) >> 21) - off) >> 15);
+    float pressure_pa = (float)press_x10 * 10.0f;
+    if (!isPressureValidPa(pressure_pa)) { markBaroError(); return false; }
+    raw_alt_m = pressureToAltitudeMeters(pressure_pa);
+    return true;
+  }
+
+  float computeBmp180PressurePa(int32_t ut, int32_t up, uint8_t oss = 1) {
+    int32_t x1 = ((ut - (int32_t)baroCal.ac6) * (int32_t)baroCal.ac5) >> 15;
+    int32_t denom = x1 + (int32_t)baroCal.md;
+    if (denom == 0) denom = 1;
+    int32_t x2 = ((int32_t)baroCal.mc << 11) / denom;
+    int32_t b5 = x1 + x2;
+    int32_t b6 = b5 - 4000;
+    x1 = ((int32_t)baroCal.b2 * ((b6 * b6) >> 12)) >> 11;
+    x2 = ((int32_t)baroCal.ac2 * b6) >> 11;
+    int32_t x3 = x1 + x2;
+    int32_t b3 = (((((int32_t)baroCal.ac1) * 4 + x3) << oss) + 2) >> 2;
+    x1 = ((int32_t)baroCal.ac3 * b6) >> 13;
+    x2 = ((int32_t)baroCal.b1 * ((b6 * b6) >> 12)) >> 16;
+    x3 = ((x1 + x2) + 2) >> 2;
+    uint32_t b4 = ((uint32_t)baroCal.ac4 * (uint32_t)(x3 + 32768)) >> 15;
+    if (b4 == 0) b4 = 1;
+    uint32_t b7 = ((uint32_t)up - (uint32_t)b3) * (50000UL >> oss);
+    int32_t p = (b7 < 0x80000000UL) ? (int32_t)((b7 * 2UL) / b4) : (int32_t)((b7 / b4) * 2UL);
+    x1 = (p >> 8) * (p >> 8);
+    x1 = (x1 * 3038) >> 16;
+    x2 = (-7357 * p) >> 16;
+    return (float)(p + ((x1 + x2 + 3791) >> 4));
+  }
+
+  bool stepBmp180Phased(uint32_t now_ms, float &raw_alt_m) {
+    constexpr uint8_t oss = 1;
+    if (bmp180_phase == B180_IDLE) {
+      if (!writeReg(activeSensors.baro_addr, 0xF4, 0x2E)) { markBaroError(); return false; }
+      bmp180_conv_start_ms = now_ms;
+      bmp180_phase = B180_WAIT_TEMP;
+      return false;
+    }
+    if (bmp180_phase == B180_WAIT_TEMP) {
+      if ((now_ms - bmp180_conv_start_ms) < BMP180_TEMP_DELAY_MS) return false;
+      uint8_t t_buf[2];
+      if (!readReg(activeSensors.baro_addr, 0xF6, t_buf, 2)) { bmp180_phase = B180_IDLE; return false; }
+      bmp180_ut_raw = (int32_t)((uint16_t)t_buf[0] << 8 | t_buf[1]);
+      if (!writeReg(activeSensors.baro_addr, 0xF4, (uint8_t)(0x34 + (oss << 6)))) { bmp180_phase = B180_IDLE; return false; }
+      bmp180_conv_start_ms = now_ms;
+      bmp180_phase = B180_WAIT_PRESS;
+      return false;
+    }
+    if ((now_ms - bmp180_conv_start_ms) < BMP180_PRESS_DELAY_MS) return false;
+    uint8_t p_buf[3];
+    if (!readReg(activeSensors.baro_addr, 0xF6, p_buf, 3)) { bmp180_phase = B180_IDLE; return false; }
+    int32_t up = (int32_t)(((((uint32_t)p_buf[0] << 16) | ((uint32_t)p_buf[1] << 8) | p_buf[2])) >> (8 - oss));
+    bmp180_phase = B180_IDLE;
+    float pressure_pa = computeBmp180PressurePa(bmp180_ut_raw, up, oss);
+    if (!isPressureValidPa(pressure_pa)) { markBaroError(); return false; }
+    raw_alt_m = pressureToAltitudeMeters(pressure_pa);
+    return true;
+  }
+
+  bool readBmp388PressurePa(float &pressure_pa) {
+    uint8_t d[6];
+    if (!readReg(activeSensors.baro_addr, 0x04, d, 6)) return false;
+    uint32_t uncomp_p = ((uint32_t)d[2] << 16) | ((uint32_t)d[1] << 8) | d[0];
+    uint32_t uncomp_t = ((uint32_t)d[5] << 16) | ((uint32_t)d[4] << 8) | d[3];
+    float partial_data1 = (float)uncomp_t - baroCal.b3_t1;
+    float t_lin = (partial_data1 * baroCal.b3_t2) + (partial_data1 * partial_data1) * baroCal.b3_t3;
+    float out1 = baroCal.b3_p5 + baroCal.b3_p6 * t_lin + baroCal.b3_p7 * (t_lin * t_lin) + baroCal.b3_p8 * (t_lin * t_lin * t_lin);
+    float out2 = (float)uncomp_p * (baroCal.b3_p1 + baroCal.b3_p2 * t_lin + baroCal.b3_p3 * (t_lin * t_lin) + baroCal.b3_p4 * (t_lin * t_lin * t_lin));
+    float p_sq = (float)uncomp_p * (float)uncomp_p;
+    float p_out4 = p_sq * (baroCal.b3_p9 + baroCal.b3_p10 * t_lin) + (p_sq * (float)uncomp_p) * baroCal.b3_p11;
+    pressure_pa = out1 + out2 + p_out4;
+    return isPressureValidPa(pressure_pa);
+  }
+
+  bool readDps310PressurePa(float &pressure_pa) {
+    uint8_t d[6];
+    if (!readReg(activeSensors.baro_addr, 0x00, d, 6)) return false;
+    int32_t praw = (int32_t)(((uint32_t)d[0] << 16) | ((uint32_t)d[1] << 8) | d[2]);
+    if (praw & 0x00800000) praw |= 0xFF000000;
+    int32_t traw = (int32_t)(((uint32_t)d[3] << 16) | ((uint32_t)d[4] << 8) | d[5]);
+    if (traw & 0x00800000) traw |= 0xFF000000;
+    float traw_sc = (float)traw / baroCal.dps_kt;
+    float praw_sc = (float)praw / baroCal.dps_kp;
+    pressure_pa = (float)baroCal.dps_c00 +
+                  praw_sc * ((float)baroCal.dps_c10 + praw_sc * ((float)baroCal.dps_c20 + praw_sc * (float)baroCal.dps_c30)) +
+                  traw_sc * ((float)baroCal.dps_c01 + praw_sc * ((float)baroCal.dps_c11 + praw_sc * (float)baroCal.dps_c21));
+    return isPressureValidPa(pressure_pa);
+  }
+
+  bool stepMs5611Phased(uint32_t now_ms, float &raw_alt_m) {
+    if (ms5611_phase == MS_IDLE) {
+      if (!writeReg(activeSensors.baro_addr, 0x48, 0x00)) { markBaroError(); return false; }
+      ms5611_conv_start_ms = now_ms;
+      ms5611_phase = MS_WAIT_D1;
+      return false;
+    }
+    if (ms5611_phase == MS_WAIT_D1) {
+      if ((now_ms - ms5611_conv_start_ms) < MS5611_CONV_DELAY_MS) return false;
+      uint8_t adc_buf[3];
+      if (!readReg(activeSensors.baro_addr, 0x00, adc_buf, 3)) { ms5611_phase = MS_IDLE; return false; }
+      ms5611_d1_raw = ((uint32_t)adc_buf[0] << 16) | ((uint32_t)adc_buf[1] << 8) | adc_buf[2];
+      if (!writeReg(activeSensors.baro_addr, 0x58, 0x00)) { ms5611_phase = MS_IDLE; markBaroError(); return false; }
+      ms5611_conv_start_ms = now_ms;
+      ms5611_phase = MS_WAIT_D2;
+      return false;
+    }
+    if ((now_ms - ms5611_conv_start_ms) < MS5611_CONV_DELAY_MS) return false;
+    uint8_t adc_buf[3];
+    if (!readReg(activeSensors.baro_addr, 0x00, adc_buf, 3)) { ms5611_phase = MS_IDLE; return false; }
+    ms5611_d2_raw = ((uint32_t)adc_buf[0] << 16) | ((uint32_t)adc_buf[1] << 8) | adc_buf[2];
+    ms5611_phase = MS_IDLE;
+    return computeMs5611AltitudeFromRaw(ms5611_d1_raw, ms5611_d2_raw, raw_alt_m);
+  }
+
+  bool readRawBaroAltitudeBlocking(float &raw_alt_m) {
+    if (!activeSensors.baro_found || !baroCal.valid) return false;
+    if (activeSensors.baro_type == BARO_MS5611) {
+      uint8_t adc_buf[3];
+      if (!writeReg(activeSensors.baro_addr, 0x48, 0x00)) return false;
+      delay(MS5611_CONV_DELAY_MS);
+      if (!readReg(activeSensors.baro_addr, 0x00, adc_buf, 3)) return false;
+      uint32_t d1 = ((uint32_t)adc_buf[0] << 16) | ((uint32_t)adc_buf[1] << 8) | adc_buf[2];
+      if (!writeReg(activeSensors.baro_addr, 0x58, 0x00)) return false;
+      delay(MS5611_CONV_DELAY_MS);
+      if (!readReg(activeSensors.baro_addr, 0x00, adc_buf, 3)) return false;
+      uint32_t d2 = ((uint32_t)adc_buf[0] << 16) | ((uint32_t)adc_buf[1] << 8) | adc_buf[2];
+      return computeMs5611AltitudeFromRaw(d1, d2, raw_alt_m);
+    }
+    if (activeSensors.baro_type == BARO_BMP180) {
+      constexpr uint8_t oss = 1;
+      uint8_t t_buf[2], p_buf[3];
+      if (!writeReg(activeSensors.baro_addr, 0xF4, 0x2E)) return false;
+      delay(BMP180_TEMP_DELAY_MS);
+      if (!readReg(activeSensors.baro_addr, 0xF6, t_buf, 2)) return false;
+      int32_t ut = (int32_t)((uint16_t)t_buf[0] << 8 | t_buf[1]);
+      if (!writeReg(activeSensors.baro_addr, 0xF4, (uint8_t)(0x34 + (oss << 6)))) return false;
+      delay(BMP180_PRESS_DELAY_MS);
+      if (!readReg(activeSensors.baro_addr, 0xF6, p_buf, 3)) return false;
+      int32_t up = (int32_t)(((((uint32_t)p_buf[0] << 16) | ((uint32_t)p_buf[1] << 8) | p_buf[2])) >> (8 - oss));
+      float p_pa = computeBmp180PressurePa(ut, up, oss);
+      if (!isPressureValidPa(p_pa)) return false;
+      raw_alt_m = pressureToAltitudeMeters(p_pa);
+      return true;
+    }
+    float p_pa = 0.0f;
+    if (activeSensors.baro_type == BARO_BMP388 || activeSensors.baro_type == BARO_BMP390) {
+      if (!readBmp388PressurePa(p_pa)) return false;
+    } else if (activeSensors.baro_type == BARO_DPS310) {
+      if (!readDps310PressurePa(p_pa)) return false;
+    } else {
+      if (!readBme280PressurePa(p_pa)) return false;
+    }
+    raw_alt_m = pressureToAltitudeMeters(p_pa);
+    return true;
+  }
+
+  void initBaroHardware() {
+    if (!activeSensors.baro_found) return;
+    baroCal.valid = false;
+    ms5611_phase = MS_IDLE;
+    bmp180_phase = B180_IDLE;
+
+    if (activeSensors.baro_type == BARO_BMP280 || activeSensors.baro_type == BARO_BME280) {
+      uint8_t cal[24];
+      if (readReg(activeSensors.baro_addr, 0x88, cal, 24)) {
+        baroCal.dig_T1 = (uint16_t)(cal[1] << 8 | cal[0]);
+        baroCal.dig_T2 = (int16_t)(cal[3] << 8 | cal[2]);
+        baroCal.dig_T3 = (int16_t)(cal[5] << 8 | cal[4]);
+        baroCal.dig_P1 = (uint16_t)(cal[7] << 8 | cal[6]);
+        baroCal.dig_P2 = (int16_t)(cal[9] << 8 | cal[8]);
+        baroCal.dig_P3 = (int16_t)(cal[11] << 8 | cal[10]);
+        baroCal.dig_P4 = (int16_t)(cal[13] << 8 | cal[12]);
+        baroCal.dig_P5 = (int16_t)(cal[15] << 8 | cal[14]);
+        baroCal.dig_P6 = (int16_t)(cal[17] << 8 | cal[16]);
+        baroCal.dig_P7 = (int16_t)(cal[19] << 8 | cal[18]);
+        baroCal.dig_P8 = (int16_t)(cal[21] << 8 | cal[20]);
+        baroCal.dig_P9 = (int16_t)(cal[23] << 8 | cal[22]);
+        baroCal.valid = (baroCal.dig_T1 != 0 && baroCal.dig_P1 != 0);
+      }
+      writeReg(activeSensors.baro_addr, 0xF4, 0x2F);
+    } else if (activeSensors.baro_type == BARO_BMP180) {
+      uint8_t cal[22];
+      if (readReg(activeSensors.baro_addr, 0xAA, cal, 22)) {
+        baroCal.ac1 = (int16_t)(cal[0] << 8 | cal[1]);
+        baroCal.ac2 = (int16_t)(cal[2] << 8 | cal[3]);
+        baroCal.ac3 = (int16_t)(cal[4] << 8 | cal[5]);
+        baroCal.ac4 = (uint16_t)(cal[6] << 8 | cal[7]);
+        baroCal.ac5 = (uint16_t)(cal[8] << 8 | cal[9]);
+        baroCal.ac6 = (uint16_t)(cal[10] << 8 | cal[11]);
+        baroCal.b1 = (int16_t)(cal[12] << 8 | cal[13]);
+        baroCal.b2 = (int16_t)(cal[14] << 8 | cal[15]);
+        baroCal.mc = (int16_t)(cal[18] << 8 | cal[19]);
+        baroCal.md = (int16_t)(cal[20] << 8 | cal[21]);
+        baroCal.valid = (baroCal.ac4 != 0 && baroCal.ac5 != 0 && baroCal.ac6 != 0);
+      }
+    } else if (activeSensors.baro_type == BARO_BMP388 || activeSensors.baro_type == BARO_BMP390) {
+      uint8_t nvm[21];
+      if (readReg(activeSensors.baro_addr, 0x31, nvm, 21)) {
+        uint16_t u_t1 = (uint16_t)(nvm[1] << 8 | nvm[0]);
+        uint16_t u_t2 = (uint16_t)(nvm[3] << 8 | nvm[2]);
+        int8_t s_t3 = (int8_t)nvm[4];
+        int16_t s_p1 = (int16_t)(nvm[6] << 8 | nvm[5]);
+        int16_t s_p2 = (int16_t)(nvm[8] << 8 | nvm[7]);
+        int8_t s_p3 = (int8_t)nvm[9];
+        int8_t s_p4 = (int8_t)nvm[10];
+        uint16_t u_p5 = (uint16_t)(nvm[12] << 8 | nvm[11]);
+        uint16_t u_p6 = (uint16_t)(nvm[14] << 8 | nvm[13]);
+        int8_t s_p7 = (int8_t)nvm[15];
+        int8_t s_p8 = (int8_t)nvm[16];
+        int16_t s_p9 = (int16_t)(nvm[18] << 8 | nvm[17]);
+        int8_t s_p10 = (int8_t)nvm[19];
+        int8_t s_p11 = (int8_t)nvm[20];
+        baroCal.b3_t1 = (float)u_t1 / powf(2.0f, -8.0f);
+        baroCal.b3_t2 = (float)u_t2 / powf(2.0f, 30.0f);
+        baroCal.b3_t3 = (float)s_t3 / powf(2.0f, 48.0f);
+        baroCal.b3_p1 = ((float)s_p1 - 16384.0f) / powf(2.0f, 20.0f);
+        baroCal.b3_p2 = ((float)s_p2 - 16384.0f) / powf(2.0f, 29.0f);
+        baroCal.b3_p3 = (float)s_p3 / powf(2.0f, 32.0f);
+        baroCal.b3_p4 = (float)s_p4 / powf(2.0f, 37.0f);
+        baroCal.b3_p5 = (float)u_p5 / powf(2.0f, -3.0f);
+        baroCal.b3_p6 = (float)u_p6 / powf(2.0f, 6.0f);
+        baroCal.b3_p7 = (float)s_p7 / powf(2.0f, 8.0f);
+        baroCal.b3_p8 = (float)s_p8 / powf(2.0f, 15.0f);
+        baroCal.b3_p9 = (float)s_p9 / powf(2.0f, 48.0f);
+        baroCal.b3_p10 = (float)s_p10 / powf(2.0f, 48.0f);
+        baroCal.b3_p11 = (float)s_p11 / powf(2.0f, 65.0f);
+        baroCal.valid = (u_t1 != 0 && u_t2 != 0);
+      }
+      writeReg(activeSensors.baro_addr, 0x1C, 0x03);
+      writeReg(activeSensors.baro_addr, 0x1F, 0x04);
+      writeReg(activeSensors.baro_addr, 0x1B, 0x33);
+    } else if (activeSensors.baro_type == BARO_DPS310) {
+      uint8_t c[18];
+      if (readReg(activeSensors.baro_addr, 0x10, c, 18)) {
+        int32_t c00 = (int32_t)(((uint32_t)c[3] << 12) | ((uint32_t)c[4] << 4) | (c[5] >> 4));
+        if (c00 & 0x00080000) c00 |= 0xFFF00000;
+        int32_t c10 = (int32_t)(((uint32_t)(c[5] & 0x0F) << 16) | ((uint32_t)c[6] << 8) | c[7]);
+        if (c10 & 0x00080000) c10 |= 0xFFF00000;
+        baroCal.dps_c00 = c00; baroCal.dps_c10 = c10;
+        baroCal.dps_c01 = (int16_t)((uint16_t)c[8] << 8 | c[9]);
+        baroCal.dps_c11 = (int16_t)((uint16_t)c[10] << 8 | c[11]);
+        baroCal.dps_c20 = (int16_t)((uint16_t)c[12] << 8 | c[13]);
+        baroCal.dps_c21 = (int16_t)((uint16_t)c[14] << 8 | c[15]);
+        baroCal.dps_c30 = (int16_t)((uint16_t)c[16] << 8 | c[17]);
+        baroCal.valid = (c00 != 0 || c10 != 0);
+      }
+      constexpr uint8_t pm_prc = 4, tm_prc = 4;
+      writeReg(activeSensors.baro_addr, 0x06, (uint8_t)(0x50 | pm_prc));
+      writeReg(activeSensors.baro_addr, 0x07, (uint8_t)(0x80 | tm_prc));
+      writeReg(activeSensors.baro_addr, 0x09, 0x0C);
+      baroCal.dps_kp = dps310ScaleFromReg(pm_prc);
+      baroCal.dps_kt = dps310ScaleFromReg(tm_prc);
+      writeReg(activeSensors.baro_addr, 0x08, 0x07);
+    } else if (activeSensors.baro_type == BARO_MS5611) {
+      uint8_t prom[2];
+      bool ok = true;
+      for (uint8_t i = 1; i <= 6; i++) {
+        if (readReg(activeSensors.baro_addr, 0xA0 + (i * 2), prom, 2)) {
+          baroCal.ms_c[i] = ((uint16_t)prom[0] << 8) | prom[1];
+          if (baroCal.ms_c[i] == 0) ok = false;
+        } else {
+          ok = false;
+        }
+      }
+      baroCal.valid = ok;
+    }
+    if (!baroCal.valid && currentConfig.baro_en) markBaroError();
+  }
+
+  static void bindAndInitBaro(uint8_t addr, BaroType t) {
+    activeSensors.baro_addr = addr;
+    activeSensors.baro_type = t;
+    activeSensors.baro_found = true;
+    initBaroHardware();
+  }
+
+  void detectBaro() {
+    uint8_t id = 0;
+    uint8_t req_id = currentConfig.bar_id;
+    activeSensors.baro_found = false;
+    activeSensors.baro_type = BARO_UNKNOWN;
+    baroCal.valid = false;
+
+    for (uint8_t addr : (const uint8_t[]){0x76, 0x77}) {
+      if ((req_id == BARO_DPS310 || req_id == BARO_UNKNOWN) && readReg(addr, 0x0D, &id, 1) && id == 0x10) {
+        bindAndInitBaro(addr, BARO_DPS310); return;
+      }
+      if ((req_id == BARO_BMP180 || req_id == BARO_BMP388 || req_id == BARO_BMP280 ||
+           req_id == BARO_BME280 || req_id == BARO_BMP390 || req_id == BARO_UNKNOWN) &&
+          readReg(addr, 0xD0, &id, 1)) {
+        if ((req_id == BARO_BMP180 || req_id == BARO_UNKNOWN) && id == 0x55) { bindAndInitBaro(addr, BARO_BMP180); return; }
+        if ((req_id == BARO_BMP388 || req_id == BARO_UNKNOWN) && id == 0x50) { bindAndInitBaro(addr, BARO_BMP388); return; }
+        if ((req_id == BARO_BMP280 || req_id == BARO_UNKNOWN) && id == 0x58) { bindAndInitBaro(addr, BARO_BMP280); return; }
+        if (id == 0x60) {
+          uint8_t ctrl_meas = 0;
+          bool has_ctrl = readReg(addr, 0xF4, &ctrl_meas, 1);
+          BaroType detected = (has_ctrl && ctrl_meas != 0x00) ? BARO_BME280 : BARO_BMP390;
+          if (req_id == BARO_UNKNOWN || req_id == (uint8_t)detected) {
+            bindAndInitBaro(addr, detected); return;
+          }
+        }
+      }
+      if (req_id == BARO_MS5611 || req_id == BARO_UNKNOWN) {
+        uint8_t prom[2];
+        if (readReg(addr, 0xA2, prom, 2) && (prom[0] != 0 || prom[1] != 0)) {
+          bindAndInitBaro(addr, BARO_MS5611); return;
+        }
+      }
+    }
+
+    if (currentConfig.baro_en) markBaroError();
+  }
+
+  bool stepBaroNonBlocking(uint32_t now_ms, float &alt_m) {
+    if (!currentConfig.baro_en || !activeSensors.baro_found || !baroCal.valid) return false;
+    float raw_alt = 0.0f;
+    if (activeSensors.baro_type == BARO_MS5611) {
+      if (!stepMs5611Phased(now_ms, raw_alt)) return false;
+    } else if (activeSensors.baro_type == BARO_BMP180) {
+      if (!stepBmp180Phased(now_ms, raw_alt)) return false;
+    } else {
+      float p_pa = 0.0f;
+      bool ok = (activeSensors.baro_type == BARO_BMP388 || activeSensors.baro_type == BARO_BMP390)
+                  ? readBmp388PressurePa(p_pa)
+                  : (activeSensors.baro_type == BARO_DPS310)
+                      ? readDps310PressurePa(p_pa)
+                      : readBme280PressurePa(p_pa);
+      if (!ok) { markBaroError(); return false; }
+      raw_alt = pressureToAltitudeMeters(p_pa);
+    }
+    if (!baro_cal_ready) {
+      baro_ground_alt_m = raw_alt;
+      lpf_baro_alt.output = 0.0f;
+      baro_cal_ready = true;
+    }
+    alt_m = lpf_baro_alt.update(raw_alt - baro_ground_alt_m);
+    return true;
+  }
+
+  void calibrateBaro() {
+    if (!activeSensors.baro_found || !baroCal.valid) { Serial.println("ERR: baro"); return; }
+    float sum_alt = 0.0f;
+    uint8_t valid_samples = 0;
+    for (uint8_t i = 0; i < 12; i++) {
+      float raw_alt = 0.0f;
+      if (readRawBaroAltitudeBlocking(raw_alt)) { sum_alt += raw_alt; valid_samples++; }
+    }
+    if (valid_samples > 0) {
+      baro_ground_alt_m = sum_alt / (float)valid_samples;
+      lpf_baro_alt.output = 0.0f; lpf_baro_vz.output = 0.0f;
+      baro_alt_m = 0.0f; baro_vz_mps = 0.0f;
+      ms5611_phase = MS_IDLE; bmp180_phase = B180_IDLE;
+      baro_cal_ready = true;
+      Serial.println("OK: cal_baro");
+    } else {
+      Serial.println("ERR: cal_baro");
+    }
+  }
+
+  void initMagHardware() {
+    if (!activeSensors.mag_found) return;
+    magCal.asa_x = 1.0f; magCal.asa_y = 1.0f; magCal.asa_z = 1.0f;
+    if (activeSensors.mag_type == MAG_AK8963) {
+      writeReg(activeSensors.mag_addr, 0x0A, 0x00); delay(5);
+      writeReg(activeSensors.mag_addr, 0x0A, 0x1F); delay(5);
+      uint8_t asa[3] = {128, 128, 128};
+      if (readReg(activeSensors.mag_addr, 0x10, asa, 3)) {
+        magCal.asa_x = (((float)asa[0] - 128.0f) / 256.0f) + 1.0f;
+        magCal.asa_y = (((float)asa[1] - 128.0f) / 256.0f) + 1.0f;
+        magCal.asa_z = (((float)asa[2] - 128.0f) / 256.0f) + 1.0f;
+      }
+      writeReg(activeSensors.mag_addr, 0x0A, 0x00); delay(5);
+      writeReg(activeSensors.mag_addr, 0x0A, 0x16); delay(5);
+      magCal.scale_x = 0.15f; magCal.scale_y = 0.15f; magCal.scale_z = 0.15f;
+    } else if (activeSensors.mag_type == MAG_AK09911) {
+      writeReg(activeSensors.mag_addr, 0x31, 0x00); delay(3);
+      writeReg(activeSensors.mag_addr, 0x31, 0x04); delay(3);
+      magCal.scale_x = 0.6f; magCal.scale_y = 0.6f; magCal.scale_z = 0.6f;
+    } else if (activeSensors.mag_type == MAG_HSCDTD008A) {
+      writeReg(activeSensors.mag_addr, 0x1E, 0x10); delay(2);
+      writeReg(activeSensors.mag_addr, 0x1B, 0x80); delay(3);
+      magCal.scale_x = 0.15f; magCal.scale_y = 0.15f; magCal.scale_z = 0.15f;
+    } else if (activeSensors.mag_type == MAG_QMC5883L) {
+      writeReg(activeSensors.mag_addr, 0x0B, 0x01); delay(2);
+      writeReg(activeSensors.mag_addr, 0x09, 0x0D); delay(2);
+      float uT_per_lsb = (1.0f / 12000.0f) * 100.0f;
+      magCal.scale_x = uT_per_lsb; magCal.scale_y = uT_per_lsb; magCal.scale_z = uT_per_lsb;
+    } else if (activeSensors.mag_type == MAG_HMC5883L) {
+      writeReg(activeSensors.mag_addr, 0x00, 0x78);
+      writeReg(activeSensors.mag_addr, 0x01, 0x20);
+      writeReg(activeSensors.mag_addr, 0x02, 0x00); delay(6);
+      magCal.scale_x = (1.0f / 1090.0f) * 100.0f;
+      magCal.scale_y = (1.0f / 1090.0f) * 100.0f;
+      magCal.scale_z = (1.0f / 980.0f) * 100.0f;
+    }
+  }
+
+  static void bindAndInitMag(uint8_t addr, MagType t) {
+    activeSensors.mag_addr = addr;
+    activeSensors.mag_type = t;
+    activeSensors.mag_found = true;
+    initMagHardware();
+  }
+
+  bool readMagUnified(float &mx_u, float &my_u, float &mz_u) {
+    if (!activeSensors.mag_found) return false;
+    uint8_t buf[6];
+    float x = 0.0f, y = 0.0f, z = 0.0f;
+    if (activeSensors.mag_type == MAG_AK8963) {
+      uint8_t st1 = 0, st2 = 0;
+      if (!readReg(activeSensors.mag_addr, 0x02, &st1, 1) || !(st1 & 0x01)) return false;
+      if (!readReg(activeSensors.mag_addr, 0x03, buf, 6)) return false;
+      readReg(activeSensors.mag_addr, 0x09, &st2, 1);
+      if (st2 & 0x08) return false;
+      x = (float)((int16_t)(buf[1] << 8 | buf[0])) * magCal.asa_x * magCal.scale_x;
+      y = (float)((int16_t)(buf[3] << 8 | buf[2])) * magCal.asa_y * magCal.scale_y;
+      z = (float)((int16_t)(buf[5] << 8 | buf[4])) * magCal.asa_z * magCal.scale_z;
+    } else if (activeSensors.mag_type == MAG_AK09911) {
+      uint8_t st1 = 0, meas[8];
+      if (!readReg(activeSensors.mag_addr, 0x10, &st1, 1) || !(st1 & 0x01)) return false;
+      if (!readReg(activeSensors.mag_addr, 0x11, meas, 8)) return false;
+      if (meas[7] & 0x08) return false;
+      x = (float)((int16_t)(meas[1] << 8 | meas[0])) * magCal.scale_x;
+      y = (float)((int16_t)(meas[3] << 8 | meas[2])) * magCal.scale_y;
+      z = (float)((int16_t)(meas[5] << 8 | meas[4])) * magCal.scale_z;
+    } else if (activeSensors.mag_type == MAG_HSCDTD008A) {
+      uint8_t stat = 0;
+      if (!readReg(activeSensors.mag_addr, 0x18, &stat, 1)) return false;
+      if (!readReg(activeSensors.mag_addr, 0x10, buf, 6)) return false;
+      x = (float)((int16_t)(buf[1] << 8 | buf[0])) * magCal.scale_x;
+      y = (float)((int16_t)(buf[3] << 8 | buf[2])) * magCal.scale_y;
+      z = (float)((int16_t)(buf[5] << 8 | buf[4])) * magCal.scale_z;
+    } else if (activeSensors.mag_type == MAG_QMC5883L) {
+      uint8_t st = 0;
+      if (!readReg(activeSensors.mag_addr, 0x06, &st, 1) || !(st & 0x01)) return false;
+      if (!readReg(activeSensors.mag_addr, 0x00, buf, 6)) return false;
+      x = (float)((int16_t)(buf[1] << 8 | buf[0])) * magCal.scale_x;
+      y = (float)((int16_t)(buf[3] << 8 | buf[2])) * magCal.scale_y;
+      z = (float)((int16_t)(buf[5] << 8 | buf[4])) * magCal.scale_z;
+    } else if (activeSensors.mag_type == MAG_HMC5883L) {
+      if (!readReg(activeSensors.mag_addr, 0x03, buf, 6)) return false;
+      x = (float)((int16_t)(buf[0] << 8 | buf[1])) * magCal.scale_x;
+      y = (float)((int16_t)(buf[4] << 8 | buf[5])) * magCal.scale_y;
+      z = (float)((int16_t)(buf[2] << 8 | buf[3])) * magCal.scale_z;
+    } else {
+      return false;
+    }
+    rotateXYByYawAlign(x, y, currentConfig.com_align);
+    mx_u = x; my_u = y; mz_u = z;
+    return true;
+  }
+
+  bool readCompassHeadingDeg(float &heading_deg) {
+    if (!currentConfig.com_en || !activeSensors.mag_found) return false;
+    float mx_u, my_u, mz_u;
+    if (!readMagUnified(mx_u, my_u, mz_u)) return false;
+    float x = mx_u - currentConfig.mag_bias_x;
+    float y = my_u - currentConfig.mag_bias_y;
+    float z = mz_u - currentConfig.mag_bias_z;
+    float xh = x, yh = y;
+    if (activeSensors.imu_found && !err_imu_fail) {
+      float q0 = orientation.q0, q1 = orientation.q1, q2 = orientation.q2, q3 = orientation.q3;
+      float roll = atan2f(2.0f * (q0 * q1 + q2 * q3), 1.0f - 2.0f * (q1 * q1 + q2 * q2));
+      float pitch = asinf(constrain(2.0f * (q0 * q2 - q3 * q1), -1.0f, 1.0f));
+      xh = x * cosf(pitch) + y * sinf(roll) * sinf(pitch) + z * cosf(roll) * sinf(pitch);
+      yh = y * cosf(roll) - z * sinf(roll);
+    }
+    float h = atan2f(yh, xh) * RAD_TO_DEG;
+    if (isnan(h) || isinf(h)) { setFcErrorRam(FC_ERR_NAN_INF_MATH); return false; }
+    heading_deg = wrapDeg0To360(h);
+    return true;
+  }
+
+  void detectMag() {
+    uint8_t id = 0;
+    uint8_t req_id = currentConfig.com_id;
+    activeSensors.mag_found = false;
+    activeSensors.mag_type = MAG_UNKNOWN;
+
+    if (activeSensors.imu_found && (activeSensors.imu_type == IMU_MPU9250 || activeSensors.imu_type == IMU_MPU6500)) {
+      enableImuI2cBypass();
+    }
+
+    if (req_id == MAG_AK8963 || req_id == MAG_UNKNOWN) {
+      if (readReg(0x0C, 0x00, &id, 1) && id == 0x48) { bindAndInitMag(0x0C, MAG_AK8963); return; }
+      if (req_id == MAG_AK8963) goto mag_not_found;
+    }
+    if (req_id == MAG_AK09911 || req_id == MAG_UNKNOWN) {
+      for (uint8_t addr : (const uint8_t[]){0x0C, 0x0E}) {
+        uint8_t wia[2] = {0, 0};
+        if (readReg(addr, 0x00, wia, 2) && wia[0] == 0x48 && wia[1] == 0x05) { bindAndInitMag(addr, MAG_AK09911); return; }
+      }
+      if (req_id == MAG_AK09911) goto mag_not_found;
+    }
+    if (req_id == MAG_HSCDTD008A || req_id == MAG_UNKNOWN) {
+      for (uint8_t addr : (const uint8_t[]){0x0C, 0x0F}) {
+        if (readReg(addr, 0x0F, &id, 1) && id == 0x49) { bindAndInitMag(addr, MAG_HSCDTD008A); return; }
+      }
+      if (req_id == MAG_HSCDTD008A) goto mag_not_found;
+    }
+    if (req_id == MAG_QMC5883L || req_id == MAG_UNKNOWN) {
+      if (readReg(0x0D, 0x0D, &id, 1) && id != 0x00) { bindAndInitMag(0x0D, MAG_QMC5883L); return; }
+      if (req_id == MAG_QMC5883L) goto mag_not_found;
+    }
+    if (req_id == MAG_HMC5883L || req_id == MAG_UNKNOWN) {
+      uint8_t hmc_id[3] = {0};
+      if (readReg(0x1E, 0x0A, hmc_id, 3) && hmc_id[0] == 'H') { bindAndInitMag(0x1E, MAG_HMC5883L); return; }
+    }
+
+  mag_not_found:
+    if (currentConfig.com_en) { err_aux_i2c_fail = true; setFcErrorRam(FC_ERR_MAG_FAIL); }
+  }
+
+  void detectLidar() {
+    uint8_t req_id = currentConfig.lid_id;
+    activeSensors.lidar_found = false;
+    activeSensors.lidar_type = LIDAR_NONE;
+
+    checkBusAndRecover();
+    Wire.beginTransmission(0x29);
+    if (Wire.endTransmission() != 0) {
+      if (currentConfig.lidar_en) { err_aux_i2c_fail = true; setFcErrorRam(FC_ERR_LIDAR_FAIL); }
+      return;
+    }
+
+    uint8_t id_l0x = 0;
+    bool is_l0x = (readReg(0x29, 0xC0, &id_l0x, 1) && (id_l0x == 0xEE || id_l0x == 0xAA));
+    uint8_t model_id[2] = {0, 0};
+    bool has_model = readReg16Addr(0x29, 0x010F, model_id, 2);
+
+    if (req_id == LIDAR_VL53L0X && is_l0x) {
+      activeSensors.lidar_type = LIDAR_VL53L0X; activeSensors.lidar_max_m = 2.0f; activeSensors.lidar_found = true; return;
+    }
+    if (req_id == LIDAR_VL53L1X && has_model && model_id[0] == 0xEA) {
+      activeSensors.lidar_type = LIDAR_VL53L1X; activeSensors.lidar_max_m = 4.0f; activeSensors.lidar_found = true; return;
+    }
+    if (req_id == LIDAR_VL53L3CX && has_model && (model_id[0] == 0xEB || model_id[0] == 0xED) && model_id[1] <= 0x40) {
+      activeSensors.lidar_type = LIDAR_VL53L3CX; activeSensors.lidar_max_m = 3.0f; activeSensors.lidar_found = true; return;
+    }
+    if (req_id == LIDAR_VL53L4CX && has_model && (model_id[0] == 0xEB || model_id[0] == 0xED) && model_id[1] > 0x40) {
+      activeSensors.lidar_type = LIDAR_VL53L4CX; activeSensors.lidar_max_m = 6.0f; activeSensors.lidar_found = true; return;
+    }
+    if (req_id == LIDAR_NONE) {
+      if (is_l0x) { activeSensors.lidar_type = LIDAR_VL53L0X; activeSensors.lidar_max_m = 2.0f; activeSensors.lidar_found = true; return; }
+      if (has_model && model_id[0] == 0xEA) { activeSensors.lidar_type = LIDAR_VL53L1X; activeSensors.lidar_max_m = 4.0f; activeSensors.lidar_found = true; return; }
+      if (has_model && (model_id[0] == 0xEB || model_id[0] == 0xED)) {
+        activeSensors.lidar_type = (model_id[1] > 0x40) ? LIDAR_VL53L4CX : LIDAR_VL53L3CX;
+        activeSensors.lidar_max_m = (activeSensors.lidar_type == LIDAR_VL53L4CX) ? 6.0f : 3.0f;
+        activeSensors.lidar_found = true;
+        return;
+      }
+    }
+
+    if (currentConfig.lidar_en) { err_aux_i2c_fail = true; setFcErrorRam(FC_ERR_LIDAR_FAIL); }
+  }
+
+  void configureLidarROI() {
+    if (!activeSensors.lidar_found) return;
+    if (activeSensors.lidar_type == LIDAR_VL53L1X ||
+        activeSensors.lidar_type == LIDAR_VL53L3CX ||
+        activeSensors.lidar_type == LIDAR_VL53L4CX) {
+      writeReg16Addr8Val(0x29, 0x007F, 0x7F);
+      writeReg16Addr8Val(0x29, 0x0080, 0x77);
+    }
+  }
+
+  void initLidarHardware() {
+    if (!activeSensors.lidar_found || !currentConfig.lidar_en) return;
+    checkBusAndRecover();
+    switch (activeSensors.lidar_type) {
+      case LIDAR_VL53L0X:
+        writeReg(0x29, 0x00, 0x01); delay(10);
+        break;
+      case LIDAR_VL53L1X:
+      case LIDAR_VL53L3CX:
+      case LIDAR_VL53L4CX:
+        writeReg16Addr8Val(0x29, 0x0000, 0x00); delay(10);
+        configureLidarROI();
+        writeReg16Addr8Val(0x29, 0x0002, 0x00);
+        writeReg16Addr8Val(0x29, 0x0086, 0x40);
+        break;
+      default:
+        break;
+    }
+  }
+
+  bool readRawLidarSlantMeters(float &slant_range_m) {
+    if (!activeSensors.lidar_found) return false;
+    uint16_t raw_dist_mm = 0;
+    if (activeSensors.lidar_type == LIDAR_VL53L0X) {
+      uint8_t status_and_dist[3] = {0};
+      if (!readReg(0x29, 0x13, status_and_dist, 3)) {
+        if (currentConfig.lidar_en) { err_aux_i2c_fail = true; setFcErrorRam(FC_ERR_LIDAR_FAIL); }
+        return false;
+      }
+      uint8_t range_status = (status_and_dist[0] >> 3) & 0x0F;
+      if (range_status != 0 && range_status != 11) return false;
+      raw_dist_mm = ((uint16_t)status_and_dist[1] << 8) | status_and_dist[2];
+    } else {
+      uint8_t blk[15] = {0};
+      if (!readReg16Addr(0x29, 0x0089, blk, 15)) {
+        if (currentConfig.lidar_en) { err_aux_i2c_fail = true; setFcErrorRam(FC_ERR_LIDAR_FAIL); }
+        return false;
+      }
+      uint8_t range_status = blk[0] & 0x1F;
+      if (range_status != 0 && range_status != 9) return false;
+      raw_dist_mm = ((uint16_t)blk[13] << 8) | blk[14];
+    }
+    uint16_t max_allowed_mm = (uint16_t)(getEffectiveLidarMaxM() * 1000.0f);
+    if (raw_dist_mm == 0 || raw_dist_mm > max_allowed_mm) return false;
+    slant_range_m = (float)raw_dist_mm / 1000.0f;
+    return true;
+  }
+
+  float computeCorrectedLidarMeters(float slant_range_m) {
+    float q0 = orientation.q0, q1 = orientation.q1, q2 = orientation.q2, q3 = orientation.q3;
+    float R31 = 2.0f * (q1 * q3 - q0 * q2);
+    float R33 = (q0 * q0) - (q1 * q1) - (q2 * q2) + (q3 * q3);
+    float vertical_factor = (R31 * SIN_45) + (R33 * COS_45);
+    if (vertical_factor < 0.15f) vertical_factor = 0.15f;
+    float corrected_m = (slant_range_m * vertical_factor) + currentConfig.lidar_offset_m;
+    return (corrected_m < 0.0f) ? 0.0f : corrected_m;
+  }
+
+  bool readLidar(float &distance_m) {
+    if (!currentConfig.lidar_en || !activeSensors.lidar_found) return false;
+    float slant_range_m = 0.0f;
+    if (!readRawLidarSlantMeters(slant_range_m)) return false;
+    dbg_lidar_m = adaptive_lidar.update(computeCorrectedLidarMeters(slant_range_m), currentConfig.lidar_filter_alpha);
+    distance_m = dbg_lidar_m;
+    last_lidar_packet_ms = millis();
+    return true;
+  }
+
+  void calibrateLidar() {
+    if (!activeSensors.lidar_found) { Serial.println("ERR: lidar"); return; }
+    float sum_raw_m = 0.0f;
+    uint8_t ok_cnt = 0;
+    for (uint8_t i = 0; i < 20; i++) {
+      float slant_m = 0.0f;
+      if (readRawLidarSlantMeters(slant_m)) { sum_raw_m += slant_m; ok_cnt++; }
+      delay(15);
+    }
+    if (ok_cnt > 0) {
+      currentConfig.lidar_offset_m = -(sum_raw_m / (float)ok_cnt);
+      adaptive_lidar.reset();
+      saveSettings();
+      Serial.println("OK: cal_lidar");
+    } else {
+      Serial.println("ERR: cal_lidar");
+    }
+  }
+
+  void calibrateBatVoltage(float actual_voltage) {
+    if (actual_voltage < 1.0f || actual_voltage > 60.0f || isnan(actual_voltage) || isinf(actual_voltage)) {
+      Serial.println("ERR: cal_bat"); return;
+    }
+    long sum_adc = 0;
+    const uint8_t samples = 32;
+    for (uint8_t i = 0; i < samples; i++) { sum_adc += analogRead(BATTERY_PIN); delay(2); }
+    float bat_pin_v = (((float)sum_adc / (float)samples) / 4095.0f) * 3.3f;
+    if (bat_pin_v < 0.01f) { Serial.println("ERR: adc"); return; }
+    currentConfig.bat_voltage_scale = actual_voltage / bat_pin_v;
+    v_batt = actual_voltage; batt_valid = true; lpf_battery.output = actual_voltage;
+    power_w = v_batt * current_a;
+    saveSettings();
+    Serial.println("OK: cal_bat");
+  }
+
+  void calibrateCurrent(bool has_value, float actual_current_a) {
+    long sum_curr_adc = 0;
+    const uint8_t samples = 32;
+    for (uint8_t i = 0; i < samples; i++) { sum_curr_adc += analogRead(CURRENT_PIN); delay(2); }
+    float shunt_a = ((((float)sum_curr_adc / (float)samples) / 4095.0f) * 3.3f) / SHUNT_RESISTANCE_OHM;
+    if (!has_value || fabsf(actual_current_a) < 0.001f) {
+      currentConfig.curr_zero_offset_a = shunt_a;
+      current_a = 0.0f; power_w = 0.0f; lpf_current.output = 0.0f;
+      saveSettings();
+      Serial.println("OK: cal_curr");
+      return;
+    }
+    if (isnan(actual_current_a) || isinf(actual_current_a) || actual_current_a < 0.0f || actual_current_a > 250.0f) {
+      Serial.println("ERR: cal_curr"); return;
+    }
+    float delta_a = shunt_a - currentConfig.curr_zero_offset_a;
+    if (fabsf(delta_a) < 0.01f) { Serial.println("ERR: cal_curr"); return; }
+    currentConfig.curr_scale = constrain(actual_current_a / delta_a, 0.05f, 20.0f);
+    current_a = actual_current_a; lpf_current.output = actual_current_a;
+    power_w = v_batt * current_a;
+    saveSettings();
+    Serial.println("OK: cal_curr");
+  }
+
+  void calibrateGyro() {
+    if (!activeSensors.imu_found) { Serial.println("ERR: imu"); return; }
+    float sum_gx = 0.0f, sum_gy = 0.0f, sum_gz = 0.0f, sum_temp = 0.0f;
+    uint16_t samples = 200;
+    for (uint16_t i = 0; i < samples; i++) {
+      uint8_t buf[14];
+      if (readMPU6050(buf)) {
+        float gx_dps = (float)((int16_t)(buf[8] << 8 | buf[9])) / activeSensors.gyro_scale;
+        float gy_dps = (float)((int16_t)(buf[10] << 8 | buf[11])) / activeSensors.gyro_scale;
+        float gz_dps = (float)((int16_t)(buf[12] << 8 | buf[13])) / activeSensors.gyro_scale;
+        rotateXYByYawAlign(gx_dps, gy_dps, currentConfig.imu_align);
+        sum_gx += gx_dps; sum_gy += gy_dps; sum_gz += gz_dps;
+        sum_temp += extractTempFromImuBuf(buf);
+      }
+      delay(4);
+    }
+    currentConfig.gyro_bias_x = sum_gx / (float)samples;
+    currentConfig.gyro_bias_y = sum_gy / (float)samples;
+    currentConfig.gyro_bias_z = sum_gz / (float)samples;
+    currentConfig.base_temperature = sum_temp / (float)samples;
+    saveSettings();
+    Serial.println("OK: cal_gyro");
+  }
+
+  void calibrateAcc() {
+    if (!activeSensors.imu_found) { Serial.println("ERR: imu"); return; }
+    float sum_ax = 0.0f, sum_ay = 0.0f, sum_az = 0.0f;
+    uint16_t samples = 200;
+    for (uint16_t i = 0; i < samples; i++) {
+      uint8_t buf[14];
+      if (readMPU6050(buf)) {
+        float ax_g = (float)((int16_t)(buf[0] << 8 | buf[1])) / activeSensors.acc_scale;
+        float ay_g = (float)((int16_t)(buf[2] << 8 | buf[3])) / activeSensors.acc_scale;
+        float az_g = (float)((int16_t)(buf[4] << 8 | buf[5])) / activeSensors.acc_scale;
+        rotateXYByYawAlign(ax_g, ay_g, currentConfig.imu_align);
+        sum_ax += ax_g; sum_ay += ay_g; sum_az += az_g;
+      }
+      delay(4);
+    }
+    currentConfig.acc_bias_x = sum_ax / (float)samples;
+    currentConfig.acc_bias_y = sum_ay / (float)samples;
+    currentConfig.acc_bias_z = (sum_az / (float)samples) - 1.0f;
+    saveSettings();
+    Serial.println("OK: cal_acc");
+  }
+
+  void autoDetectAll() {
+    err_aux_i2c_fail = false;
+    detectIMU();
+    if (currentConfig.baro_en) detectBaro();
+    else { activeSensors.baro_found = false; activeSensors.baro_type = BARO_UNKNOWN; }
+
+    if (currentConfig.com_en) detectMag();
+    else { activeSensors.mag_found = false; activeSensors.mag_type = MAG_UNKNOWN; }
+
+    if (currentConfig.lidar_en) { detectLidar(); initLidarHardware(); }
+    else { activeSensors.lidar_found = false; activeSensors.lidar_type = LIDAR_NONE; }
+  }
+} // namespace SensorDriver
+
+void startMagCalibrationNonBlocking() {
+  if (!currentConfig.com_en) { Serial.println("ERR: com_en"); return; }
+  if (!SensorDriver::activeSensors.mag_found) SensorDriver::detectMag();
+  if (!SensorDriver::activeSensors.mag_found) {
+    Serial.println("ERR: mag");
+    setFcErrorRam(FC_ERR_MAG_FAIL);
+    return;
+  }
+  SensorDriver::initMagHardware();
+  mag_cal_active = true;
+  mag_cal_start_ms = millis();
+  mag_cal_last_sample_ms = 0;
+  mag_cal_min_x = 1e9f; mag_cal_max_x = -1e9f;
+  mag_cal_min_y = 1e9f; mag_cal_max_y = -1e9f;
+  mag_cal_min_z = 1e9f; mag_cal_max_z = -1e9f;
+  Serial.println("OK: cal_mag");
+}
+
+void stepMagCalibrationNonBlocking(uint32_t now_ms) {
+  if (!mag_cal_active) return;
+  if (is_armed) { mag_cal_active = false; Serial.println("ERR: cal_mag"); return; }
+  if ((now_ms - mag_cal_last_sample_ms) >= MAG_CAL_SAMPLE_MS) {
+    mag_cal_last_sample_ms = now_ms;
+    float mx_u, my_u, mz_u;
+    if (SensorDriver::readMagUnified(mx_u, my_u, mz_u)) {
+      if (mx_u < mag_cal_min_x) mag_cal_min_x = mx_u;
+      if (mx_u > mag_cal_max_x) mag_cal_max_x = mx_u;
+      if (my_u < mag_cal_min_y) mag_cal_min_y = my_u;
+      if (my_u > mag_cal_max_y) mag_cal_max_y = my_u;
+      if (mz_u < mag_cal_min_z) mag_cal_min_z = mz_u;
+      if (mz_u > mag_cal_max_z) mag_cal_max_z = mz_u;
+    }
+  }
+  if ((now_ms - mag_cal_start_ms) >= MAG_CAL_DURATION_MS) {
+    mag_cal_active = false;
+    bool has_x = (mag_cal_max_x > mag_cal_min_x);
+    bool has_y = (mag_cal_max_y > mag_cal_min_y);
+    bool has_z = (mag_cal_max_z > mag_cal_min_z);
+    if (has_x) currentConfig.mag_bias_x = 0.5f * (mag_cal_min_x + mag_cal_max_x);
+    if (has_y) currentConfig.mag_bias_y = 0.5f * (mag_cal_min_y + mag_cal_max_y);
+    if (has_z) currentConfig.mag_bias_z = 0.5f * (mag_cal_min_z + mag_cal_max_z);
+    if (has_x && has_y) { saveSettings(); Serial.println("OK: cal_mag_done"); }
+    else { setFcErrorRam(FC_ERR_MAG_FAIL); Serial.println("ERR: cal_mag"); }
+  }
+}
+
+void readBatteryAndCurrent(float dt_sec) {
+  int raw_bat = analogRead(BATTERY_PIN);
+  batt_valid = (raw_bat > 5);
+  if (!batt_valid && is_armed) setFcErrorRam(FC_ERR_BAT_SENSOR_FAIL);
+  float measured_v = ((float)raw_bat / 4095.0f) * 3.3f * SensorDriver::getBatScale();
+  v_batt = lpf_battery.update(measured_v);
+
+  int raw_curr = analogRead(CURRENT_PIN);
+  float measured_a = SensorDriver::computeCurrentAmpsFromAdc(raw_curr);
+  current_a = lpf_current.update(measured_a);
+  power_w = v_batt * current_a;
+
+  if (is_armed && dt_sec > 0.0f && !isnan(power_w) && !isinf(power_w) && power_w > 0.0f) {
+    consumed_wh += (power_w * dt_sec) / 3600.0f;
+  }
+
+  err_batt_low = (currentConfig.fs_bat_en && batt_valid && v_batt < currentConfig.bat_fs_v);
+  if (err_batt_low && is_armed) setFcErrorRam(FC_ERR_BAT_LOW);
+}
+
+static int8_t quantizeSignedByte(float val, float step) {
+  if (isnan(val) || isinf(val) || step <= 0.0f) return 0;
+  float q = roundf(val / step);
+  return (int8_t)constrain(q, -127.0f, 127.0f);
+}
+
+static uint8_t quantizeUnsignedByte(float val, float step) {
+  if (isnan(val) || isinf(val) || val < 0.0f || step <= 0.0f) return TELEMETRY_NO_SIGNAL;
+  float q = roundf(val / step);
+  return (q >= 254.0f) ? 254 : (uint8_t)constrain(q, 0.0f, 254.0f);
+}
+
+static int16_t quantizeAngleTenthsDeg(float deg) {
+  if (isnan(deg) || isinf(deg)) return 0;
+  float clamped = constrain(deg, -180.0f, 180.0f);
+  return (int16_t)constrain(roundf(clamped * 10.0f), -1800.0f, 1800.0f);
+}
+
+void stepMonitorStreamNonBlocking(uint32_t now_ms) {
+  if (!mon_stream_active) return;
+  if ((now_ms - mon_last_send_ms) < MON_STREAM_PERIOD_MS) return;
+  mon_last_send_ms = now_ms;
+
+  float q0 = orientation.q0, q1 = orientation.q1, q2 = orientation.q2, q3 = orientation.q3;
+  float roll_deg = atan2f(2.0f * (q0 * q1 + q2 * q3), 1.0f - 2.0f * (q1 * q1 + q2 * q2)) * RAD_TO_DEG;
+  float pitch_deg = asinf(constrain(2.0f * (q0 * q2 - q3 * q1), -1.0f, 1.0f)) * RAD_TO_DEG;
+  int16_t r_tenths = quantizeAngleTenthsDeg(roll_deg);
+  int16_t p_tenths = quantizeAngleTenthsDeg(pitch_deg);
+
+  bool baro_ok = currentConfig.baro_en && SensorDriver::activeSensors.baro_found && baro_cal_ready;
+  bool lidar_ok = currentConfig.lidar_en && SensorDriver::activeSensors.lidar_found && ((now_ms - last_lidar_packet_ms) < 200);
+
+  uint8_t cpu_byte = quantizeUnsignedByte(cpu_max_load_pct, 1.0f);
+  cpu_max_load_pct = 0.0f;
+
+  // Frame: [0xAA][0x55][LEN=19][gx][gy][gz][ax][ay][az][mag][baro][lid][vbatt][curr][cpu][roll_hi][roll_lo][pitch_hi][pitch_lo][err][crc8]
+  uint8_t pkt[21];
+  pkt[0] = 0xAA;
+  pkt[1] = 0x55;
+  pkt[2] = 19;
+  pkt[3] = (uint8_t)quantizeSignedByte(last_cal_gx_dps, 4.0f);
+  pkt[4] = (uint8_t)quantizeSignedByte(last_cal_gy_dps, 4.0f);
+  pkt[5] = (uint8_t)quantizeSignedByte(last_cal_gz_dps, 4.0f);
+  pkt[6] = (uint8_t)quantizeSignedByte(last_cal_ax_g, 0.032f);
+  pkt[7] = (uint8_t)quantizeSignedByte(last_cal_ay_g, 0.032f);
+  pkt[8] = (uint8_t)quantizeSignedByte(last_cal_az_g, 0.032f);
+  pkt[9] = (currentConfig.com_en && SensorDriver::activeSensors.mag_found && compass_valid)
+             ? quantizeUnsignedByte(SensorDriver::wrapDeg0To360(compass_heading_deg), 360.0f / 254.0f)
+             : TELEMETRY_NO_SIGNAL;
+  pkt[10] = baro_ok ? quantizeUnsignedByte((baro_alt_m > 0.0f) ? baro_alt_m : 0.0f, 0.1f) : TELEMETRY_NO_SIGNAL;
+  pkt[11] = lidar_ok ? quantizeUnsignedByte(dbg_lidar_m, 0.05f) : TELEMETRY_NO_SIGNAL;
+  pkt[12] = batt_valid ? quantizeUnsignedByte(v_batt, 0.1f) : TELEMETRY_NO_SIGNAL;
+  pkt[13] = quantizeUnsignedByte(current_a, 0.1f);
+  pkt[14] = cpu_byte;
+  pkt[15] = (uint8_t)((uint16_t)r_tenths >> 8);
+  pkt[16] = (uint8_t)((uint16_t)r_tenths & 0xFF);
+  pkt[17] = (uint8_t)((uint16_t)p_tenths >> 8);
+  pkt[18] = (uint8_t)((uint16_t)p_tenths & 0xFF);
+  pkt[19] = getActiveStatusErrorCode();
+  pkt[20] = smartAudioCrc8(pkt, 20);
+  Serial.write(pkt, 21);
+}
+
+inline uint8_t encodeDeg0To360ToByte(float deg) {
+  if (isnan(deg) || isinf(deg)) { setFcErrorRam(FC_ERR_NAN_INF_MATH); return TELEMETRY_NO_SIGNAL; }
+  uint8_t val = (uint8_t)constrain((SensorDriver::wrapDeg0To360(deg) / 360.0f) * 254.0f, 0.0f, 254.0f);
+  return (val == TELEMETRY_NO_SIGNAL) ? 254 : val;
+}
+
+uint8_t encodeVibrationLevelByte() {
+  if (!SensorDriver::activeSensors.imu_found || err_imu_fail || isnan(vibration_index) || isinf(vibration_index) || vibration_index < 0.0f) {
+    return TELEMETRY_NO_SIGNAL;
+  }
+  float scaled = vibration_index * 50.0f;
+  return (scaled >= 254.0f) ? 254 : (uint8_t)constrain(scaled, 0.0f, 254.0f);
+}
+
+uint8_t encodeAltitudeDecimetersByte() {
+  float max_lidar_m = SensorDriver::getEffectiveLidarMaxM();
+  bool lidar_ok = currentConfig.lidar_en && SensorDriver::activeSensors.lidar_found &&
+                  ((millis() - last_lidar_packet_ms) < 200) && (dbg_lidar_m <= max_lidar_m);
+  bool baro_ok = currentConfig.baro_en && SensorDriver::activeSensors.baro_found && baro_cal_ready;
+  float alt_m = lidar_ok ? dbg_lidar_m : (baro_ok ? ((baro_alt_m > 0.0f) ? baro_alt_m : 0.0f) : -1.0f);
+  if (alt_m < 0.0f || isnan(alt_m) || isinf(alt_m)) return TELEMETRY_NO_SIGNAL;
+  float dm = alt_m * 10.0f;
+  return (dm >= 254.0f) ? 254 : (uint8_t)constrain(dm, 0.0f, 254.0f);
+}
+
+uint8_t encodeBatteryVoltageByte() {
+  if (!batt_valid || isnan(v_batt) || isinf(v_batt) || v_batt <= 0.0f) return TELEMETRY_NO_SIGNAL;
+  float scaled = v_batt * 10.0f;
+  return (scaled >= 254.0f) ? 254 : (uint8_t)constrain(scaled, 0.0f, 254.0f);
+}
+
+uint8_t encodeCurrentDeciAmpsByte() {
+  if (isnan(current_a) || isinf(current_a) || current_a < 0.0f) return TELEMETRY_NO_SIGNAL;
+  float scaled = current_a * 10.0f;
+  return (scaled >= 254.0f) ? 254 : (uint8_t)constrain(scaled, 0.0f, 254.0f);
+}
+
+uint8_t encodeConsumedWattHoursByte() {
+  if (isnan(consumed_wh) || isinf(consumed_wh) || consumed_wh < 0.0f) return TELEMETRY_NO_SIGNAL;
+  return (consumed_wh >= 254.0f) ? 254 : (uint8_t)constrain(consumed_wh, 0.0f, 254.0f);
+}
+
+void startTelemetryNonBlocking() {
+  if (!currentConfig.rtx_en || rtx_tx_in_flight || rtx_scan_active) return;
+  if (digitalRead(RTX_BUSY_PIN) == HIGH) return;
+
+  bool has_delayed = hasQueuedRtxResponse();
+  if (has_delayed && ((fc_tick_count - last_rc_rx_tick) < RTX_MIN_RESP_DELAY_TICKS)) return;
+
+  uint8_t tx_buf[32];
+  int idx = 0;
+  if (currentConfig.rtx_addr_en) {
+    tx_buf[idx++] = (uint8_t)(currentConfig.rtx_addr >> 8);
+    tx_buf[idx++] = (uint8_t)(currentConfig.rtx_addr & 0xFF);
+  }
+
+  bool sent_switch_notify = false;
+  DelayedRtxRespItem resp;
+  if (has_delayed && popDelayedRtxResponse(resp)) {
+    switch (resp.type) {
+      case RTX_RESP_202_ERR_EVENT:
+        tx_buf[idx++] = 202; tx_buf[idx++] = current_link_quality; tx_buf[idx++] = resp.ch; tx_buf[idx++] = resp.tier;
+        break;
+      case RTX_RESP_250_SA_ACK:
+        tx_buf[idx++] = 250; tx_buf[idx++] = current_link_quality; tx_buf[idx++] = resp.ch; tx_buf[idx++] = resp.tier;
+        tx_buf[idx++] = (uint8_t)(resp.power_mw >> 8); tx_buf[idx++] = (uint8_t)(resp.power_mw & 0xFF);
+        break;
+      case RTX_RESP_230_SCAN_BEST:
+        tx_buf[idx++] = 230; tx_buf[idx++] = current_link_quality; tx_buf[idx++] = resp.ch;
+        break;
+      case RTX_RESP_240_CHAN_SW:
+        tx_buf[idx++] = 240; tx_buf[idx++] = current_link_quality; tx_buf[idx++] = resp.ch;
+        sent_switch_notify = true;
+        break;
+      default:
+        break;
+    }
+  } else {
+    uint8_t enc_roll = TELEMETRY_NO_SIGNAL, enc_pitch = TELEMETRY_NO_SIGNAL;
+    if (SensorDriver::activeSensors.imu_found && !err_imu_fail) {
+      float q0 = orientation.q0, q1 = orientation.q1, q2 = orientation.q2, q3 = orientation.q3;
+      float roll_deg = atan2f(2.0f * (q0 * q1 + q2 * q3), 1.0f - 2.0f * (q1 * q1 + q2 * q2)) * RAD_TO_DEG;
+      float pitch_deg = asinf(constrain(2.0f * (q0 * q2 - q3 * q1), -1.0f, 1.0f)) * RAD_TO_DEG;
+      enc_roll = encodeDeg0To360ToByte(roll_deg);
+      enc_pitch = encodeDeg0To360ToByte(pitch_deg);
+    }
+    uint8_t enc_compass = (currentConfig.com_en && SensorDriver::activeSensors.mag_found && compass_valid)
+                            ? encodeDeg0To360ToByte(compass_heading_deg)
+                            : TELEMETRY_NO_SIGNAL;
+    tx_buf[idx++] = 210;
+    tx_buf[idx++] = current_link_quality;
+    tx_buf[idx++] = enc_roll;
+    tx_buf[idx++] = enc_pitch;
+    tx_buf[idx++] = enc_compass;
+    tx_buf[idx++] = encodeAltitudeDecimetersByte();
+    tx_buf[idx++] = encodeBatteryVoltageByte();
+    tx_buf[idx++] = encodeCurrentDeciAmpsByte();
+    tx_buf[idx++] = encodeConsumedWattHoursByte();
+    tx_buf[idx++] = encodeVibrationLevelByte();
+  }
+
+  uint8_t stby = 0x01;
+  rtx_write_command(0x80, &stby, 1);
+  if (!rtx_try_ready_short()) return;
+
+  rtx_spi_begin_tx();
+  rtxSpi.transfer(0x0E);
+  rtxSpi.transfer(0x00);
+  for (int i = 0; i < idx; i++) rtxSpi.transfer(tx_buf[i]);
+  rtx_spi_end_tx();
+
+  uint8_t tx_params[3] = {0x00, 0x00, 0x00};
+  rtx_write_command(0x83, tx_params, 3);
+
+  if (sent_switch_notify) {
+    rtx_switched_flag = false;
+    bool returning_to_main = (rtx_new_switched_chan == main_rtx_chan);
+    rtx_post_tx_chan = returning_to_main ? main_rtx_chan : rtx_new_switched_chan;
+    rtx_post_tx_backup = !returning_to_main;
+    rtx_apply_switch_after_tx = true;
+  }
+
+  rtx_tx_start_ms = millis();
+  rtx_tx_timeout_ms = getTelemetryTxTimeoutMs(is_on_backup);
+  rtx_tx_in_flight = true;
+  send_telemetry_pending = false;
+}
+
+void pollTelemetryTxState() {
+  if (!rtx_tx_in_flight || !currentConfig.rtx_en) return;
+  if (digitalRead(RTX_BUSY_PIN) == LOW) {
+    rtx_tx_in_flight = false;
+    if (rtx_apply_switch_after_tx) {
+      rtx_apply_switch_after_tx = false;
+      active_rtx_chan = rtx_post_tx_chan;
+      is_on_backup = rtx_post_tx_backup;
+      pending_channel_switch = false;
+      applyRtxConfiguration(is_on_backup);
+      return;
+    }
+    rtx_set_rx_mode();
+  } else if ((millis() - rtx_tx_start_ms) >= rtx_tx_timeout_ms) {
+    rtx_tx_in_flight = false;
+    setFcErrorRam(FC_ERR_RTX_TX_TIMEOUT);
+    if (rtx_apply_switch_after_tx) {
+      rtx_apply_switch_after_tx = false;
+      active_rtx_chan = rtx_post_tx_chan;
+      is_on_backup = rtx_post_tx_backup;
+      pending_channel_switch = false;
+      applyRtxConfiguration(is_on_backup);
+    } else {
+      rtx_set_rx_mode();
+    }
+  }
+}
+
+// ==============================================================================
+// 5. ПОЛЁТНЫЙ ДВИЖОК И ВЫВОД НА МОТОРЫ
+// ==============================================================================
+void madgwickUpdate(float gx, float gy, float gz, float ax, float ay, float az, float dt) {
+  float q0 = orientation.q0, q1 = orientation.q1, q2 = orientation.q2, q3 = orientation.q3;
+  float norm = sqrtf(ax * ax + ay * ay + az * az);
+  if (norm > 0.0f && !isnan(norm) && !isinf(norm)) {
+    ax /= norm; ay /= norm; az /= norm;
+    float _2q0 = 2.0f * q0, _2q1 = 2.0f * q1, _2q2 = 2.0f * q2, _2q3 = 2.0f * q3;
+    float _4q0 = 4.0f * q0, _4q1 = 4.0f * q1, _4q2 = 4.0f * q2;
+    float _8q1 = 8.0f * q1, _8q2 = 8.0f * q2;
+    float q0q0 = q0 * q0, q1q1 = q1 * q1, q2q2 = q2 * q2, q3q3 = q3 * q3;
+
+    float s0 = _4q0 * q2q2 + _2q2 * ax + _4q0 * q1q1 - _2q1 * ay;
+    float s1 = _4q1 * q3q3 - _2q3 * ax + 4.0f * q0q0 * q1 - _2q0 * ay - _4q1 + _8q1 * q1q1 + _8q1 * q2q2 + _4q1 * az;
+    float s2 = 4.0f * q0q0 * q2 + _2q0 * ax + _4q2 * q3q3 - _2q3 * ay - _4q2 + _8q2 * q1q1 + _8q2 * q2q2 + _4q2 * az;
+    float s3 = 4.0f * q1q1 * q3 + _2q1 * ax + 4.0f * q2q2 * q3 - _2q2 * ay;
+    float s_norm = sqrtf(s0 * s0 + s1 * s1 + s2 * s2 + s3 * s3);
+    if (s_norm > 0.0f && !isnan(s_norm) && !isinf(s_norm)) {
+      s0 /= s_norm; s1 /= s_norm; s2 /= s_norm; s3 /= s_norm;
+      float beta = (fabsf(norm - 1.0f) > 0.15f) ? MADGWICK_BETA_MIN : MADGWICK_BETA;
+      float qDot0 = 0.5f * (-q1 * gx - q2 * gy - q3 * gz) - beta * s0;
+      float qDot1 = 0.5f * (q0 * gx + q2 * gz - q3 * gy) - beta * s1;
+      float qDot2 = 0.5f * (q0 * gy - q1 * gz + q3 * gx) - beta * s2;
+      float qDot3 = 0.5f * (q0 * gz + q1 * gy - q2 * gx) - beta * s3;
+      q0 += qDot0 * dt; q1 += qDot1 * dt; q2 += qDot2 * dt; q3 += qDot3 * dt;
+      orientation.q0 = q0; orientation.q1 = q1; orientation.q2 = q2; orientation.q3 = q3;
+      orientation.normalize();
+      return;
+    }
+  }
+  q0 += 0.5f * (-q1 * gx - q2 * gy - q3 * gz) * dt;
+  q1 += 0.5f * (q0 * gx + q2 * gz - q3 * gy) * dt;
+  q2 += 0.5f * (q0 * gy - q1 * gz + q3 * gx) * dt;
+  q3 += 0.5f * (q0 * gz + q1 * gy - q2 * gx) * dt;
+  orientation.q0 = q0; orientation.q1 = q1; orientation.q2 = q2; orientation.q3 = q3;
+  orientation.normalize();
+}
+
+float calculateSuperExpoRate(float in, float r, float s, float e) {
+  float abs_in = fabsf(in);
+  float exp_term = abs_in * (powf(abs_in, 4.0f) * e + abs_in * (1.0f - e));
+  float denom = (1.0f - (abs_in * s));
+  if (denom < 0.05f) denom = 0.05f;
+  float out = (r * exp_term) / denom;
+  return (in >= 0.0f) ? out : -out;
+}
+
+void setMotorsPower(float m1, float m2, float m3, float m4) {
+  float m[4] = {
+    constrain(m1, OUTPUT_MIN, OUTPUT_MAX),
+    constrain(m2, OUTPUT_MIN, OUTPUT_MAX),
+    constrain(m3, OUTPUT_MIN, OUTPUT_MAX),
+    constrain(m4, OUTPUT_MIN, OUTPUT_MAX)
+  };
+  for (uint8_t i = 0; i < 4; i++) {
+    if (isnan(m[i]) || isinf(m[i])) {
+      m[0] = m[1] = m[2] = m[3] = OUTPUT_MIN;
+      is_armed = false;
+      setFcErrorRam(FC_ERR_NAN_INF_MATH);
+      break;
+    }
+  }
+  uint32_t period_ticks = (TIM2_TICK_HZ / 250) - 1;
+  uint32_t min_pulse_ticks = (currentConfig.esc_protocol == 1) ? 1000 : 8000;
+  uint32_t max_pulse_ticks = (currentConfig.esc_protocol == 1) ? 2000 : 16000;
+  uint32_t pulse_span = max_pulse_ticks - min_pulse_ticks;
+  uint32_t ccr[4];
+  for (uint8_t i = 0; i < 4; i++) {
+    uint32_t p = min_pulse_ticks + (uint32_t)(((m[i] - OUTPUT_MIN) / (OUTPUT_MAX - OUTPUT_MIN)) * (float)pulse_span);
+    ccr[i] = (p >= period_ticks) ? (period_ticks - 1) : p;
+  }
+  tim2.setCaptureCompare(1, ccr[0], TICK_COMPARE_FORMAT);
+  tim2.setCaptureCompare(2, ccr[1], TICK_COMPARE_FORMAT);
+  tim2.setCaptureCompare(3, ccr[2], TICK_COMPARE_FORMAT);
+  tim2.setCaptureCompare(4, ccr[3], TICK_COMPARE_FORMAT);
+}
+
+void stopBenchTest() {
+  if (bench_test_mode != BENCH_TEST_NONE) {
+    bench_test_mode = BENCH_TEST_NONE;
+    setMotorsPower(OUTPUT_MIN, OUTPUT_MIN, OUTPUT_MIN, OUTPUT_MIN);
+  }
+}
+
+void stepBenchTestNonBlocking(uint32_t now_ms, float gx_rad, float gy_rad, float gz_rad,
+                              float &m1, float &m2, float &m3, float &m4) {
+  if (bench_test_mode == BENCH_TEST_NONE) return;
+  if (is_armed || (now_ms - bench_test_start_ms) >= BENCH_TEST_DURATION_MS) {
+    stopBenchTest();
+    m1 = m2 = m3 = m4 = OUTPUT_MIN;
+    return;
+  }
+  if (bench_test_mode == BENCH_TEST_MOTORS) {
+    uint32_t elapsed = now_ms - bench_test_start_ms;
+    uint8_t active_idx = (uint8_t)((elapsed / 2500UL) % 4);
+    float motors[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    motors[active_idx] = BENCH_TEST_THROTTLE;
+    m1 = motors[0]; m2 = motors[1]; m3 = motors[2]; m4 = motors[3];
+    return;
+  }
+  float gx_dps = gx_rad * RAD_TO_DEG;
+  float gy_dps = gy_rad * RAD_TO_DEG;
+  float gz_dps = gz_rad * RAD_TO_DEG;
+  float r_out = rollRatePID.update(0.0f - gx_dps, gx_dps, DT, false);
+  float p_out = pitchRatePID.update(0.0f - gy_dps, gy_dps, DT, false);
+  float y_out = yawRatePID.update(0.0f - gz_dps, gz_dps, DT, false);
+  float base = BENCH_TEST_THROTTLE;
+  m1 = base + p_out + r_out - y_out;
+  m2 = base + p_out - r_out + y_out;
+  m3 = base - p_out - r_out - y_out;
+  m4 = base - p_out + r_out + y_out;
+}
+
+void flightControlTask() {
+  uint32_t loop_start_us = micros();
+  uint32_t now_ms = millis();
+  fc_tick_count++;
+
+  bool imu_read_ok = SensorDriver::readMPU6050(mpu_dma_buffer);
+  if (!imu_read_ok) {
+    err_imu_fail = true;
+    setFcErrorRam(FC_ERR_IMU_FAIL);
+  } else {
+    err_imu_fail = false;
+  }
+
+  float ax_g = (float)((int16_t)(mpu_dma_buffer[0] << 8 | mpu_dma_buffer[1])) / SensorDriver::activeSensors.acc_scale;
+  float ay_g = (float)((int16_t)(mpu_dma_buffer[2] << 8 | mpu_dma_buffer[3])) / SensorDriver::activeSensors.acc_scale;
+  float az_g = (float)((int16_t)(mpu_dma_buffer[4] << 8 | mpu_dma_buffer[5])) / SensorDriver::activeSensors.acc_scale;
+  float gx_dps = (float)((int16_t)(mpu_dma_buffer[8] << 8 | mpu_dma_buffer[9])) / SensorDriver::activeSensors.gyro_scale;
+  float gy_dps = (float)((int16_t)(mpu_dma_buffer[10] << 8 | mpu_dma_buffer[11])) / SensorDriver::activeSensors.gyro_scale;
+  float gz_dps = (float)((int16_t)(mpu_dma_buffer[12] << 8 | mpu_dma_buffer[13])) / SensorDriver::activeSensors.gyro_scale;
+
+  SensorDriver::rotateXYByYawAlign(ax_g, ay_g, currentConfig.imu_align);
+  SensorDriver::rotateXYByYawAlign(gx_dps, gy_dps, currentConfig.imu_align);
+
+  if (isnan(ax_g) || isnan(ay_g) || isnan(az_g) || isnan(gx_dps) || isnan(gy_dps) || isnan(gz_dps) ||
+      isinf(ax_g) || isinf(ay_g) || isinf(az_g) || isinf(gx_dps) || isinf(gy_dps) || isinf(gz_dps)) {
+    ax_g = 0.0f; ay_g = 0.0f; az_g = 1.0f; gx_dps = 0.0f; gy_dps = 0.0f; gz_dps = 0.0f;
+    setFcErrorRam(FC_ERR_NAN_INF_MATH);
+  }
+
+  current_chip_temp = lpf_temp.update(SensorDriver::extractTempFromImuBuf(mpu_dma_buffer));
+  float d_temp = current_chip_temp - currentConfig.base_temperature;
+  gx_dps -= (currentConfig.gyro_bias_x + currentConfig.temp_coeff_x * d_temp);
+  gy_dps -= (currentConfig.gyro_bias_y + currentConfig.temp_coeff_y * d_temp);
+  gz_dps -= (currentConfig.gyro_bias_z + currentConfig.temp_coeff_z * d_temp);
+  ax_g -= currentConfig.acc_bias_x;
+  ay_g -= currentConfig.acc_bias_y;
+  az_g -= currentConfig.acc_bias_z;
+
+  last_cal_gx_dps = gx_dps; last_cal_gy_dps = gy_dps; last_cal_gz_dps = gz_dps;
+  last_cal_ax_g = ax_g; last_cal_ay_g = ay_g; last_cal_az_g = az_g;
+
+  float acc_mag_diff = fabsf(sqrtf(ax_g * ax_g + ay_g * ay_g + az_g * az_g) - 1.0f);
+  vibration_index = 0.90f * vibration_index + 0.10f * acc_mag_diff;
+
+  float f_gx_dps = gx_dps, f_gy_dps = gy_dps, f_gz_dps = gz_dps;
+  float f_ax_g = ax_g, f_ay_g = ay_g, f_az_g = az_g;
+
+  if (currentConfig.filter_mode >= 1) {
+    f_gx_dps = lpf_gx.update(gx_dps); f_gy_dps = lpf_gy.update(gy_dps); f_gz_dps = lpf_gz.update(gz_dps);
+    f_ax_g = lpf_ax.update(ax_g); f_ay_g = lpf_ay.update(ay_g); f_az_g = lpf_az.update(az_g);
+  }
+  if (currentConfig.filter_mode == 2 || currentConfig.filter_mode == 3) {
+    float notch_f = currentConfig.filter_notch_freq;
+    if (currentConfig.filter_mode == 3) {
+      float norm_thr = constrain(smooth_throttle / OUTPUT_MAX, 0.0f, 1.0f);
+      notch_f = currentConfig.filter_dyn_min_hz + norm_thr * (currentConfig.filter_dyn_max_hz - currentConfig.filter_dyn_min_hz);
+    }
+    notch_gx.setParameters(250.0f, notch_f, currentConfig.filter_notch_bw, false);
+    notch_gy.setParameters(250.0f, notch_f, currentConfig.filter_notch_bw, false);
+    notch_gz.setParameters(250.0f, notch_f, currentConfig.filter_notch_bw, false);
+    f_gx_dps = notch_gx.update(f_gx_dps);
+    f_gy_dps = notch_gy.update(f_gy_dps);
+    f_gz_dps = notch_gz.update(f_gz_dps);
+  }
+
+  float gx_rad = f_gx_dps * DEG_TO_RAD;
+  float gy_rad = f_gy_dps * DEG_TO_RAD;
+  float gz_rad = f_gz_dps * DEG_TO_RAD;
+  madgwickUpdate(gx_rad, gy_rad, gz_rad, f_ax_g, f_ay_g, f_az_g, DT);
+
+  float q0 = orientation.q0, q1 = orientation.q1, q2 = orientation.q2, q3 = orientation.q3;
+  float roll_deg = atan2f(2.0f * (q0 * q1 + q2 * q3), 1.0f - 2.0f * (q1 * q1 + q2 * q2)) * RAD_TO_DEG;
+  float pitch_deg = asinf(constrain(2.0f * (q0 * q2 - q3 * q1), -1.0f, 1.0f)) * RAD_TO_DEG;
+
+  if (isnan(roll_deg) || isnan(pitch_deg) || isinf(roll_deg) || isinf(pitch_deg)) {
+    roll_deg = 0.0f; pitch_deg = 0.0f;
+    setFcErrorRam(FC_ERR_NAN_INF_MATH);
+  }
+  if (is_armed && (fabsf(roll_deg) > 75.0f || fabsf(pitch_deg) > 75.0f)) {
+    is_armed = false;
+    setMotorsPower(OUTPUT_MIN, OUTPUT_MIN, OUTPUT_MIN, OUTPUT_MIN);
+    setFcErrorRam(FC_ERR_TILT_DISARM);
+    return;
+  }
+
+  static uint32_t last_aux_ms = 0;
+  if ((now_ms - last_aux_ms) >= AUX_SENSOR_PERIOD_MS) {
+    float aux_dt = (last_aux_ms == 0) ? (AUX_SENSOR_PERIOD_MS * 0.001f) : ((float)(now_ms - last_aux_ms) * 0.001f);
+    last_aux_ms = now_ms;
+
+    readBatteryAndCurrent(aux_dt);
+
+    float new_alt_m = baro_alt_m;
+    if (SensorDriver::stepBaroNonBlocking(now_ms, new_alt_m)) {
+      float raw_vz = (new_alt_m - baro_alt_m) / aux_dt;
+      baro_vz_mps = lpf_baro_vz.update(raw_vz);
+      baro_alt_m = new_alt_m;
+    }
+
+    float lid_dist_m = 0.0f;
+    if (SensorDriver::readLidar(lid_dist_m)) {
+      current_vz = lid_dist_m;
+    } else if (currentConfig.baro_en && SensorDriver::activeSensors.baro_found && baro_cal_ready) {
+      current_vz = baro_vz_mps;
+    }
+
+    float hdg_deg = compass_heading_deg;
+    if (SensorDriver::readCompassHeadingDeg(hdg_deg)) {
+      compass_heading_deg = hdg_deg;
+      compass_valid = true;
+    } else if (!currentConfig.com_en || !SensorDriver::activeSensors.mag_found) {
+      compass_valid = false;
+    }
+  }
+
+  vtxStepNonBlocking(now_ms);
+  stepMagCalibrationNonBlocking(now_ms);
+  serviceError202Event(now_ms);
+  stepMonitorStreamNonBlocking(now_ms);
+
+  err_rc_loss = (currentConfig.fs_rtx_en && ((now_ms - last_rc_packet_ms) > FAILSAFE_TIMEOUT_MS));
+  if (err_rc_loss) {
+    is_failsafe = true;
+    setFcErrorRam(FC_ERR_RC_LOSS);
+  } else {
+    is_failsafe = false;
+  }
+
+  handleMotorArmStateAndEepromError();
+  if (!is_armed) arm_ramp_factor = 0.0f;
+  else if (arm_ramp_factor < 1.0f) { arm_ramp_factor += 0.008f; if (arm_ramp_factor > 1.0f) arm_ramp_factor = 1.0f; }
+
+  float m1 = OUTPUT_MIN, m2 = OUTPUT_MIN, m3 = OUTPUT_MIN, m4 = OUTPUT_MIN;
+  if (!is_armed && bench_test_mode != BENCH_TEST_NONE) {
+    stepBenchTestNonBlocking(now_ms, gx_rad, gy_rad, gz_rad, m1, m2, m3, m4);
+    setMotorsPower(m1, m2, m3, m4);
+  } else if (is_armed) {
+    float r_stick = smooth_roll - STICK_CENTER;
+    float p_stick = smooth_pitch - STICK_CENTER;
+    float y_stick = smooth_yaw - STICK_CENTER;
+    if (fabsf(r_stick) < currentConfig.rc_deadband) r_stick = 0.0f;
+    if (fabsf(p_stick) < currentConfig.rc_deadband) p_stick = 0.0f;
+    if (fabsf(y_stick) < currentConfig.rc_deadband) y_stick = 0.0f;
+
+    float r_norm = constrain(r_stick / STICK_CENTER, -1.0f, 1.0f);
+    float p_norm = constrain(p_stick / STICK_CENTER, -1.0f, 1.0f);
+    float y_norm = constrain(y_stick / STICK_CENTER, -1.0f, 1.0f);
+
+    float target_rate_r = calculateSuperExpoRate(r_norm, currentConfig.rc_rate, currentConfig.rc_super_expo, currentConfig.rc_stick_expo) * MAX_RATE_DPS_PER_UNIT;
+    float target_rate_p = calculateSuperExpoRate(p_norm, currentConfig.rc_rate, currentConfig.rc_super_expo, currentConfig.rc_stick_expo) * MAX_RATE_DPS_PER_UNIT;
+    float target_rate_y = calculateSuperExpoRate(y_norm, currentConfig.rc_yaw_rate, currentConfig.rc_yaw_super_expo, currentConfig.rc_yaw_expo) * MAX_RATE_DPS_PER_UNIT;
+
+    if (currentConfig.fl_mode == 1 || currentConfig.fl_mode == 2) {
+      float angle_r_sp = r_norm * currentConfig.fl_roll_max;
+      float angle_p_sp = p_norm * currentConfig.fl_pitch_max;
+      float angle_rate_r = (angle_r_sp - roll_deg) * 4.0f;
+      float angle_rate_p = (angle_p_sp - pitch_deg) * 4.0f;
+      if (currentConfig.fl_mode == 1) {
+        target_rate_r = angle_rate_r;
+        target_rate_p = angle_rate_p;
+      } else {
+        float stick_mag = fmaxf(fabsf(r_norm), fabsf(p_norm));
+        float h_blend = constrain((stick_mag - currentConfig.rc_horizon_transition) / fmaxf(0.05f, 1.0f - currentConfig.rc_horizon_transition), 0.0f, 1.0f);
+        target_rate_r = angle_rate_r * (1.0f - h_blend) + target_rate_r * h_blend;
+        target_rate_p = angle_rate_p * (1.0f - h_blend) + target_rate_p * h_blend;
+      }
+    }
+
+    float r_out = rollRatePID.update(target_rate_r - f_gx_dps, f_gx_dps, DT, false);
+    float p_out = pitchRatePID.update(target_rate_p - f_gy_dps, f_gy_dps, DT, false);
+    float y_out = yawRatePID.update(target_rate_y - f_gz_dps, f_gz_dps, DT, false);
+
+    float base_throttle = smooth_throttle;
+    if (is_failsafe) {
+      float vz_sp = -currentConfig.fs_vz_speed;
+      float vz_err = vz_sp - current_vz;
+      base_throttle = constrain(base_hover_throttle + vzPID.update(vz_err, current_vz, DT, false), 100.0f, 550.0f);
+    } else if (currentConfig.fl_mode == 3) {
+      float vz_sp = ((smooth_throttle - STICK_CENTER) / STICK_CENTER) * currentConfig.fl_vz_speed_max;
+      float vz_err = vz_sp - current_vz;
+      base_throttle = constrain(base_hover_throttle + vzPID.update(vz_err, current_vz, DT, false), 50.0f, 850.0f);
+    }
+
+    float ramped_throttle = base_throttle * arm_ramp_factor;
+    m1 = ramped_throttle + p_out + r_out - y_out;
+    m2 = ramped_throttle + p_out - r_out + y_out;
+    m3 = ramped_throttle - p_out - r_out - y_out;
+    m4 = ramped_throttle - p_out + r_out + y_out;
+    setMotorsPower(m1, m2, m3, m4);
+  } else {
+    setMotorsPower(OUTPUT_MIN, OUTPUT_MIN, OUTPUT_MIN, OUTPUT_MIN);
+  }
+
+  pollTelemetryTxState();
+  if (!rtx_tx_in_flight && !rtx_scan_active) {
+    readRx();
+    if (send_telemetry_pending || hasQueuedRtxResponse()) {
+      startTelemetryNonBlocking();
+    }
+  } else if (rtx_scan_active && !rtx_tx_in_flight) {
+    stepChannelScanNonBlocking();
+  }
+
+  uint32_t elapsed_us = micros() - loop_start_us;
+  cpu_load_pct = constrain(((float)elapsed_us / (float)LOOP_INTERVAL_US) * 100.0f, 0.0f, 100.0f);
+  if (cpu_load_pct > cpu_max_load_pct) cpu_max_load_pct = cpu_load_pct;
+  if (elapsed_us > (LOOP_INTERVAL_US + LOOP_OVERRUN_MARGIN_US)) {
+    setFcErrorRam(FC_ERR_LOOP_OVERRUN);
+  }
+}
+
+void setup() {
+  delay(POWER_ON_SETTLE_MS);
+  Serial.begin(SERIAL_BAUD_RATE);
+  Wire.setSCL(PB6);
+  Wire.setSDA(PB7);
+  Wire.begin();
+  Wire.setClock(400000);
+  analogReadResolution(12);
+
+  loadSettings();
+  applyFilterConfig();
+  setupHardwareTimers();
+  setMotorsPower(OUTPUT_MIN, OUTPUT_MIN, OUTPUT_MIN, OUTPUT_MIN);
+
+  SensorDriver::autoDetectAll();
+  vtxInit();
+
+  main_rtx_chan = currentConfig.rtx_pri_chan;
+  active_rtx_chan = main_rtx_chan;
+  is_on_backup = false;
+  rtx_init_hardware();
+  if (currentConfig.rtx_en) applyRtxConfiguration(false);
+}
+
+void loop() {
+  static uint32_t last_loop_us = 0;
+  uint32_t now_us = micros();
+  if (last_loop_us == 0) last_loop_us = now_us;
+  if ((now_us - last_loop_us) >= LOOP_INTERVAL_US) {
+    last_loop_us = now_us;
+    flightControlTask();
+  }
+  parseCli();
+}
