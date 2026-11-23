@@ -6,7 +6,6 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'dart:math' as math;
 
-
 import 'xlib.dart';
 
 void main() => runApp(const MyApp());
@@ -39,7 +38,7 @@ class MyApp extends StatelessWidget {
           filled: true,
           fillColor: const Color(0xFF242428),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
           isDense: true,
         ),
       ),
@@ -84,7 +83,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     return const Scaffold(
       backgroundColor: Color(0xFF0A0A0A),
       body: Center(
-        child: Text("XFire v3.27", style: TextStyle(fontSize: 42, fontWeight: FontWeight.bold, letterSpacing: 4.0, color: Colors.white)),
+        child: Text("XFire v3.27", style: TextStyle(fontSize: 46, fontWeight: FontWeight.bold, letterSpacing: 4.0, color: Colors.white)),
       ),
     );
   }
@@ -114,8 +113,8 @@ class _MainContainerState extends State<MainContainer> {
     "Инфо",
     "Полетный контроллер FC",
     "Пульт RC",
-    "Радиомодуль RTX (915 МГц)",
-    "Профили (Калькулятор сетапа)",
+    "Радиомодуль RTX",
+    "Профили и калькулятор",
     "Терминал CLI",
   ];
 
@@ -141,7 +140,7 @@ class _MainContainerState extends State<MainContainer> {
         List<UsbDevice> devices = await UsbSerial.listDevices();
         if (devices.isEmpty) {
           SerialService.appendLog(">> ERROR: No USB devices found\n");
-          if (mounted) showAppDialog(context, "Ошибка соединения", "USB устройства не найдены! Подключите плату по USB OTG.", isError: true);
+          if (mounted) showAppDialog(context, "Ошибка соединения", "USB устройства не найдены!\nПодключите плату по USB OTG.", isError: true);
         } else {
           SerialService.usbPort = await devices[0].create();
           bool? openResult = await SerialService.usbPort?.open();
@@ -157,7 +156,7 @@ class _MainContainerState extends State<MainContainer> {
         }
       } catch (e) {
         SerialService.appendLog(">> ERROR: USB Exception: $e\n");
-        if (mounted) showAppDialog(context, "Ошибка соединения", "Сбой подключения USB Serial: $e", isError: true);
+        if (mounted) showAppDialog(context, "Ошибка соединения", "Сбой подключения USB Serial:\n$e", isError: true);
       }
     }
     setState(() {});
@@ -172,7 +171,7 @@ class _MainContainerState extends State<MainContainer> {
         centerTitle: true,
         title: Center(
           child: Container(
-            width: 280,
+            width: 300,
             padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
               color: const Color(0xFF1C1C1E),
@@ -194,10 +193,11 @@ class _MainContainerState extends State<MainContainer> {
                         _tabNames[index],
                         style: TextStyle(
                           color: index == 0 ? Colors.greenAccent : Colors.white,
-                          fontSize: 13,
+                          fontSize: 14,
                           fontWeight: FontWeight.bold,
                         ),
-                        overflow: TextOverflow.ellipsis,
+                        softWrap: true,
+                        maxLines: 2,
                       ),
                     );
                   }),
@@ -206,9 +206,13 @@ class _MainContainerState extends State<MainContainer> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          "Соединение USB Serial",
-                          style: TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold),
+                        const Expanded(
+                          child: Text(
+                            "Соединение USB Serial",
+                            style: TextStyle(color: Colors.amberAccent, fontSize: 13, fontWeight: FontWeight.bold),
+                            softWrap: true,
+                            maxLines: 2,
+                          ),
                         ),
                         IgnorePointer(
                           child: Switch(
@@ -279,7 +283,7 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
       });
     } catch (e) {
       setState(() {
-        _sections = [DocSection(title: 'Ошибка загрузки doc.txt', content: 'Ошибка: $e')];
+        _sections = [DocSection(title: 'Ошибка загрузки doc.txt', content: 'Ошибка:\n$e')];
         _isLoading = false;
       });
     }
@@ -291,7 +295,11 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
     int lastMatchEnd = 0;
     for (Match match in imgRegex.allMatches(rawContent)) {
       if (match.start > lastMatchEnd) {
-        widgets.add(Text(rawContent.substring(lastMatchEnd, match.start).trim(), style: const TextStyle(fontSize: 12, color: Colors.white70, height: 1.4, fontFamily: 'monospace')));
+        widgets.add(Text(
+          rawContent.substring(lastMatchEnd, match.start).trim(),
+          style: const TextStyle(fontSize: 13, color: Colors.white70, height: 1.45, fontFamily: 'monospace'),
+          softWrap: true,
+        ));
         widgets.add(const SizedBox(height: 10));
       }
       String imgTag = match.group(1)!.toLowerCase();
@@ -308,7 +316,7 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
               width: double.infinity,
               alignment: Alignment.center,
               decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
-              child: Text("Изображение не найдено ($imgTag.jpg)", style: const TextStyle(fontSize: 11, color: Colors.amberAccent)),
+              child: Text("Изображение не найдено\n($imgTag.jpg)", textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, color: Colors.amberAccent)),
             ),
           ),
         ),
@@ -317,7 +325,11 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
       lastMatchEnd = match.end;
     }
     if (lastMatchEnd < rawContent.length) {
-      widgets.add(Text(rawContent.substring(lastMatchEnd).trim(), style: const TextStyle(fontSize: 12, color: Colors.white70, height: 1.4, fontFamily: 'monospace')));
+      widgets.add(Text(
+        rawContent.substring(lastMatchEnd).trim(),
+        style: const TextStyle(fontSize: 13, color: Colors.white70, height: 1.45, fontFamily: 'monospace'),
+        softWrap: true,
+      ));
     }
     return widgets;
   }
@@ -336,23 +348,38 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('XFire Ecosystem', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
+                    const Expanded(
+                      child: Text(
+                        'XFire Ecosystem',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.amberAccent),
+                        softWrap: true,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
-                      child: const Text('v.3.27 (CLI)', style: TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                      child: const Text('v.3.27 (CLI)', style: TextStyle(color: Colors.blueAccent, fontSize: 12, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
                 const SizedBox(height: 10),
-                const Text('Аппаратно-программная экосистема для управления дронами (Моторы: 2312, Пропы: 9450, 4S, 915 МГц).', style: TextStyle(fontSize: 12, color: Colors.white70, height: 1.4)),
+                const Text(
+                  'Аппаратно-программная экосистема для управления дронами.\nМоторы: 2312, Пропы: 9450, 4S, LoRa RTX.',
+                  style: TextStyle(fontSize: 13, color: Colors.white70, height: 1.45),
+                  softWrap: true,
+                ),
               ],
             ),
           ),
         ),
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-          child: Text('СПРАВОЧНИК CLI КОМАНД (doc.txt)', style: TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+          child: Text(
+            'СПРАВОЧНИК CLI КОМАНД (doc.txt)',
+            style: TextStyle(color: Colors.amberAccent, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.1),
+            softWrap: true,
+          ),
         ),
         if (_isLoading)
           const Center(child: Padding(padding: EdgeInsets.all(20.0), child: CircularProgressIndicator(color: Colors.blueAccent)))
@@ -362,7 +389,7 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
                 child: Card(
                   margin: EdgeInsets.zero,
                   child: ExpansionTile(
-                    title: Text(sec.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                    title: Text(sec.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white), softWrap: true),
                     iconColor: Colors.amberAccent,
                     collapsedIconColor: Colors.white54,
                     children: [Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: _buildContentWidgets(sec.content)))],
@@ -583,7 +610,7 @@ class _ProfilesTabState extends State<ProfilesTab> {
       children: [
         XFireExpansionCard(
           title: "Калькулятор сетапа и полета",
-          subtitle: "Расчет PID, просадки с 4.2В до 3.3В и времени полета",
+          subtitle: "Расчет PID, просадки с 4.2В до 3.3В\nи времени полета",
           icon: Icons.tune_rounded,
           children: [
             XFireSliderCard(title: "Размер пропеллера", commandName: "prop_size_inch", value: _propSize, min: 5.0, max: 13.0, divisions: 8, unit: "\"", onChanged: (v) => setState(() => _propSize = v), onChangeEnd: (_) {}),
@@ -609,7 +636,7 @@ class _ProfilesTabState extends State<ProfilesTab> {
               onChangeEnd: (_) {},
             ),
             XFireSliderCard(
-              title: "Внутреннее сопротивление батареи (3-30 мОм/банку)",
+              title: "Внутреннее сопротивление батареи\n(3-30 мОм/банку)",
               commandName: "bat_rint_mohm",
               value: _totalRintMohm,
               min: minRint,
@@ -619,11 +646,11 @@ class _ProfilesTabState extends State<ProfilesTab> {
               onChanged: (v) => setState(() => _totalRintMohm = v),
               onChangeEnd: (_) {},
             ),
-            XFireSliderCard(title: "Максимальный угол наклона (fl_roll_max)", commandName: "fl_roll_max", value: _calcMaxTilt, min: 10.0, max: 75.0, divisions: 13, unit: "°", onChanged: (v) => setState(() => _calcMaxTilt = v), onChangeEnd: (_) {}),
-            XFireSliderCard(title: "Максимальная вертикальная скорость (fl_vz_speed_max)", commandName: "fl_vz_speed_max", value: _calcMaxVz, min: 0.5, max: 3.0, divisions: 25, unit: "м/с", onChanged: (v) => setState(() => _calcMaxVz = v), onChangeEnd: (_) {}),
+            XFireSliderCard(title: "Максимальный угол наклона\n(fl_roll_max)", commandName: "fl_roll_max", value: _calcMaxTilt, min: 10.0, max: 75.0, divisions: 13, unit: "°", onChanged: (v) => setState(() => _calcMaxTilt = v), onChangeEnd: (_) {}),
+            XFireSliderCard(title: "Максимальная вертикальная скорость\n(fl_vz_speed_max)", commandName: "fl_vz_speed_max", value: _calcMaxVz, min: 0.5, max: 3.0, divisions: 25, unit: "м/с", onChanged: (v) => setState(() => _calcMaxVz = v), onChangeEnd: (_) {}),
             XFireSliderCard(title: "Взлетный вес дрона (AUW)", commandName: "auw_grams", value: _auwGrams, min: 400.0, max: 3500.0, divisions: 62, unit: "г", onChanged: (v) => setState(() => _auwGrams = v), onChangeEnd: (_) {}),
             XFireSliderCard(title: "Емкость аккумулятора", commandName: "battery_mah", value: _batteryMah, min: 1300.0, max: 16000.0, divisions: 58, unit: "mAh", onChanged: (v) => setState(() => _batteryMah = v), onChangeEnd: (_) {}),
-            XFireSliderCard(title: "Диагональ рамы (от мотора до мотора)", commandName: "frame_size_mm", value: _frameSizeMm, min: 220.0, max: 650.0, divisions: 43, unit: "мм", onChanged: (v) => setState(() => _frameSizeMm = v), onChangeEnd: (_) {}),
+            XFireSliderCard(title: "Диагональ рамы\n(от мотора до мотора)", commandName: "frame_size_mm", value: _frameSizeMm, min: 220.0, max: 650.0, divisions: 43, unit: "мм", onChanged: (v) => setState(() => _frameSizeMm = v), onChangeEnd: (_) {}),
             XFireSegmentedCard(title: "Характер поведения дрона", commandName: "drone_behavior", options: const ["Плавное", "Уверенное", "Резвое"], selectedIndex: _behaviorIndex, onSelected: (val) => setState(() => _behaviorIndex = val)),
           ],
         ),
@@ -644,34 +671,34 @@ class _ProfilesTabState extends State<ProfilesTab> {
                   children: [
                     Expanded(
                       child: Text(
-                        "ФИЗИЧЕСКИЙ РАСЧЕТ И НАГРУЗКИ (v.3.27)",
-                        style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.1),
-                        overflow: TextOverflow.ellipsis,
+                        "ФИЗИЧЕСКИЙ РАСЧЕТ\nИ НАГРУЗКИ (v.3.27)",
+                        style: TextStyle(color: Colors.amberAccent, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.0),
+                        softWrap: true,
                       ),
                     ),
                     SizedBox(width: 8),
-                    Icon(Icons.insights, color: Colors.amberAccent, size: 16),
+                    Icon(Icons.insights, color: Colors.amberAccent, size: 18),
                   ],
                 ),
                 const SizedBox(height: 12),
                 _calcResultRow("Тяговооруженность (TWR):", "${optimal['twr']} : 1", Colors.white),
-                _calcResultRow("Газ висения (Hover Throttle):", "${optimal['hover_throttle']} %", optimal['color_hover_throttle']),
-                _calcResultRow("Сопротивление батареи (суммарное):", "${optimal['total_rint_mohm']} мОм (${(_totalRintMohm / _batteryCells).toStringAsFixed(1)} мОм/банку)", Colors.white),
+                _calcResultRow("Газ висения\n(Hover Throttle):", "${optimal['hover_throttle']} %", optimal['color_hover_throttle']),
+                _calcResultRow("Сопротивление батареи\n(суммарное):", "${optimal['total_rint_mohm']} мОм\n(${(_totalRintMohm / _batteryCells).toStringAsFixed(1)} мОм/банку)", Colors.white),
                 const Divider(color: Colors.white12, height: 16),
-                _calcResultRow("Ток висения (суммарный):", "${optimal['hover_amps']} А", optimal['color_hover_amps']),
-                _calcResultRow("Напряжение свежего аккума (4.2В) под нагрузкой:", "${optimal['fresh_load_voltage']} В (${optimal['fresh_load_v_cell']} В/б)", optimal['color_fresh_voltage']),
-                _calcResultRow("Напряжение под нагрузкой (на плато 3.7В):", "${optimal['load_voltage']} В", optimal['color_load_voltage']),
-                _calcResultRow("Тепловые потери батареи (висение):", "${optimal['bat_thermal_loss']} Вт", Colors.white),
+                _calcResultRow("Ток висения\n(суммарный):", "${optimal['hover_amps']} А", optimal['color_hover_amps']),
+                _calcResultRow("Напряжение свежего аккума\n(4.2В) под нагрузкой:", "${optimal['fresh_load_voltage']} В\n(${optimal['fresh_load_v_cell']} В/б)", optimal['color_fresh_voltage']),
+                _calcResultRow("Напряжение под нагрузкой\n(на плато 3.7В):", "${optimal['load_voltage']} В", optimal['color_load_voltage']),
+                _calcResultRow("Тепловые потери батареи\n(висение):", "${optimal['bat_thermal_loss']} Вт", Colors.white),
                 const Divider(color: Colors.white12, height: 16),
-                _calcResultRow("Ток при макс. наклоне (${_calcMaxTilt.toStringAsFixed(0)}°):", "${optimal['max_tilt_amps']} А", Colors.white),
-                _calcResultRow("Напряжение при макс. наклоне:", "${optimal['max_tilt_voltage']} В", Colors.white),
-                _calcResultRow("Ток при макс. взлете (${_calcMaxVz.toStringAsFixed(1)} м/с):", "${optimal['max_vz_amps']} А", Colors.white),
-                _calcResultRow("Напряжение при макс. взлете:", "${optimal['max_vz_voltage']} В", Colors.white),
+                _calcResultRow("Ток при макс. наклоне\n(${_calcMaxTilt.toStringAsFixed(0)}°):", "${optimal['max_tilt_amps']} А", Colors.white),
+                _calcResultRow("Напряжение при макс.\nнаклоне:", "${optimal['max_tilt_voltage']} В", Colors.white),
+                _calcResultRow("Ток при макс. взлете\n(${_calcMaxVz.toStringAsFixed(1)} м/с):", "${optimal['max_vz_amps']} А", Colors.white),
+                _calcResultRow("Напряжение при макс.\nвзлете:", "${optimal['max_vz_voltage']} В", Colors.white),
                 const Divider(color: Colors.white12, height: 16),
-                _calcResultRow("Время висения (до отсечки 3.3В под нагрузкой):", "${optimal['flight_time']} мин", optimal['color_flight_time']),
-                _calcResultRow("Время в полете (наклон 30° + взлеты):", "${optimal['flight_time_30deg']} мин", optimal['color_flight_time_30']),
+                _calcResultRow("Время висения\n(до отсечки 3.3В):", "${optimal['flight_time']} мин", optimal['color_flight_time']),
+                _calcResultRow("Время в полете\n(наклон 30° + взлеты):", "${optimal['flight_time_30deg']} мин", optimal['color_flight_time_30']),
                 const Divider(color: Colors.white12, height: 16),
-                _calcResultRow("Roll/Pitch Kp / Ki / Kd (от инерции):", "${optimal['roll_kp']} / ${optimal['roll_ki']} / ${optimal['roll_kd']}", Colors.white),
+                _calcResultRow("Roll/Pitch Kp / Ki / Kd:", "${optimal['roll_kp']} / ${optimal['roll_ki']} / ${optimal['roll_kd']}", Colors.white),
                 _calcResultRow("Yaw Kp / Ki / Kd:", "${optimal['yaw_kp']} / ${optimal['yaw_ki']} / ${optimal['yaw_kd']}", Colors.white),
                 _calcResultRow("RC Rate / Super Expo:", "${optimal['rc_rate']} / ${optimal['rc_super_expo']}", Colors.white),
                 _calcResultRow("Notch (от BPF винта):", "${optimal['filter_notch_freq']} Гц", Colors.white),
@@ -680,7 +707,7 @@ class _ProfilesTabState extends State<ProfilesTab> {
           ),
         ),
         XFireResetCard(
-          hint: "Сброс калькулятора сетапа и полета",
+          hint: "Сброс калькулятора сетапа\nи полета",
           onReset: () => setState(() {
             _propSize = 9.0;
             _propPitch = 4.5;
@@ -697,7 +724,7 @@ class _ProfilesTabState extends State<ProfilesTab> {
           }),
         ),
         XFireBatchApplyCard(
-          hint: "Применение рассчитанных PID и лимитов к контроллеру",
+          hint: "Применение рассчитанных PID\nи лимитов к контроллеру",
           parameters: [
             "fl_roll_max $_calcMaxTilt",
             "fl_pitch_max $_calcMaxTilt",
@@ -723,13 +750,25 @@ class _ProfilesTabState extends State<ProfilesTab> {
 
   Widget _calcResultRow(String label, String value, Color color) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      padding: const EdgeInsets.symmetric(vertical: 5.0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(child: Text(label, style: const TextStyle(fontSize: 11, color: Colors.white70), overflow: TextOverflow.ellipsis)),
-          const SizedBox(width: 8),
-          Text(value, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color, fontFamily: 'monospace')),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 13, color: Colors.white70, height: 1.3),
+              softWrap: true,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            value,
+            textAlign: TextAlign.right,
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color, fontFamily: 'monospace', height: 1.3),
+            softWrap: true,
+          ),
         ],
       ),
     );
@@ -921,25 +960,25 @@ class _SettingsTabState extends State<SettingsTab> {
     _resetFiltersGroup();
     _resetPidGroup();
     SerialService.sendCommand("default");
-    showAppDialog(context, "Общий сброс FC", "Все настройки полётного контроллера сброшены по умолчанию.");
+    showAppDialog(context, "Общий сброс FC", "Все настройки полётного контроллера\nсброшены по умолчанию.");
   }
 
   Widget _buildSensorBar(String label, double value, double min, double max, String unit, Color color) {
     double percent = ((value - min) / (max - min)).clamp(0.0, 1.0);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3.0),
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(label, style: const TextStyle(fontSize: 11, color: Colors.white70)),
-              Text("${value.toStringAsFixed(2)} $unit", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color)),
+              Text(label, style: const TextStyle(fontSize: 13, color: Colors.white70)),
+              Text("${value.toStringAsFixed(2)} $unit", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color)),
             ],
           ),
-          const SizedBox(height: 2),
-          LinearProgressIndicator(value: percent, color: color, backgroundColor: Colors.white12, minHeight: 5, borderRadius: BorderRadius.circular(3)),
+          const SizedBox(height: 3),
+          LinearProgressIndicator(value: percent, color: color, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
         ],
       ),
     );
@@ -953,7 +992,7 @@ class _SettingsTabState extends State<SettingsTab> {
         // 1. Аппаратура, датчики и калибровка
         XFireExpansionCard(
           title: "Аппаратура, датчики и калибровка",
-          subtitle: "ESC, ориентация IMU/компаса, ID датчиков, лидар и смещения",
+          subtitle: "ESC, ориентация IMU/компаса, ID датчиков,\nлидар и смещения",
           icon: Icons.sensors,
           children: [
             XFireSegmentedCard(
@@ -987,7 +1026,7 @@ class _SettingsTabState extends State<SettingsTab> {
               },
             ),
             XFireSliderCard(
-              title: "Тип IMU (0-авто, 1-MPU6050..6-QMI8658)",
+              title: "Тип IMU\n(0-авто, 1-MPU6050..6-QMI8658)",
               commandName: "imu_id",
               value: _imuId,
               min: 0,
@@ -998,7 +1037,7 @@ class _SettingsTabState extends State<SettingsTab> {
               onChangeEnd: (v) => SerialService.sendCommand("imu_id ${v.round()}"),
             ),
             XFireSliderCard(
-              title: "Тип барометра (0-авто..7-DPS310)",
+              title: "Тип барометра\n(0-авто..7-DPS310)",
               commandName: "bar_id",
               value: _barId,
               min: 0,
@@ -1009,7 +1048,7 @@ class _SettingsTabState extends State<SettingsTab> {
               onChangeEnd: (v) => SerialService.sendCommand("bar_id ${v.round()}"),
             ),
             XFireSliderCard(
-              title: "Тип компаса (0-авто..6-AK09911)",
+              title: "Тип компаса\n(0-авто..6-AK09911)",
               commandName: "com_id",
               value: _comId,
               min: 0,
@@ -1020,7 +1059,7 @@ class _SettingsTabState extends State<SettingsTab> {
               onChangeEnd: (v) => SerialService.sendCommand("com_id ${v.round()}"),
             ),
             XFireSliderCard(
-              title: "Тип лидара (0-авто..4-VL53L4CX)",
+              title: "Тип лидара\n(0-авто..4-VL53L4CX)",
               commandName: "lid_id",
               value: _lidId,
               min: 0,
@@ -1058,7 +1097,7 @@ class _SettingsTabState extends State<SettingsTab> {
               },
             ),
             XFireSliderCard(
-              title: "Сглаживание лидара (медиана + EMA)",
+              title: "Сглаживание лидара\n(медиана + EMA)",
               commandName: "lidar_filter_alpha",
               value: _lidarFilterAlpha,
               min: 0.01,
@@ -1112,9 +1151,9 @@ class _SettingsTabState extends State<SettingsTab> {
               onChanged: (v) => setState(() => _magBiasZ = v),
               onChangeEnd: (v) => SerialService.sendCommand("mag_bias_z $v"),
             ),
-            XFireResetCard(hint: "Сброс группы аппаратуры (default hw)", onReset: _resetHardwareGroup),
+            XFireResetCard(hint: "Сброс группы аппаратуры\n(default hw)", onReset: _resetHardwareGroup),
             XFireBatchApplyCard(
-              hint: "Пакетная отправка аппаратуры и смещений датчиков",
+              hint: "Пакетная отправка аппаратуры\nи смещений датчиков",
               parameters: [
                 "esc_protocol ${_escProtocol.round()}",
                 "imu_align ${_imuAlign.round()}",
@@ -1139,11 +1178,11 @@ class _SettingsTabState extends State<SettingsTab> {
         // 2. Питание и датчик тока
         XFireExpansionCard(
           title: "Питание и датчик тока",
-          subtitle: "Делитель напряжения (PA4) и шунт тока 0.01 Ом (PA5)",
+          subtitle: "Делитель напряжения (PA4)\nи шунт тока 0.01 Ом (PA5)",
           icon: Icons.battery_charging_full,
           children: [
             XFireSliderCard(
-              title: "Масштаб делителя напряжения (PA4)",
+              title: "Масштаб делителя напряжения\n(PA4)",
               commandName: "bat_voltage_scale",
               value: _batVoltageScale,
               min: 1.0,
@@ -1154,7 +1193,7 @@ class _SettingsTabState extends State<SettingsTab> {
               onChangeEnd: (v) => SerialService.sendCommand("bat_voltage_scale $v"),
             ),
             XFireSliderCard(
-              title: "LPF фильтрация напряжения батареи",
+              title: "LPF фильтрация напряжения\nбатареи",
               commandName: "bat_filter_alpha",
               value: _batFilterAlpha,
               min: 0.01,
@@ -1165,7 +1204,7 @@ class _SettingsTabState extends State<SettingsTab> {
               onChangeEnd: (v) => SerialService.sendCommand("bat_filter_alpha $v"),
             ),
             XFireSliderCard(
-              title: "Ток покоя / смещение нуля (PA5)",
+              title: "Ток покоя / смещение нуля\n(PA5)",
               commandName: "curr_zero_offset_a",
               value: _currZeroOffsetA,
               min: -10.0,
@@ -1176,7 +1215,7 @@ class _SettingsTabState extends State<SettingsTab> {
               onChangeEnd: (v) => SerialService.sendCommand("curr_zero_offset_a $v"),
             ),
             XFireSliderCard(
-              title: "Калибровочный множитель тока (>=0.01)",
+              title: "Калибровочный множитель тока\n(>=0.01)",
               commandName: "curr_scale",
               value: _currScale,
               min: 0.01,
@@ -1186,9 +1225,9 @@ class _SettingsTabState extends State<SettingsTab> {
               onChanged: (v) => setState(() => _currScale = v),
               onChangeEnd: (v) => SerialService.sendCommand("curr_scale $v"),
             ),
-            XFireResetCard(hint: "Сброс питания и тока (default bat)", onReset: _resetPowerGroup),
+            XFireResetCard(hint: "Сброс питания и тока\n(default bat)", onReset: _resetPowerGroup),
             XFireBatchApplyCard(
-              hint: "Пакетная отправка параметров питания и тока",
+              hint: "Пакетная отправка параметров\nпитания и тока",
               parameters: [
                 "bat_voltage_scale $_batVoltageScale",
                 "bat_filter_alpha $_batFilterAlpha",
@@ -1202,11 +1241,11 @@ class _SettingsTabState extends State<SettingsTab> {
         // 3. Режимы полёта и кривые стиков (RC)
         XFireExpansionCard(
           title: "Режимы полёта и кривые стиков (RC)",
-          subtitle: "Acro/Angle/Horizon, углы, Vz и кривые RC",
+          subtitle: "Acro/Angle/Horizon, углы,\nVz и кривые RC",
           icon: Icons.flight,
           children: [
             XFireSegmentedCard(
-              title: "Режим полёта (1-Angle, 2-Horizon, иначе Rate)",
+              title: "Режим полёта\n(1-Angle, 2-Horizon, иначе Rate)",
               commandName: "fl_mode",
               options: const ["0 (Rate)", "1 (Angle)", "2 (Horizon)", "3 (Rate)"],
               selectedIndex: _flMode.round().clamp(0, 3),
@@ -1215,21 +1254,21 @@ class _SettingsTabState extends State<SettingsTab> {
                 SerialService.sendCommand("fl_mode $val");
               },
             ),
-            XFireSliderCard(title: "Макс. угол крена (Roll)", commandName: "fl_roll_max", value: _flRollMax, min: 5.0, max: 80.0, divisions: 150, unit: "°", onChanged: (v) => setState(() => _flRollMax = v), onChangeEnd: (v) => SerialService.sendCommand("fl_roll_max $v")),
-            XFireSliderCard(title: "Макс. угол тангажа (Pitch)", commandName: "fl_pitch_max", value: _flPitchMax, min: 5.0, max: 80.0, divisions: 150, unit: "°", onChanged: (v) => setState(() => _flPitchMax = v), onChangeEnd: (v) => SerialService.sendCommand("fl_pitch_max $v")),
+            XFireSliderCard(title: "Макс. угол крена\n(Roll)", commandName: "fl_roll_max", value: _flRollMax, min: 5.0, max: 80.0, divisions: 150, unit: "°", onChanged: (v) => setState(() => _flRollMax = v), onChangeEnd: (v) => SerialService.sendCommand("fl_roll_max $v")),
+            XFireSliderCard(title: "Макс. угол тангажа\n(Pitch)", commandName: "fl_pitch_max", value: _flPitchMax, min: 5.0, max: 80.0, divisions: 150, unit: "°", onChanged: (v) => setState(() => _flPitchMax = v), onChangeEnd: (v) => SerialService.sendCommand("fl_pitch_max $v")),
             XFireSliderCard(title: "Макс. вертикальная скорость", commandName: "fl_vz_speed_max", value: _flVzSpeedMax, min: 0.2, max: 5.0, divisions: 48, unit: "м/с", onChanged: (v) => setState(() => _flVzSpeedMax = v), onChangeEnd: (v) => SerialService.sendCommand("fl_vz_speed_max $v")),
-            XFireSliderCard(title: "RC Rate (Roll/Pitch)", commandName: "rc_rate", value: _rcRate, min: 0.05, max: 2.0, divisions: 195, unit: "", onChanged: (v) => setState(() => _rcRate = v), onChangeEnd: (v) => SerialService.sendCommand("rc_rate $v")),
-            XFireSliderCard(title: "RC Super Expo (Roll/Pitch)", commandName: "rc_super_expo", value: _rcSuperExpo, min: 0.0, max: 0.9, divisions: 90, unit: "", onChanged: (v) => setState(() => _rcSuperExpo = v), onChangeEnd: (v) => SerialService.sendCommand("rc_super_expo $v")),
-            XFireSliderCard(title: "RC Stick Expo (Roll/Pitch)", commandName: "rc_stick_expo", value: _rcStickExpo, min: 0.0, max: 1.0, divisions: 100, unit: "", onChanged: (v) => setState(() => _rcStickExpo = v), onChangeEnd: (v) => SerialService.sendCommand("rc_stick_expo $v")),
+            XFireSliderCard(title: "RC Rate\n(Roll/Pitch)", commandName: "rc_rate", value: _rcRate, min: 0.05, max: 2.0, divisions: 195, unit: "", onChanged: (v) => setState(() => _rcRate = v), onChangeEnd: (v) => SerialService.sendCommand("rc_rate $v")),
+            XFireSliderCard(title: "RC Super Expo\n(Roll/Pitch)", commandName: "rc_super_expo", value: _rcSuperExpo, min: 0.0, max: 0.9, divisions: 90, unit: "", onChanged: (v) => setState(() => _rcSuperExpo = v), onChangeEnd: (v) => SerialService.sendCommand("rc_super_expo $v")),
+            XFireSliderCard(title: "RC Stick Expo\n(Roll/Pitch)", commandName: "rc_stick_expo", value: _rcStickExpo, min: 0.0, max: 1.0, divisions: 100, unit: "", onChanged: (v) => setState(() => _rcStickExpo = v), onChangeEnd: (v) => SerialService.sendCommand("rc_stick_expo $v")),
             XFireSliderCard(title: "Yaw Rate", commandName: "rc_yaw_rate", value: _rcYawRate, min: 0.05, max: 2.0, divisions: 195, unit: "", onChanged: (v) => setState(() => _rcYawRate = v), onChangeEnd: (v) => SerialService.sendCommand("rc_yaw_rate $v")),
             XFireSliderCard(title: "Yaw Super Expo", commandName: "rc_yaw_super_expo", value: _rcYawSuperExpo, min: 0.0, max: 0.9, divisions: 90, unit: "", onChanged: (v) => setState(() => _rcYawSuperExpo = v), onChangeEnd: (v) => SerialService.sendCommand("rc_yaw_super_expo $v")),
             XFireSliderCard(title: "Yaw Expo", commandName: "rc_yaw_expo", value: _rcYawExpo, min: 0.0, max: 1.0, divisions: 100, unit: "", onChanged: (v) => setState(() => _rcYawExpo = v), onChangeEnd: (v) => SerialService.sendCommand("rc_yaw_expo $v")),
-            XFireSliderCard(title: "Мёртвая зона вокруг центра (500.0)", commandName: "rc_deadband", value: _rcDeadband, min: 0.0, max: 100.0, divisions: 100, unit: "", onChanged: (v) => setState(() => _rcDeadband = v), onChangeEnd: (v) => SerialService.sendCommand("rc_deadband $v")),
+            XFireSliderCard(title: "Мёртвая зона вокруг центра\n(500.0)", commandName: "rc_deadband", value: _rcDeadband, min: 0.0, max: 100.0, divisions: 100, unit: "", onChanged: (v) => setState(() => _rcDeadband = v), onChangeEnd: (v) => SerialService.sendCommand("rc_deadband $v")),
             XFireSliderCard(title: "Порог перехода Horizon", commandName: "rc_horizon_transition", value: _rcHorizonTransition, min: 0.0, max: 1.0, divisions: 100, unit: "", onChanged: (v) => setState(() => _rcHorizonTransition = v), onChangeEnd: (v) => SerialService.sendCommand("rc_horizon_transition $v")),
-            XFireSliderCard(title: "Сглаживание стиков (0.01..1.0)", commandName: "rc_filter_smoothing", value: _rcFilterSmoothing, min: 0.01, max: 1.0, divisions: 99, unit: "", onChanged: (v) => setState(() => _rcFilterSmoothing = v), onChangeEnd: (v) => SerialService.sendCommand("rc_filter_smoothing $v")),
-            XFireResetCard(hint: "Сброс режимов полёта и RC (default fl)", onReset: _resetFlightRcGroup),
+            XFireSliderCard(title: "Сглаживание стиков\n(0.01..1.0)", commandName: "rc_filter_smoothing", value: _rcFilterSmoothing, min: 0.01, max: 1.0, divisions: 99, unit: "", onChanged: (v) => setState(() => _rcFilterSmoothing = v), onChangeEnd: (v) => SerialService.sendCommand("rc_filter_smoothing $v")),
+            XFireResetCard(hint: "Сброс режимов полёта и RC\n(default fl)", onReset: _resetFlightRcGroup),
             XFireBatchApplyCard(
-              hint: "Пакетная отправка режимов полёта и кривых RC",
+              hint: "Пакетная отправка режимов\nполёта и кривых RC",
               parameters: [
                 "fl_mode ${_flMode.round()}",
                 "fl_roll_max $_flRollMax",
@@ -1252,11 +1291,11 @@ class _SettingsTabState extends State<SettingsTab> {
         // 4. Failsafe
         XFireExpansionCard(
           title: "Failsafe",
-          subtitle: "Порог батареи, потеря пакетов RC и скорость снижения",
+          subtitle: "Порог батареи, потеря пакетов RC\nи скорость снижения",
           icon: Icons.warning_amber_rounded,
           children: [
             XFireSwitchCard(
-              title: "Failsafe по низкому напряжению батареи",
+              title: "Failsafe по низкому напряжению\nбатареи",
               commandName: "fs_bat_en",
               value: _fsBatEn == 1,
               onChanged: (v) {
@@ -1265,7 +1304,7 @@ class _SettingsTabState extends State<SettingsTab> {
               },
             ),
             XFireSwitchCard(
-              title: "Failsafe при потере пакетов RC",
+              title: "Failsafe при потере\nпакетов RC",
               commandName: "fs_rtx_en",
               value: _fsRtxEn == 1,
               onChanged: (v) {
@@ -1274,7 +1313,7 @@ class _SettingsTabState extends State<SettingsTab> {
               },
             ),
             XFireSliderCard(
-              title: "Скорость снижения при failsafe",
+              title: "Скорость снижения\nпри failsafe",
               commandName: "fs_vz_speed",
               value: _fsVzSpeed,
               min: 0.1,
@@ -1285,7 +1324,7 @@ class _SettingsTabState extends State<SettingsTab> {
               onChangeEnd: (v) => SerialService.sendCommand("fs_vz_speed $v"),
             ),
             XFireSliderCard(
-              title: "Порог напряжения батареи для failsafe",
+              title: "Порог напряжения батареи\nдля failsafe",
               commandName: "bat_fs_v",
               value: _batFsV,
               min: 6.0,
@@ -1295,9 +1334,9 @@ class _SettingsTabState extends State<SettingsTab> {
               onChanged: (v) => setState(() => _batFsV = v),
               onChangeEnd: (v) => SerialService.sendCommand("bat_fs_v $v"),
             ),
-            XFireResetCard(hint: "Сброс настроек failsafe (default fs)", onReset: _resetFailsafeGroup),
+            XFireResetCard(hint: "Сброс настроек failsafe\n(default fs)", onReset: _resetFailsafeGroup),
             XFireBatchApplyCard(
-              hint: "Пакетная отправка настроек failsafe",
+              hint: "Пакетная отправка настроек\nfailsafe",
               parameters: [
                 "fs_bat_en ${_fsBatEn.round()}",
                 "fs_rtx_en ${_fsRtxEn.round()}",
@@ -1311,11 +1350,11 @@ class _SettingsTabState extends State<SettingsTab> {
         // 5. Фильтры (LPF, Notch, Madgwick)
         XFireExpansionCard(
           title: "Фильтры (LPF, Notch, Madgwick)",
-          subtitle: "LPF, Biquad Notch и адаптивный beta Madgwick",
+          subtitle: "LPF, Biquad Notch и адаптивный\nbeta Madgwick",
           icon: Icons.waves,
           children: [
             XFireSwitchCard(
-              title: "Адаптивный beta Madgwick по вибрациям",
+              title: "Адаптивный beta Madgwick\nпо вибрациям",
               commandName: "fil_amb_en",
               value: _filAmbEn == 1,
               onChanged: (v) {
@@ -1324,7 +1363,7 @@ class _SettingsTabState extends State<SettingsTab> {
               },
             ),
             XFireSwitchCard(
-              title: "Включение LPF (гироскоп и акселерометр)",
+              title: "Включение LPF\n(гироскоп и акселерометр)",
               commandName: "fil_lpf_en",
               value: _filLpfEn == 1,
               onChanged: (v) {
@@ -1333,7 +1372,7 @@ class _SettingsTabState extends State<SettingsTab> {
               },
             ),
             XFireSwitchCard(
-              title: "Включение Biquad Notch по осям гироскопа",
+              title: "Включение Biquad Notch\nпо осям гироскопа",
               commandName: "fil_not_en",
               value: _filNotEn == 1,
               onChanged: (v) {
@@ -1341,15 +1380,15 @@ class _SettingsTabState extends State<SettingsTab> {
                 SerialService.sendCommand("fil_not_en ${_filNotEn.round()}");
               },
             ),
-            XFireSliderCard(title: "Альфа LPF гироскопа (0.03..0.35 авто)", commandName: "gyro_filter_alpha", value: _gyroFilterAlpha, min: 0.01, max: 1.0, divisions: 99, unit: "", onChanged: (v) => setState(() => _gyroFilterAlpha = v), onChangeEnd: (v) => SerialService.sendCommand("gyro_filter_alpha $v")),
-            XFireSliderCard(title: "Альфа LPF акселерометра (0.03..0.35 авто)", commandName: "acc_filter_alpha", value: _accFilterAlpha, min: 0.01, max: 1.0, divisions: 99, unit: "", onChanged: (v) => setState(() => _accFilterAlpha = v), onChangeEnd: (v) => SerialService.sendCommand("acc_filter_alpha $v")),
-            XFireSliderCard(title: "Центральная частота Notch (70..220 Гц авто)", commandName: "filter_notch_freq", value: _filterNotchFreq, min: 20.0, max: 400.0, divisions: 380, unit: "Гц", onChanged: (v) => setState(() => _filterNotchFreq = v), onChangeEnd: (v) => SerialService.sendCommand("filter_notch_freq $v")),
+            XFireSliderCard(title: "Альфа LPF гироскопа\n(0.03..0.35 авто)", commandName: "gyro_filter_alpha", value: _gyroFilterAlpha, min: 0.01, max: 1.0, divisions: 99, unit: "", onChanged: (v) => setState(() => _gyroFilterAlpha = v), onChangeEnd: (v) => SerialService.sendCommand("gyro_filter_alpha $v")),
+            XFireSliderCard(title: "Альфа LPF акселерометра\n(0.03..0.35 авто)", commandName: "acc_filter_alpha", value: _accFilterAlpha, min: 0.01, max: 1.0, divisions: 99, unit: "", onChanged: (v) => setState(() => _accFilterAlpha = v), onChangeEnd: (v) => SerialService.sendCommand("acc_filter_alpha $v")),
+            XFireSliderCard(title: "Центральная частота Notch\n(70..220 Гц авто)", commandName: "filter_notch_freq", value: _filterNotchFreq, min: 20.0, max: 400.0, divisions: 380, unit: "Гц", onChanged: (v) => setState(() => _filterNotchFreq = v), onChangeEnd: (v) => SerialService.sendCommand("filter_notch_freq $v")),
             XFireSliderCard(title: "Полоса Notch фильтра", commandName: "filter_notch_bw", value: _filterNotchBw, min: 2.0, max: 100.0, divisions: 98, unit: "Гц", onChanged: (v) => setState(() => _filterNotchBw = v), onChangeEnd: (v) => SerialService.sendCommand("filter_notch_bw $v")),
-            XFireSliderCard(title: "Базовый beta Madgwick (0.001..1.0)", commandName: "fil_amb", value: _filAmb, min: 0.001, max: 1.0, divisions: 999, unit: "", onChanged: (v) => setState(() => _filAmb = v), onChangeEnd: (v) => SerialService.sendCommand("fil_amb $v")),
-            XFireSliderCard(title: "Мин. beta Madgwick (0.0005..fil_amb)", commandName: "fil_amb_min", value: _filAmbMin, min: 0.0005, max: 0.2, divisions: 399, unit: "", onChanged: (v) => setState(() => _filAmbMin = v), onChangeEnd: (v) => SerialService.sendCommand("fil_amb_min $v")),
-            XFireResetCard(hint: "Сброс фильтров (default fil)", onReset: _resetFiltersGroup),
+            XFireSliderCard(title: "Базовый beta Madgwick\n(0.001..1.0)", commandName: "fil_amb", value: _filAmb, min: 0.001, max: 1.0, divisions: 999, unit: "", onChanged: (v) => setState(() => _filAmb = v), onChangeEnd: (v) => SerialService.sendCommand("fil_amb $v")),
+            XFireSliderCard(title: "Мин. beta Madgwick\n(0.0005..fil_amb)", commandName: "fil_amb_min", value: _filAmbMin, min: 0.0005, max: 0.2, divisions: 399, unit: "", onChanged: (v) => setState(() => _filAmbMin = v), onChangeEnd: (v) => SerialService.sendCommand("fil_amb_min $v")),
+            XFireResetCard(hint: "Сброс фильтров\n(default fil)", onReset: _resetFiltersGroup),
             XFireBatchApplyCard(
-              hint: "Пакетная отправка настроек фильтров",
+              hint: "Пакетная отправка настроек\nфильтров",
               parameters: [
                 "fil_amb_en ${_filAmbEn.round()}",
                 "fil_lpf_en ${_filLpfEn.round()}",
@@ -1367,8 +1406,8 @@ class _SettingsTabState extends State<SettingsTab> {
 
         // 6. ПИД-коэффициенты (Roll, Pitch, Yaw, Vz)
         XFireExpansionCard(
-          title: "ПИД-коэффициенты (Roll, Pitch, Yaw, Vz)",
-          subtitle: "Настройки Kp, Ki, Kd для осей Roll, Pitch, Yaw и Vz",
+          title: "ПИД-коэффициенты\n(Roll, Pitch, Yaw, Vz)",
+          subtitle: "Настройки Kp, Ki, Kd для осей\nRoll, Pitch, Yaw и Vz",
           icon: Icons.tune,
           children: [
             PidAxisCardWidget(
@@ -1447,9 +1486,9 @@ class _SettingsTabState extends State<SettingsTab> {
                 SerialService.sendCommand("vz_kd $d");
               },
             ),
-            XFireResetCard(hint: "Сброс ПИД-коэффициентов (default pid)", onReset: _resetPidGroup),
+            XFireResetCard(hint: "Сброс ПИД-коэффициентов\n(default pid)", onReset: _resetPidGroup),
             XFireBatchApplyCard(
-              hint: "Пакетная отправка ПИД-коэффициентов осей",
+              hint: "Пакетная отправка ПИД-коэффициентов\nосей",
               parameters: [
                 "roll_kp $_rollKp",
                 "roll_ki $_rollKi",
@@ -1471,7 +1510,7 @@ class _SettingsTabState extends State<SettingsTab> {
         // 7. Калибровки датчиков
         XFireExpansionCard(
           title: "Калибровка датчиков",
-          subtitle: "Гироскоп, акселерометр, лидар и компас",
+          subtitle: "Гироскоп, акселерометр,\nлидар и компас",
           icon: Icons.explore,
           children: [
             XFireActionCard(
@@ -1506,7 +1545,7 @@ class _SettingsTabState extends State<SettingsTab> {
                   showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
                 } else {
                   SerialService.sendCommand("cal_lid");
-                  showAppDialog(context, "Успех", "Калибровка лидара (cal_lid) запущена.");
+                  showAppDialog(context, "Успех", "Калибровка лидара (cal_lid)\nзапущена.");
                 }
               },
             ),
@@ -1518,7 +1557,7 @@ class _SettingsTabState extends State<SettingsTab> {
                   showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
                 } else {
                   SerialService.sendCommand("cal_mag");
-                  showAppDialog(context, "Успех", "Калибровка компаса (cal_mag) запущена.");
+                  showAppDialog(context, "Успех", "Калибровка компаса (cal_mag)\nзапущена.");
                 }
               },
             ),
@@ -1528,11 +1567,11 @@ class _SettingsTabState extends State<SettingsTab> {
         // 8. Тесты оборудования
         XFireExpansionCard(
           title: "Тесты оборудования",
-          subtitle: "Проверки датчиков, радио, моторов, PID и линка RC",
+          subtitle: "Проверки датчиков, радио,\nмоторов, PID и линка RC",
           icon: Icons.rule,
           children: [
             XFireActionCard(
-              title: "Тест IMU (MPU / датчики)",
+              title: "Тест IMU\n(MPU / датчики)",
               commandName: "test_mpu",
               onTap: () {
                 if (!SerialService.isConnected) {
@@ -1544,14 +1583,14 @@ class _SettingsTabState extends State<SettingsTab> {
               },
             ),
             XFireActionCard(
-              title: "Тест радиомодуля SX126x (915 МГц)",
+              title: "Тест радиомодуля\nSX126x (915 МГц)",
               commandName: "test_sx",
               onTap: () {
                 if (!SerialService.isConnected) {
                   showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
                 } else {
                   SerialService.sendCommand("test_sx");
-                  showAppDialog(context, "Тест SX126x", "Проверка SPI радиомодуля запущена.");
+                  showAppDialog(context, "Тест SX126x", "Проверка SPI радиомодуля\nзапущена.");
                 }
               },
             ),
@@ -1575,7 +1614,7 @@ class _SettingsTabState extends State<SettingsTab> {
                   showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
                 } else {
                   SerialService.sendCommand("test_motor");
-                  showAppDialog(context, "Внимание", "Тест моторов (25%) активирован!", isError: true);
+                  showAppDialog(context, "Внимание", "Тест моторов (25%)\nактивирован!", isError: true);
                 }
               },
             ),
@@ -1599,19 +1638,19 @@ class _SettingsTabState extends State<SettingsTab> {
                   showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
                 } else {
                   SerialService.sendCommand("test_rc");
-                  showAppDialog(context, "Тест RC", "Диагностика связи с пультом запущена.");
+                  showAppDialog(context, "Тест RC", "Диагностика связи с пультом\nзапущена.");
                 }
               },
             ),
             XFireActionCard(
-              title: "Тест смены канала связи с пультом",
+              title: "Тест смены канала\nсвязи с пультом",
               commandName: "test_rc_can",
               onTap: () {
                 if (!SerialService.isConnected) {
                   showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
                 } else {
                   SerialService.sendCommand("test_rc_can");
-                  showAppDialog(context, "Смена канала", "Команда test_rc_can отправлена.");
+                  showAppDialog(context, "Смена канала", "Команда test_rc_can\nотправлена.");
                 }
               },
             ),
@@ -1621,7 +1660,7 @@ class _SettingsTabState extends State<SettingsTab> {
         // 9. Телеметрия (датчики и авиогоризонт)
         XFireExpansionCard(
           title: "Телеметрия",
-          subtitle: "Авиогоризонт, HUD и показания гироскопа / акселерометра",
+          subtitle: "Авиогоризонт, HUD и показания\nгироскопа / акселерометра",
           icon: Icons.radar,
           children: [
             StreamBuilder<void>(
@@ -1713,13 +1752,13 @@ class _SettingsTabState extends State<SettingsTab> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text("GYROSCOPE", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+                            const Text("GYROSCOPE", style: TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
                             const SizedBox(height: 4),
                             _buildSensorBar("Gyro Roll", SerialService.gyroRoll, -3.14, 3.14, "rad/s", Colors.blueAccent),
                             _buildSensorBar("Gyro Pitch", SerialService.gyroPitch, -3.14, 3.14, "rad/s", Colors.blueAccent),
                             _buildSensorBar("Gyro Yaw", SerialService.gyroYaw, -3.14, 3.14, "rad/s", Colors.blueAccent),
-                            const SizedBox(height: 6),
-                            const Text("ACCELEROMETER", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+                            const SizedBox(height: 8),
+                            const Text("ACCELEROMETER", style: TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
                             const SizedBox(height: 4),
                             _buildSensorBar("Accel X", SerialService.accelX, -2.0, 2.0, "G", Colors.cyanAccent),
                             _buildSensorBar("Accel Y", SerialService.accelY, -2.0, 2.0, "G", Colors.cyanAccent),
@@ -1738,11 +1777,11 @@ class _SettingsTabState extends State<SettingsTab> {
         // 10. Прошивка полетного контроллера
         XFireExpansionCard(
           title: "Прошивка полетного контроллера",
-          subtitle: "Обновление прошивки STM32 (нажмите для прошивки)",
+          subtitle: "Обновление прошивки STM32\n(нажмите для прошивки)",
           icon: Icons.memory,
           children: [
             XFireFlashCard(
-              title: "Прошить полетный контроллер (v3.27)",
+              title: "Прошить полетный контроллер\n(v3.27)",
               targetName: "Полетный контроллер FC",
               onFlash: (onProgress) async {
                 onProgress("Стирание флеш-памяти STM32...", 0.2);
@@ -1762,7 +1801,7 @@ class _SettingsTabState extends State<SettingsTab> {
 
         // 11. Общий сброс всех настроек FC
         XFireResetCard(
-          hint: "Общий сброс всех настроек полётного контроллера (default)",
+          hint: "Общий сброс всех настроек\nполётного контроллера (default)",
           onReset: _resetAllFcSettings,
         ),
 
@@ -1811,14 +1850,14 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
               commandName: "rc_cal_sticks",
               onTap: () {
                 if (!SerialService.isConnected) {
-                  showAppDialog(context, "Ошибка", "Устройство пульта не подключено!", isError: true);
+                  showAppDialog(context, "Ошибка", "Устройство пульта\nне подключено!", isError: true);
                 } else {
                   SerialService.sendCommand("rc_cal_sticks");
-                  showAppDialog(context, "Калибровка", "Команда калибровки нейтрали отправлена в пульт.");
+                  showAppDialog(context, "Калибровка", "Команда калибровки нейтрали\nотправлена в пульт.");
                 }
               },
             ),
-            XFireSliderCard(title: "Мертвая зона стиков (Deadband)", commandName: "rc_tx_deadband", value: _stickDeadband, min: 0, max: 50, divisions: 50, unit: "PWM", onChanged: (v) => setState(() => _stickDeadband = v), onChangeEnd: (v) => SerialService.sendCommand("rc_tx_deadband ${v.round()}")),
+            XFireSliderCard(title: "Мертвая зона стиков\n(Deadband)", commandName: "rc_tx_deadband", value: _stickDeadband, min: 0, max: 50, divisions: 50, unit: "PWM", onChanged: (v) => setState(() => _stickDeadband = v), onChangeEnd: (v) => SerialService.sendCommand("rc_tx_deadband ${v.round()}")),
             XFireResetCard(
               hint: "Сброс калибровки стиков пульта",
               onReset: () {
@@ -1829,18 +1868,18 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
               },
             ),
             XFireBatchApplyCard(
-              hint: "Пакетная отправка мертвой зоны стиков пульта",
+              hint: "Пакетная отправка мертвой зоны\nстиков пульта",
               parameters: ["rc_tx_deadband ${_stickDeadband.round()}"],
             ),
           ],
         ),
         XFireExpansionCard(
           title: "Прошивка пульта управления",
-          subtitle: "Обновление ПО пульта (нажмите для прошивки)",
+          subtitle: "Обновление ПО пульта\n(нажмите для прошивки)",
           icon: Icons.memory,
           children: [
             XFireFlashCard(
-              title: "Прошить пульт управления (v3.27)",
+              title: "Прошить пульт управления\n(v3.27)",
               targetName: "Пульт управления RC",
               onFlash: (onProgress) async {
                 onProgress("Стирание памяти пульта...", 0.25);
@@ -1859,22 +1898,22 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
         ),
         XFireExpansionCard(
           title: "Протокол и мощность",
-          subtitle: "Выбор протокола связи и мощности передатчика",
+          subtitle: "Выбор протокола связи и мощности\nпередатчика",
           icon: Icons.wifi,
           children: [
             XFireSegmentedCard(
               title: "Протокол связи с модулем",
               commandName: "rc_proto",
-              options: const ["CRSF", "XFire RTX (915MHz)", "SBUS"],
+              options: const ["CRSF", "XFire RTX", "SBUS"],
               selectedIndex: _rcProtocol.round(),
               onSelected: (val) {
                 setState(() => _rcProtocol = val.toDouble());
                 SerialService.sendCommand("rc_proto $val");
               },
             ),
-            XFireSliderCard(title: "Выходная мощность передатчика пульта", commandName: "tx_power_mw", value: _txPowerW, min: 10, max: 1000, divisions: 99, unit: "мВт", onChanged: (v) => setState(() => _txPowerW = v), onChangeEnd: (v) => SerialService.sendCommand("tx_power_mw ${v.round()}")),
+            XFireSliderCard(title: "Выходная мощность передатчика\nпульта", commandName: "tx_power_mw", value: _txPowerW, min: 10, max: 1000, divisions: 99, unit: "мВт", onChanged: (v) => setState(() => _txPowerW = v), onChangeEnd: (v) => SerialService.sendCommand("tx_power_mw ${v.round()}")),
             XFireResetCard(
-              hint: "Сброс протокола и мощности передатчика",
+              hint: "Сброс протокола и мощности\nпередатчика",
               onReset: () {
                 setState(() {
                   _rcProtocol = 1.0;
@@ -1884,17 +1923,17 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
               },
             ),
             XFireBatchApplyCard(
-              hint: "Пакетная отправка типа протокола и мощности Tx",
+              hint: "Пакетная отправка типа протокола\nи мощности Tx",
               parameters: ["rc_proto ${_rcProtocol.round()}", "tx_power_mw ${_txPowerW.round()}"],
             ),
           ],
         ),
         XFireExpansionCard(
-          title: "Радиоуправление и экспоненты пульта",
-          subtitle: "RC Rate, Super Expo, кривые и сглаживание",
+          title: "Радиоуправление и экспоненты\nпульта",
+          subtitle: "RC Rate, Super Expo,\nкривые и сглаживание",
           icon: Icons.tune,
           children: [
-            XFireSliderCard(title: "RC Rate (Roll/Pitch)", commandName: "rc_rate", value: _rcRate, min: 0.1, max: 2.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcRate = v), onChangeEnd: (v) => SerialService.sendCommand("rc_rate $v")),
+            XFireSliderCard(title: "RC Rate\n(Roll/Pitch)", commandName: "rc_rate", value: _rcRate, min: 0.1, max: 2.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcRate = v), onChangeEnd: (v) => SerialService.sendCommand("rc_rate $v")),
             XFireSliderCard(title: "RC Super Expo", commandName: "rc_super_expo", value: _rcSuperExpo, min: 0.0, max: 0.9, divisions: 18, unit: "", onChanged: (v) => setState(() => _rcSuperExpo = v), onChangeEnd: (v) => SerialService.sendCommand("rc_super_expo $v")),
             XFireSliderCard(title: "RC Stick Expo", commandName: "rc_stick_expo", value: _rcStickExpo, min: 0.0, max: 1.0, divisions: 20, unit: "", onChanged: (v) => setState(() => _rcStickExpo = v), onChangeEnd: (v) => SerialService.sendCommand("rc_stick_expo $v")),
             XFireSliderCard(title: "Yaw Rate", commandName: "rc_yaw_rate", value: _rcYawRate, min: 0.1, max: 2.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcYawRate = v), onChangeEnd: (v) => SerialService.sendCommand("rc_yaw_rate $v")),
@@ -1903,7 +1942,7 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
             XFireSliderCard(title: "Мертвая зона стиков", commandName: "rc_deadband", value: _rcDeadband, min: 0, max: 50, divisions: 50, unit: "PWM", onChanged: (v) => setState(() => _rcDeadband = v), onChangeEnd: (v) => SerialService.sendCommand("rc_deadband $v")),
             XFireSliderCard(title: "Сглаживание RC", commandName: "rc_filter_smoothing", value: _rcFilterSmoothing, min: 0.05, max: 1.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcFilterSmoothing = v), onChangeEnd: (v) => SerialService.sendCommand("rc_filter_smoothing $v")),
             XFireSwitchCard(
-              title: "RC Failsafe (пакеты пульта)",
+              title: "RC Failsafe\n(пакеты пульта)",
               commandName: "rc_fs_en",
               value: _rcFsEn == 1,
               onChanged: (v) {
@@ -1929,21 +1968,21 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
               },
             ),
             XFireBatchApplyCard(
-              hint: "Пакетная отправка кривых управления и сглаживания",
+              hint: "Пакетная отправка кривых управления\nи сглаживания",
               parameters: ["rc_rate $_rcRate", "rc_super_expo $_rcSuperExpo", "rc_stick_expo $_rcStickExpo", "rc_yaw_rate $_rcYawRate", "rc_yaw_super_expo $_rcYawSuperExpo", "rc_yaw_expo $_rcYawExpo", "rc_deadband $_rcDeadband", "rc_filter_smoothing $_rcFilterSmoothing", "rc_fs_en ${_rcFsEn.round()}"],
             ),
           ],
         ),
         XFireExpansionCard(
           title: "Тест каналов",
-          subtitle: "Монитор каналов управления в реальном времени",
+          subtitle: "Монитор каналов управления\nв реальном времени",
           icon: Icons.bar_chart,
           children: [
             XFireCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text("Каналы пульта (CH1 - CH4)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                  const Text("Каналы пульта (CH1 - CH4)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white), softWrap: true),
                   const SizedBox(height: 12),
                   _buildChannelBar("Channel 1 (Roll)", 1500, Colors.blueAccent),
                   _buildChannelBar("Channel 2 (Pitch)", 1500, Colors.cyanAccent),
@@ -1962,18 +2001,18 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
   Widget _buildChannelBar(String label, int pwmValue, Color color) {
     double percent = ((pwmValue - 1000) / 1000.0).clamp(0.0, 1.0);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      padding: const EdgeInsets.symmetric(vertical: 5.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(label, style: const TextStyle(fontSize: 11, color: Colors.white70)),
-              Text("$pwmValue PWM", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color)),
+              Text(label, style: const TextStyle(fontSize: 13, color: Colors.white70)),
+              Text("$pwmValue PWM", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color)),
             ],
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 3),
           LinearProgressIndicator(value: percent, color: color, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
         ],
       ),
@@ -1982,7 +2021,7 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
 }
 
 // ==========================================
-// ВКЛАДКА 3: РАДИОМОДУЛЬ RTX (915 МГц)
+// ВКЛАДКА 3: РАДИОМОДУЛЬ RTX / LoRa
 // ==========================================
 class RadioTab extends StatefulWidget {
   const RadioTab({super.key});
@@ -1992,34 +2031,28 @@ class RadioTab extends StatefulWidget {
 }
 
 class _RadioTabState extends State<RadioTab> {
+  double _rtxProtId = 0;
+  double _rtxId = 1;
   double _rtxEn = 1;
+  double _rtxBand = 2; // 0: 433, 1: 868, 2: 915 МГц
 
-  double _rtxBand = 9.0;
-  double _rtxAmpTier = 22.0;
-  int _antennaComboIndex = 1;
-
-  double _priChan = 15.0;
-  double _priSf = 7.0;
-  double _priBw = 7.0;
-  double _priCr = 1.0;
-  double _priPower = 22.0;
-  double _priFadeMargin = 15.0;
-
-  double _bakChan = 25.0;
-  double _bakSf = 10.0;
-  double _bakBw = 4.0;
-  double _bakCr = 1.0;
-  double _bakPower = 22.0;
-  double _bakFadeMargin = 15.0;
-
-  bool _rtxAfcEn = false;
   bool _rtxHwCrcEn = true;
-  bool _rtxSwCrcEn = false;
-  bool _rtxAddrEn = true;
-  String _rtxAddrHex = "0x0000";
-  String _rtxSyncWordHex = "0x1424";
-  bool _rtxLbtEn = false;
+  bool _rtxAddrEn = false;
+  double _rtxAddr = 0;
+  String _rtxSyncWordHex = "0x12";
   bool _rtxIqInv = false;
+
+  double _priChan = 0;
+  double _priSf = 7;
+  double _priBw = 7;
+  double _priCr = 1;
+  double _priPower = 14;
+
+  double _bakChan = 1;
+  double _bakSf = 8;
+  double _bakBw = 7;
+  double _bakCr = 2;
+  double _bakPower = 17;
 
   bool _hasProtectiveSleeve = true;
   double _sleeveThicknessMm = 1.0;
@@ -2028,322 +2061,314 @@ class _RadioTabState extends State<RadioTab> {
   double _kharchenkoWireSqMm = 2.0;
 
   final List<double> _bwTable = [7800.0, 10400.0, 15600.0, 20800.0, 31250.0, 41700.0, 62500.0, 125000.0, 250000.0, 500000.0];
-  final Map<int, double> _snrTable = {5: -2.5, 6: -5.0, 7: -7.5, 8: -10.0, 9: -12.5, 10: -15.0, 11: -17.5, 12: -20.0};
+  final Map<int, double> _snrTable = {6: -5.0, 7: -7.5, 8: -10.0, 9: -12.5, 10: -15.0, 11: -17.5, 12: -20.0};
 
-  double get _priFreqMhz => (_rtxBand * 100.0) + _priChan;
-  double get _bakFreqMhz => (_rtxBand * 100.0) + _bakChan;
+  double _bandBaseMhz(int band) {
+    if (band == 0) return 433.0;
+    if (band == 1) return 868.0;
+    return 915.0;
+  }
+
+  double get _priFreqMhz => _bandBaseMhz(_rtxBand.round()) + (_priChan * 0.2);
+  double get _bakFreqMhz => _bandBaseMhz(_rtxBand.round()) + (_bakChan * 0.2);
+
+  int _parseByte(String raw, {int fallback = 0x12}) {
+    final cleaned = raw.trim().toLowerCase().replaceFirst('0x', '');
+    final parsed = int.tryParse(cleaned, radix: raw.trim().toLowerCase().startsWith('0x') ? 16 : 10);
+    if (parsed == null) return fallback;
+    return parsed.clamp(0, 255);
+  }
 
   double _calculateSensitivity(double bwParam, double sfParam) {
-    int bwIdx = bwParam.round().clamp(0, _bwTable.length - 1);
-    double bwHz = _bwTable[bwIdx];
-    int sfInt = sfParam.round().clamp(5, 12);
-    double snr = _snrTable[sfInt] ?? -7.5;
+    final bwHz = _bwTable[bwParam.round().clamp(0, _bwTable.length - 1)];
+    final sfInt = sfParam.round().clamp(6, 12);
+    final snr = _snrTable[sfInt] ?? -7.5;
     return -174.0 + (10.0 * (math.log(bwHz) / math.ln10)) + 6.0 + snr;
   }
 
   double _calculateAirDataRate(double bwParam, double sfParam, double crParam) {
-    int bwIdx = bwParam.round().clamp(0, _bwTable.length - 1);
-    double bwHz = _bwTable[bwIdx];
-    int sfInt = sfParam.round().clamp(5, 12);
-    int crInt = crParam.round().clamp(1, 4);
-    double symbolRate = bwHz / math.pow(2, sfInt).toDouble();
+    final bwHz = _bwTable[bwParam.round().clamp(0, _bwTable.length - 1)];
+    final sfInt = sfParam.round().clamp(6, 12);
+    final crInt = crParam.round().clamp(1, 4);
+    final symbolRate = bwHz / math.pow(2, sfInt).toDouble();
     return sfInt * symbolRate * (4.0 / (4.0 + crInt));
   }
 
-  Map<String, dynamic> _calculateLinkBudget(double freqMhz, double bw, double sf, double cr, double power, double fadeMargin) {
-    double sensitivity = _calculateSensitivity(bw, sf);
-    double gTx = (_antennaComboIndex == 1) ? 5.5 : 2.15;
-    double gRx = 2.15;
-    double cableLoss = 1.0;
-
-    double eirp = power + gTx - cableLoss;
-    double maxPathLoss = eirp + gRx - sensitivity - fadeMargin;
-    if (maxPathLoss < 0) maxPathLoss = 0;
-
-    double freqLog = 20 * (math.log(freqMhz) / math.ln10);
-    double exponent = (maxPathLoss - 32.44 - freqLog) / 20.0;
-    double distanceKm = math.pow(10.0, exponent).toDouble();
-    double bitRate = _calculateAirDataRate(bw, sf, cr);
-
-    return {'sensitivity': sensitivity, 'eirp': eirp, 'distanceKm': distanceKm, 'bitRate': bitRate};
+  Map<String, dynamic> _calculateLinkBudget(double freqMhz, double bw, double sf, double cr, double power) {
+    final sensitivity = _calculateSensitivity(bw, sf);
+    const eirp = 2.15;
+    final maxPathLoss = (power + eirp + 2.15 - 1.0 - sensitivity - 15.0).clamp(0.0, 200.0);
+    final freqLog = 20.0 * (math.log(freqMhz) / math.ln10);
+    final distanceKm = math.pow(10.0, (maxPathLoss - 32.44 - freqLog) / 20.0).toDouble();
+    final bitRate = _calculateAirDataRate(bw, sf, cr);
+    return {'sensitivity': sensitivity, 'distanceKm': distanceKm, 'bitRate': bitRate};
   }
 
   Map<String, dynamic> _calculateAntennaDimensions() {
-    double freqHz = _bakFreqMhz * 1e6;
-    double lambdaMm = (299792458.0 / (freqHz * 1.0003)) * 1000.0;
-    double quarterLambda = lambdaMm / 4.0;
+    final freqHz = _bakFreqMhz * 1e6;
+    final lambdaMm = (299792458.0 / (freqHz * 1.0003)) * 1000.0;
+    final quarterLambda = lambdaMm / 4.0;
 
     double dielectricLoading = 1.0;
     if (_hasProtectiveSleeve) {
       dielectricLoading = 1.0 + (0.018 * 1.6 * (_sleeveThicknessMm / 1.0));
     }
 
-    double radiusBot = _dipoleTubeDiameterMm / 2.0;
-    double kFactorDipoleBot = (0.97 - (2.5 / (2.0 * math.log(lambdaMm / radiusBot)))) / dielectricLoading;
+    final radiusBot = _dipoleTubeDiameterMm / 2.0;
+    final kFactorDipoleBot = (0.97 - (2.5 / (2.0 * math.log(lambdaMm / radiusBot)))) / dielectricLoading;
 
-    double radiusTop = math.sqrt(_dipoleTopWireSqMm / math.pi);
-    double kFactorDipoleTop = (0.97 - (2.0 / (2.0 * math.log(lambdaMm / radiusTop)))) / dielectricLoading;
+    final radiusTop = math.sqrt(_dipoleTopWireSqMm / math.pi);
+    final kFactorDipoleTop = (0.97 - (2.0 / (2.0 * math.log(lambdaMm / radiusTop)))) / dielectricLoading;
 
-    double dipoleArmTopMm = quarterLambda * kFactorDipoleTop - 0.006;
-    double dipoleArmBotMm = quarterLambda * kFactorDipoleBot - 0.006;
-    double kharchenkoSideMm = quarterLambda * (0.96 - (1.8 / (2.0 * math.log(lambdaMm / (2.0 * math.sqrt(_kharchenkoWireSqMm / math.pi))))));
+    final dipoleArmTopMm = quarterLambda * kFactorDipoleTop - 0.006;
+    final dipoleArmBotMm = quarterLambda * kFactorDipoleBot - 0.006;
+    final kharchenkoSideMm = quarterLambda * (0.96 - (1.8 / (2.0 * math.log(lambdaMm / (2.0 * math.sqrt(_kharchenkoWireSqMm / math.pi))))));
 
     return {'lambdaMm': lambdaMm, 'dipoleArmTopMm': dipoleArmTopMm, 'dipoleArmBotMm': dipoleArmBotMm, 'kharchenkoSideMm': kharchenkoSideMm};
   }
 
+  void _resetCommon() {
+    setState(() {
+      _rtxProtId = 0;
+      _rtxId = 1;
+      _rtxEn = 1;
+      _rtxBand = 2;
+      _rtxHwCrcEn = true;
+      _rtxAddrEn = false;
+      _rtxAddr = 0;
+      _rtxSyncWordHex = "0x12";
+      _rtxIqInv = false;
+    });
+    SerialService.sendCommand("default rtx_common");
+  }
+
+  void _resetPrimary() {
+    setState(() {
+      _priChan = 0;
+      _priSf = 7;
+      _priBw = 7;
+      _priCr = 1;
+      _priPower = 14;
+    });
+    SerialService.sendCommand("default rtx_primary");
+  }
+
+  void _resetBackup() {
+    setState(() {
+      _bakChan = 1;
+      _bakSf = 8;
+      _bakBw = 7;
+      _bakCr = 2;
+      _bakPower = 17;
+    });
+    SerialService.sendCommand("default rtx_backup");
+  }
+
+  void _resetAllRadio() {
+    _resetCommon();
+    _resetPrimary();
+    _resetBackup();
+    setState(() {
+      _hasProtectiveSleeve = true;
+      _sleeveThicknessMm = 1.0;
+      _dipoleTubeDiameterMm = 3.0;
+      _dipoleTopWireSqMm = 1.0;
+      _kharchenkoWireSqMm = 2.0;
+    });
+    SerialService.sendCommand("default dipole");
+    SerialService.sendCommand("default kharchenko");
+    SerialService.sendCommand("default");
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (_priPower > _rtxAmpTier) _priPower = _rtxAmpTier;
-    if (_bakPower > _rtxAmpTier) _bakPower = _rtxAmpTier;
-
-    var priResults = _calculateLinkBudget(_priFreqMhz, _priBw, _priSf, _priCr, _priPower, _priFadeMargin);
-    var bakResults = _calculateLinkBudget(_bakFreqMhz, _bakBw, _bakSf, _bakCr, _bakPower, _bakFadeMargin);
-    var antResults = _calculateAntennaDimensions();
-
-    int powerTierIndex = _rtxAmpTier == 22 ? 0 : (_rtxAmpTier == 29 ? 1 : (_rtxAmpTier == 30 ? 2 : 3));
+    final priResults = _calculateLinkBudget(_priFreqMhz, _priBw, _priSf, _priCr, _priPower);
+    final bakResults = _calculateLinkBudget(_bakFreqMhz, _bakBw, _bakSf, _bakCr, _bakPower);
+    final antResults = _calculateAntennaDimensions();
+    final syncByte = _parseByte(_rtxSyncWordHex, fallback: 0x12);
 
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
         XFireExpansionCard(
           title: "Общие настройки радиомодуля",
-          subtitle: "Диапазон частот, мощность усилителя (PA Tier) и протокол",
+          subtitle: "Протокол, ID сети, диапазон,\nCRC, адресация и sync word",
           icon: Icons.settings_applications_rounded,
           children: [
-            XFireSwitchCard(title: "Включить RTX модуль", commandName: "rtx_en", value: _rtxEn == 1, onChanged: (v) { setState(() => _rtxEn = v ? 1.0 : 0.0); SerialService.sendCommand("rtx_en ${_rtxEn.round()}"); }),
-            XFireSliderCard(title: "Общий диапазон частот (9 = 900 МГц)", commandName: "rtx_band", value: _rtxBand, min: 1, max: 9, divisions: 8, unit: "", onChanged: (v) => setState(() => _rtxBand = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_band ${v.round()}")),
-            XFireSegmentedCard(
-              title: "Мощность усилителя (PA Tier)",
-              commandName: "rtx_amp_tier",
-              options: const ["22 dBm", "29 dBm", "30 dBm", "33 dBm"],
-              selectedIndex: powerTierIndex,
-              onSelected: (val) {
-                setState(() {
-                  if (val == 0) {
-                    _rtxAmpTier = 22.0;
-                  } else if (val == 1) {
-                    _rtxAmpTier = 29.0;
-                  } else if (val == 2) {
-                    _rtxAmpTier = 30.0;
-                  } else {
-                    _rtxAmpTier = 33.0;
-                  }
-
-                  if (_priPower > _rtxAmpTier) _priPower = _rtxAmpTier;
-                  if (_bakPower > _rtxAmpTier) _bakPower = _rtxAmpTier;
-                });
-                SerialService.sendCommand("rtx_amp_tier ${_rtxAmpTier.round()}");
+            XFireSliderCard(
+              title: "ID протокола радиоканала",
+              commandName: "rtx_prot_id",
+              value: _rtxProtId,
+              min: 0,
+              max: 255,
+              divisions: 255,
+              unit: "",
+              onChanged: (v) => setState(() => _rtxProtId = v),
+              onChangeEnd: (v) => SerialService.sendCommand("rtx_prot_id ${v.round()}"),
+            ),
+            XFireSliderCard(
+              title: "Уникальный ID пары / сети",
+              commandName: "rtx_id",
+              value: _rtxId,
+              min: 0,
+              max: 65535,
+              divisions: 255,
+              unit: "",
+              onChanged: (v) => setState(() => _rtxId = v),
+              onChangeEnd: (v) => SerialService.sendCommand("rtx_id ${v.round()}"),
+            ),
+            XFireSwitchCard(
+              title: "Включение радиомодуля",
+              commandName: "rtx_en",
+              value: _rtxEn == 1,
+              onChanged: (v) {
+                setState(() => _rtxEn = v ? 1.0 : 0.0);
+                SerialService.sendCommand("rtx_en ${_rtxEn.round()}");
               },
             ),
-            XFireCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text("Комбинация антенн", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-                  const SizedBox(height: 2),
-                  const Text("ant_combo_config", style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    decoration: BoxDecoration(color: const Color(0xFF242428), borderRadius: BorderRadius.circular(12)),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<int>(
-                        value: _antennaComboIndex,
-                        dropdownColor: const Color(0xFF242428),
-                        borderRadius: BorderRadius.circular(12),
-                        isExpanded: true,
-                        icon: const Icon(Icons.arrow_drop_down, color: Colors.amberAccent),
-                        style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold),
-                        items: const [
-                          DropdownMenuItem(value: 0, child: Text("Штырь + Штырь (2.15 dBi)")),
-                          DropdownMenuItem(value: 1, child: Text("Харченко + Штырь (5.5 dBi)")),
-                        ],
-                        onChanged: (val) {
-                          if (val != null) setState(() => _antennaComboIndex = val);
-                        },
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+            XFireSegmentedCard(
+              title: "Частотный диапазон",
+              commandName: "rtx_band",
+              options: const ["0: 433 МГц", "1: 868 МГц", "2: 915 МГц"],
+              selectedIndex: _rtxBand.round().clamp(0, 2),
+              onSelected: (val) {
+                setState(() => _rtxBand = val.toDouble());
+                SerialService.sendCommand("rtx_band $val");
+              },
             ),
-            XFireSwitchCard(title: "Аппаратный CRC", commandName: "rtx_hw_crc_en", value: _rtxHwCrcEn, onChanged: (v) { setState(() => _rtxHwCrcEn = v); SerialService.sendCommand("rtx_hw_crc_en ${v ? 1 : 0}"); }),
-            XFireSwitchCard(title: "Программный CRC", commandName: "rtx_sw_crc_en", value: _rtxSwCrcEn, onChanged: (v) { setState(() => _rtxSwCrcEn = v); SerialService.sendCommand("rtx_sw_crc_en ${v ? 1 : 0}"); }),
-            XFireSwitchCard(title: "Сетевой адрес (вкл/выкл)", commandName: "rtx_addr_en", value: _rtxAddrEn, onChanged: (v) { setState(() => _rtxAddrEn = v); SerialService.sendCommand("rtx_addr_en ${v ? 1 : 0}"); }),
-            XFireTextHexCard(
-              title: "Сетевой адрес (HEX)",
+            XFireSwitchCard(
+              title: "Аппаратная проверка CRC",
+              commandName: "rtx_hw_crc_en",
+              value: _rtxHwCrcEn,
+              onChanged: (v) {
+                setState(() => _rtxHwCrcEn = v);
+                SerialService.sendCommand("rtx_hw_crc_en ${v ? 1 : 0}");
+              },
+            ),
+            XFireSwitchCard(
+              title: "Адресация по адресу узла",
+              commandName: "rtx_addr_en",
+              value: _rtxAddrEn,
+              onChanged: (v) {
+                setState(() => _rtxAddrEn = v);
+                SerialService.sendCommand("rtx_addr_en ${v ? 1 : 0}");
+              },
+            ),
+            XFireSliderCard(
+              title: "Адрес узла\n(при rtx_addr_en = 1)",
               commandName: "rtx_addr",
-              initialValue: _rtxAddrHex,
-              onChanged: (v) => setState(() => _rtxAddrHex = v),
-              onSubmitEnd: (v) => SerialService.sendCommand("rtx_addr $v"),
+              value: _rtxAddr,
+              min: 0,
+              max: 255,
+              divisions: 255,
+              unit: "",
+              onChanged: (v) => setState(() => _rtxAddr = v),
+              onChangeEnd: (v) => SerialService.sendCommand("rtx_addr ${v.round()}"),
             ),
             XFireTextHexCard(
-              title: "Слово синхронизации (HEX)",
+              title: "Sync word LoRa\n(0..255, по умолч. 0x12)",
               commandName: "rtx_sync_word",
               initialValue: _rtxSyncWordHex,
               onChanged: (v) => setState(() => _rtxSyncWordHex = v),
-              onSubmitEnd: (v) => SerialService.sendCommand("rtx_sync_word $v"),
-            ),
-            XFireSwitchCard(title: "Слушать перед передачей (LBT)", commandName: "rtx_lbt_en", value: _rtxLbtEn, onChanged: (v) { setState(() => _rtxLbtEn = v); SerialService.sendCommand("rtx_lbt_en ${v ? 1 : 0}"); }),
-            XFireSwitchCard(title: "Инверсия IQ", commandName: "rtx_iq_inv", value: _rtxIqInv, onChanged: (v) { setState(() => _rtxIqInv = v); SerialService.sendCommand("rtx_iq_inv ${v ? 1 : 0}"); }),
-            XFireSwitchCard(title: "Автоматическая подстройка частоты (AFC)", commandName: "rtx_afc_en", value: _rtxAfcEn, onChanged: (v) => setState(() => _rtxAfcEn = v)),
-            XFireResetCard(
-              hint: "Сброс общих настроек по умолчанию",
-              onReset: () {
-                setState(() {
-                  _rtxEn = 1;
-                  _rtxBand = 9.0;
-                  _rtxAmpTier = 22.0;
-                  _antennaComboIndex = 1;
-                  _rtxHwCrcEn = true;
-                  _rtxSwCrcEn = false;
-                  _rtxAddrEn = true;
-                  _rtxAddrHex = "0x0000";
-                  _rtxSyncWordHex = "0x1424";
-                  _rtxLbtEn = false;
-                  _rtxIqInv = false;
-                  _rtxAfcEn = false;
-                });
-                SerialService.sendCommand("default rtx_common");
+              onSubmitEnd: (v) {
+                final val = _parseByte(v, fallback: 0x12);
+                SerialService.sendCommand("rtx_sync_word $val");
               },
             ),
+            XFireSwitchCard(
+              title: "Инверсия IQ-сигнала",
+              commandName: "rtx_iq_inv",
+              value: _rtxIqInv,
+              onChanged: (v) {
+                setState(() => _rtxIqInv = v);
+                SerialService.sendCommand("rtx_iq_inv ${v ? 1 : 0}");
+              },
+            ),
+            XFireResetCard(hint: "Сброс общих настроек\n(default rtx_common)", onReset: _resetCommon),
             XFireBatchApplyCard(
-              hint: "Пакетная отправка общих настроек и усилителя",
+              hint: "Пакетная отправка общих\nнастроек RTX",
               parameters: [
+                "rtx_prot_id ${_rtxProtId.round()}",
+                "rtx_id ${_rtxId.round()}",
                 "rtx_en ${_rtxEn.round()}",
                 "rtx_band ${_rtxBand.round()}",
-                "rtx_amp_tier ${_rtxAmpTier.round()}",
-                "ant_combo_config $_antennaComboIndex",
                 "rtx_hw_crc_en ${_rtxHwCrcEn ? 1 : 0}",
-                "rtx_sw_crc_en ${_rtxSwCrcEn ? 1 : 0}",
                 "rtx_addr_en ${_rtxAddrEn ? 1 : 0}",
-                "rtx_addr $_rtxAddrHex",
-                "rtx_sync_word $_rtxSyncWordHex",
-                "rtx_lbt_en ${_rtxLbtEn ? 1 : 0}",
+                "rtx_addr ${_rtxAddr.round()}",
+                "rtx_sync_word $syncByte",
                 "rtx_iq_inv ${_rtxIqInv ? 1 : 0}",
-                "rtx_afc_en ${_rtxAfcEn ? 1 : 0}",
               ],
             ),
           ],
         ),
         XFireExpansionCard(
-          title: "Основной канал связи (~5.4 кбит/с)",
-          subtitle: "Штатный режим с малой задержкой (SF7, BW 125 кГц)",
+          title: "Основной канал связи (Primary)",
+          subtitle: "Канал, SF6..12, BW 0..9,\nCR 1..4 и мощность -9..22 дБм",
           icon: Icons.flash_on_rounded,
           children: [
-            XFireSliderCard(title: "Рабочий канал основного профиля", commandName: "rtx_pri_chan", value: _priChan, min: 0, max: 99, divisions: 99, unit: "МГц", onChanged: (v) => setState(() => _priChan = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_pri_chan ${v.round()}")),
-            XFireSliderCard(title: "Основной SF (Spreading Factor 7)", commandName: "rtx_pri_sf", value: _priSf, min: 5, max: 12, divisions: 7, unit: "", onChanged: (v) => setState(() => _priSf = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_pri_sf ${v.round()}")),
-            XFireSliderCard(title: "Основная полоса (BW 125 кГц)", commandName: "rtx_pri_bw", value: _priBw, min: 0, max: 9, divisions: 9, unit: "", onChanged: (v) => setState(() => _priBw = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_pri_bw ${v.round()}")),
-            XFireSliderCard(title: "Основной CR (Coding Rate)", commandName: "rtx_pri_cr", value: _priCr, min: 1, max: 4, divisions: 3, unit: "", onChanged: (v) => setState(() => _priCr = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_pri_cr ${v.round()}")),
-            XFireSliderCard(
-              title: "Мощность основного канала (до ${_rtxAmpTier.round()} dBm)",
-              commandName: "rtx_pri_power",
-              value: _priPower,
-              min: -9,
-              max: _rtxAmpTier,
-              divisions: (_rtxAmpTier + 9).round(),
-              unit: "dBm",
-              onChanged: (v) => setState(() => _priPower = v),
-              onChangeEnd: (v) => SerialService.sendCommand("rtx_pri_power ${v.round()}"),
-            ),
-            XFireSliderCard(title: "Запас на условия (Fade Margin)", commandName: "rtx_pri_fade", value: _priFadeMargin, min: 5.0, max: 30.0, divisions: 25, unit: "dB", onChanged: (v) => setState(() => _priFadeMargin = v), onChangeEnd: (_) {}),
+            XFireSliderCard(title: "Номер основного канала", commandName: "rtx_pri_chan", value: _priChan, min: 0, max: 255, divisions: 255, unit: "", onChanged: (v) => setState(() => _priChan = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_pri_chan ${v.round()}")),
+            XFireSliderCard(title: "Spreading Factor\n(SF6..SF12)", commandName: "rtx_pri_sf", value: _priSf, min: 6, max: 12, divisions: 6, unit: "", onChanged: (v) => setState(() => _priSf = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_pri_sf ${v.round()}")),
+            XFireSliderCard(title: "Индекс полосы BW\n(0..9)", commandName: "rtx_pri_bw", value: _priBw, min: 0, max: 9, divisions: 9, unit: "", onChanged: (v) => setState(() => _priBw = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_pri_bw ${v.round()}")),
+            XFireSliderCard(title: "Coding Rate\n(1: 4/5 .. 4: 4/8)", commandName: "rtx_pri_cr", value: _priCr, min: 1, max: 4, divisions: 3, unit: "", onChanged: (v) => setState(() => _priCr = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_pri_cr ${v.round()}")),
+            XFireSliderCard(title: "Мощность передатчика\n(-9..22 дБм)", commandName: "rtx_pri_power", value: _priPower, min: -9, max: 22, divisions: 31, unit: "дБм", onChanged: (v) => setState(() => _priPower = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_pri_power ${v.round()}")),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 4.0),
               child: RtxLinkCalculatorCard(
-                title: "Калькулятор дальности основного канала",
+                title: "Оценка основного канала",
                 themeColor: Colors.blueAccent,
                 currentFreqMhz: _priFreqMhz,
                 sensitivity: priResults['sensitivity'],
                 distKm: priResults['distanceKm'],
                 bitRate: priResults['bitRate'],
-                sensitivityProgress: ((priResults['sensitivity'] - (-140.0)) / ((-100.0) - (-140.0))).clamp(0.0, 1.0),
+                sensitivityProgress: ((priResults['sensitivity'] - (-140.0)) / 40.0).clamp(0.0, 1.0),
                 bitRateProgress: (priResults['bitRate'] / 30000.0).clamp(0.0, 1.0),
               ),
             ),
-            XFireResetCard(
-              hint: "Сброс основного канала по умолчанию",
-              onReset: () {
-                setState(() {
-                  _priChan = 15.0;
-                  _priSf = 7.0;
-                  _priBw = 7.0;
-                  _priCr = 1.0;
-                  _priPower = 22.0;
-                  _priFadeMargin = 15.0;
-                });
-                SerialService.sendCommand("default rtx_primary");
-              },
-            ),
+            XFireResetCard(hint: "Сброс основного канала\n(default rtx_primary)", onReset: _resetPrimary),
             XFireBatchApplyCard(
-              hint: "Пакетная отправка настроек основного канала",
+              hint: "Пакетная отправка основного\nканала",
               parameters: [
                 "rtx_pri_chan ${_priChan.round()}",
                 "rtx_pri_sf ${_priSf.round()}",
                 "rtx_pri_bw ${_priBw.round()}",
                 "rtx_pri_cr ${_priCr.round()}",
                 "rtx_pri_power ${_priPower.round()}",
-                "rtx_pri_fade $_priFadeMargin",
               ],
             ),
           ],
         ),
         XFireExpansionCard(
-          title: "Запасной канал связи (~1.0 кбит/с)",
-          subtitle: "Ультра-дальний резервный линк (SF10, BW 31.25 кГц)",
+          title: "Резервный канал связи (Backup)",
+          subtitle: "Канал, SF6..12, BW 0..9,\nCR 1..4 и мощность -9..22 дБм",
           icon: Icons.shield_rounded,
           children: [
-            XFireSliderCard(title: "Рабочий канал запасного профиля", commandName: "rtx_bak_chan", value: _bakChan, min: 0, max: 99, divisions: 99, unit: "МГц", onChanged: (v) => setState(() => _bakChan = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_bak_chan ${v.round()}")),
-            XFireSliderCard(title: "Запасной SF (Spreading Factor 10)", commandName: "rtx_bak_sf", value: _bakSf, min: 5, max: 12, divisions: 7, unit: "", onChanged: (v) => setState(() => _bakSf = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_bak_sf ${v.round()}")),
-            XFireSliderCard(title: "Запасная полоса (BW 31.25 кГц)", commandName: "rtx_bak_bw", value: _bakBw, min: 0, max: 9, divisions: 9, unit: "", onChanged: (v) => setState(() => _bakBw = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_bak_bw ${v.round()}")),
-            XFireSliderCard(title: "Запасной CR (Coding Rate)", commandName: "rtx_bak_cr", value: _bakCr, min: 1, max: 4, divisions: 3, unit: "", onChanged: (v) => setState(() => _bakCr = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_bak_cr ${v.round()}")),
-            XFireSliderCard(
-              title: "Мощность запасного канала (до ${_rtxAmpTier.round()} dBm)",
-              commandName: "rtx_bak_power",
-              value: _bakPower,
-              min: -9,
-              max: _rtxAmpTier,
-              divisions: (_rtxAmpTier + 9).round(),
-              unit: "dBm",
-              onChanged: (v) => setState(() => _bakPower = v),
-              onChangeEnd: (v) => SerialService.sendCommand("rtx_bak_power ${v.round()}"),
-            ),
-            XFireSliderCard(title: "Запас на условия (Fade Margin)", commandName: "rtx_bak_fade", value: _bakFadeMargin, min: 5.0, max: 30.0, divisions: 25, unit: "dB", onChanged: (v) => setState(() => _bakFadeMargin = v), onChangeEnd: (_) {}),
+            XFireSliderCard(title: "Номер резервного канала", commandName: "rtx_bak_chan", value: _bakChan, min: 0, max: 255, divisions: 255, unit: "", onChanged: (v) => setState(() => _bakChan = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_bak_chan ${v.round()}")),
+            XFireSliderCard(title: "Spreading Factor\n(SF6..SF12)", commandName: "rtx_bak_sf", value: _bakSf, min: 6, max: 12, divisions: 6, unit: "", onChanged: (v) => setState(() => _bakSf = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_bak_sf ${v.round()}")),
+            XFireSliderCard(title: "Индекс полосы BW\n(0..9)", commandName: "rtx_bak_bw", value: _bakBw, min: 0, max: 9, divisions: 9, unit: "", onChanged: (v) => setState(() => _bakBw = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_bak_bw ${v.round()}")),
+            XFireSliderCard(title: "Coding Rate\n(1: 4/5 .. 4: 4/8)", commandName: "rtx_bak_cr", value: _bakCr, min: 1, max: 4, divisions: 3, unit: "", onChanged: (v) => setState(() => _bakCr = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_bak_cr ${v.round()}")),
+            XFireSliderCard(title: "Мощность передатчика\n(-9..22 дБм)", commandName: "rtx_bak_power", value: _bakPower, min: -9, max: 22, divisions: 31, unit: "дБм", onChanged: (v) => setState(() => _bakPower = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_bak_power ${v.round()}")),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 4.0),
               child: RtxLinkCalculatorCard(
-                title: "Калькулятор дальности запасного канала",
+                title: "Оценка резервного канала",
                 themeColor: Colors.greenAccent,
                 currentFreqMhz: _bakFreqMhz,
                 sensitivity: bakResults['sensitivity'],
                 distKm: bakResults['distanceKm'],
                 bitRate: bakResults['bitRate'],
-                sensitivityProgress: ((bakResults['sensitivity'] - (-140.0)) / ((-100.0) - (-140.0))).clamp(0.0, 1.0),
+                sensitivityProgress: ((bakResults['sensitivity'] - (-140.0)) / 40.0).clamp(0.0, 1.0),
                 bitRateProgress: (bakResults['bitRate'] / 30000.0).clamp(0.0, 1.0),
               ),
             ),
-            XFireResetCard(
-              hint: "Сброс запасного канала по умолчанию",
-              onReset: () {
-                setState(() {
-                  _bakChan = 25.0;
-                  _bakSf = 10.0;
-                  _bakBw = 4.0;
-                  _bakCr = 1.0;
-                  _bakPower = 22.0;
-                  _bakFadeMargin = 15.0;
-                });
-                SerialService.sendCommand("default rtx_backup");
-              },
-            ),
+            XFireResetCard(hint: "Сброс резервного канала\n(default rtx_backup)", onReset: _resetBackup),
             XFireBatchApplyCard(
-              hint: "Пакетная отправка настроек запасного канала",
+              hint: "Пакетная отправка резервного\nканала",
               parameters: [
                 "rtx_bak_chan ${_bakChan.round()}",
                 "rtx_bak_sf ${_bakSf.round()}",
                 "rtx_bak_bw ${_bakBw.round()}",
                 "rtx_bak_cr ${_bakCr.round()}",
                 "rtx_bak_power ${_bakPower.round()}",
-                "rtx_bak_fade $_bakFadeMargin",
               ],
             ),
           ],
@@ -2363,6 +2388,10 @@ class _RadioTabState extends State<RadioTab> {
           kharchenkoWireSqMm: _kharchenkoWireSqMm,
           antResults: antResults,
           onKharcChanged: (v) => setState(() => _kharchenkoWireSqMm = v),
+        ),
+        XFireResetCard(
+          hint: "Общий сброс всех настроек\nрадиомодуля и антенн (default)",
+          onReset: _resetAllRadio,
         ),
         const SizedBox(height: 24),
       ],
@@ -2390,6 +2419,7 @@ class _TerminalTabState extends State<TerminalTab> {
   final List<String> _cliCommands = [
     "info", "mon", "stop", "config", "default",
     "default hw", "default bat", "default fl", "default fs", "default fil", "default pid",
+    "default rtx_common", "default rtx_primary", "default rtx_backup", "default dipole", "default kharchenko",
     "esc_protocol", "imu_align", "com_align",
     "imu_id", "bar_id", "com_id", "lid_id",
     "baro_en", "com_en", "lidar_en",
@@ -2407,10 +2437,9 @@ class _TerminalTabState extends State<TerminalTab> {
     "cal_gyro", "cal_acc", "cal_lid", "cal_mag",
     "test_mpu", "test_sx", "test_lidar", "test_motor", "test_pid", "test_rc", "test_rc_can",
     "rc_cal_sticks", "rc_tx_deadband", "rc_proto", "tx_power_mw",
-    "rtx_en", "rtx_band", "rtx_amp_tier", "ant_combo_config", "rtx_hw_crc_en", "rtx_sw_crc_en", "rtx_addr_en", "rtx_addr", "rtx_sync_word", "rtx_lbt_en", "rtx_iq_inv", "rtx_afc_en",
-    "rtx_pri_chan", "rtx_pri_sf", "rtx_pri_bw", "rtx_pri_cr", "rtx_pri_power", "rtx_pri_fade",
-    "rtx_bak_chan", "rtx_bak_sf", "rtx_bak_bw", "rtx_bak_cr", "rtx_bak_power", "rtx_bak_fade",
-    "ant_sleeve_en", "ant_sleeve_thick", "ant_tube_diam", "ant_top_wire", "ant_kharc_wire",
+    "rtx_prot_id", "rtx_id", "rtx_en", "rtx_band", "rtx_hw_crc_en", "rtx_addr_en", "rtx_addr", "rtx_sync_word", "rtx_iq_inv",
+    "rtx_pri_chan", "rtx_pri_sf", "rtx_pri_bw", "rtx_pri_cr", "rtx_pri_power",
+    "rtx_bak_chan", "rtx_bak_sf", "rtx_bak_bw", "rtx_bak_cr", "rtx_bak_power",
   ];
 
   @override
@@ -2467,14 +2496,18 @@ class _TerminalTabState extends State<TerminalTab> {
               ),
               child: SingleChildScrollView(
                 reverse: true,
-                child: Text(_displayLog, style: const TextStyle(fontFamily: 'monospace', color: Colors.greenAccent, fontSize: 11)),
+                child: Text(
+                  _displayLog,
+                  style: const TextStyle(fontFamily: 'monospace', color: Colors.greenAccent, fontSize: 13, height: 1.35),
+                  softWrap: true,
+                ),
               ),
             ),
           ),
           if (_suggestions.isNotEmpty)
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 13),
-              constraints: const BoxConstraints(maxHeight: 150),
+              constraints: const BoxConstraints(maxHeight: 160),
               decoration: BoxDecoration(
                 color: const Color(0xFF1C1C1E),
                 borderRadius: BorderRadius.circular(12),
@@ -2494,7 +2527,11 @@ class _TerminalTabState extends State<TerminalTab> {
                     },
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
-                      child: Text(item, style: const TextStyle(fontFamily: 'monospace', fontSize: 12, color: Colors.amberAccent, fontWeight: FontWeight.bold)),
+                      child: Text(
+                        item,
+                        style: const TextStyle(fontFamily: 'monospace', fontSize: 14, color: Colors.amberAccent, fontWeight: FontWeight.bold),
+                        softWrap: true,
+                      ),
                     ),
                   );
                 },
@@ -2509,18 +2546,19 @@ class _TerminalTabState extends State<TerminalTab> {
                   child: TextField(
                     controller: _controller,
                     focusNode: _focusNode,
-                    style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
+                    maxLines: null,
+                    style: const TextStyle(fontSize: 15, fontFamily: 'monospace'),
                     decoration: const InputDecoration(hintText: "Enter CLI command..."),
                     onSubmitted: _submitCommand,
                   ),
                 ),
                 const SizedBox(width: 8),
                 SizedBox(
-                  height: 44,
-                  width: 44,
+                  height: 46,
+                  width: 46,
                   child: IconButton.filled(
                     onPressed: () => SerialService.sendCommand("info"),
-                    icon: const Icon(Icons.info_outline, size: 18, color: Colors.white),
+                    icon: const Icon(Icons.info_outline, size: 20, color: Colors.white),
                     tooltip: "Read Config Info",
                     style: IconButton.styleFrom(
                       backgroundColor: Colors.blueAccent,
@@ -2530,14 +2568,14 @@ class _TerminalTabState extends State<TerminalTab> {
                 ),
                 const SizedBox(width: 6),
                 SizedBox(
-                  height: 44,
-                  width: 44,
+                  height: 46,
+                  width: 46,
                   child: IconButton.filled(
                     onPressed: () {
                       SerialService.terminalLog = "";
                       SerialService.logController.add("");
                     },
-                    icon: const Icon(Icons.cleaning_services, size: 18, color: Colors.white),
+                    icon: const Icon(Icons.cleaning_services, size: 20, color: Colors.white),
                     tooltip: "Clear Log",
                     style: IconButton.styleFrom(
                       backgroundColor: Colors.blueAccent,
@@ -2547,12 +2585,12 @@ class _TerminalTabState extends State<TerminalTab> {
                 ),
                 const SizedBox(width: 6),
                 IconButton.filled(
-                  icon: const Icon(Icons.send_rounded, size: 18, color: Colors.white),
+                  icon: const Icon(Icons.send_rounded, size: 20, color: Colors.white),
                   onPressed: () => _submitCommand(_controller.text),
                   style: IconButton.styleFrom(
                     backgroundColor: Colors.blueAccent,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(13),
                   ),
                 ),
               ],
