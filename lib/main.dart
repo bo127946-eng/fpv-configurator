@@ -919,10 +919,8 @@ class _SettingsTabState extends State<SettingsTab> {
   double _batFilterAlpha = 0.05;
   double _currZeroOffsetA = 0.0;
   double _currScale = 1.0;
-  double _fsBatEn = 1;
-  double _batFsV = 13.8;
 
-  // Полётные режимы, RC, остальные failsafe, фильтры и PID
+  // Полётные режимы, RC, Failsafe (включая аварийную посадку по батарее и RC), фильтры и PID
   double _flMode = 1;
   double _flRollMax = 25.0;
   double _flPitchMax = 25.0;
@@ -937,8 +935,10 @@ class _SettingsTabState extends State<SettingsTab> {
   double _rcHorizonTransition = 0.75;
   double _rcFilterSmoothing = 0.35;
 
+  double _fsBatEn = 1;
   double _fsRtxEn = 1;
   double _fsVzSpeed = 0.5;
+  double _batFsV = 13.8;
 
   double _filAmbEn = 1;
   double _filLpfEn = 1;
@@ -1022,8 +1022,6 @@ class _SettingsTabState extends State<SettingsTab> {
       _batFilterAlpha = 0.05;
       _currZeroOffsetA = 0.0;
       _currScale = 1.0;
-      _fsBatEn = 1;
-      _batFsV = 13.8;
     });
     SerialService.sendCommand("default bat");
   }
@@ -1385,7 +1383,7 @@ class _SettingsTabState extends State<SettingsTab> {
         // 4. БАРОМЕТР
         XFireExpansionCard(
           title: "Барометр",
-          subtitle: "Опрос и выбор чипа\nбарометра",
+          subtitle: "Опрос, выбор чипа\nи калибровка барометра",
           icon: Icons.compress_rounded,
           children: [
             XFireSwitchCard(
@@ -1415,6 +1413,11 @@ class _SettingsTabState extends State<SettingsTab> {
                 setState(() => _barId = val.toDouble());
                 SerialService.sendCommand("bar_id $val");
               },
+            ),
+            XFireActionCard(
+              title: "Калибровка барометра",
+              commandName: "cal_baro",
+              onTap: () => _runCalOrTest("cal_baro", "Калибровка барометра", "Калибровка барометра (cal_baro)\nзапущена."),
             ),
             XFireResetCard(hint: "Сброс группы барометра\n(default hw)", onReset: _resetBaroGroup),
             XFireBatchApplyCard(
@@ -1506,7 +1509,7 @@ class _SettingsTabState extends State<SettingsTab> {
         // 6. БАТАРЕЯ
         XFireExpansionCard(
           title: "Батарея",
-          subtitle: "Делитель (PA4), шунт тока (PA5)\nи порог failsafe по напряжению",
+          subtitle: "Делитель напряжения (PA4)\nи шунт тока 0.01 Ом (PA5)",
           icon: Icons.battery_charging_full,
           children: [
             XFireSliderCard(
@@ -1553,26 +1556,6 @@ class _SettingsTabState extends State<SettingsTab> {
               onChanged: (v) => setState(() => _currScale = v),
               onChangeEnd: (v) => SerialService.sendCommand("curr_scale $v"),
             ),
-            XFireSwitchCard(
-              title: "Failsafe по низкому напряжению\nбатареи",
-              commandName: "fs_bat_en",
-              value: _fsBatEn == 1,
-              onChanged: (v) {
-                setState(() => _fsBatEn = v ? 1.0 : 0.0);
-                SerialService.sendCommand("fs_bat_en ${_fsBatEn.round()}");
-              },
-            ),
-            XFireSliderCard(
-              title: "Порог напряжения батареи\nдля failsafe",
-              commandName: "bat_fs_v",
-              value: _batFsV,
-              min: 6.0,
-              max: 25.0,
-              divisions: 190,
-              unit: "В",
-              onChanged: (v) => setState(() => _batFsV = v),
-              onChangeEnd: (v) => SerialService.sendCommand("bat_fs_v $v"),
-            ),
             XFireResetCard(hint: "Сброс группы батареи\n(default bat)", onReset: _resetBatteryGroup),
             XFireBatchApplyCard(
               hint: "Пакетная отправка настроек\nбатареи и тока",
@@ -1581,8 +1564,6 @@ class _SettingsTabState extends State<SettingsTab> {
                 "bat_filter_alpha $_batFilterAlpha",
                 "curr_zero_offset_a $_currZeroOffsetA",
                 "curr_scale $_currScale",
-                "fs_bat_en ${_fsBatEn.round()}",
-                "bat_fs_v $_batFsV",
               ],
             ),
           ],
@@ -1638,12 +1619,21 @@ class _SettingsTabState extends State<SettingsTab> {
           ],
         ),
         XFireExpansionCard(
-          title: "Failsafe (RC и автоснижение)",
-          subtitle: "Потеря пакетов RC\nи скорость снижения",
+          title: "Failsafe и аварийная посадка",
+          subtitle: "Порог батареи, потеря RC\nи скорость аварийного снижения",
           icon: Icons.warning_amber_rounded,
           children: [
             XFireSwitchCard(
-              title: "Failsafe при потере\nпакетов RC",
+              title: "Failsafe по низкому напряжению\nбатареи (аварийная посадка)",
+              commandName: "fs_bat_en",
+              value: _fsBatEn == 1,
+              onChanged: (v) {
+                setState(() => _fsBatEn = v ? 1.0 : 0.0);
+                SerialService.sendCommand("fs_bat_en ${_fsBatEn.round()}");
+              },
+            ),
+            XFireSwitchCard(
+              title: "Failsafe при потере\nпакетов RC (аварийная посадка)",
               commandName: "fs_rtx_en",
               value: _fsRtxEn == 1,
               onChanged: (v) {
@@ -1652,7 +1642,18 @@ class _SettingsTabState extends State<SettingsTab> {
               },
             ),
             XFireSliderCard(
-              title: "Скорость снижения\nпри failsafe",
+              title: "Порог напряжения батареи\nдля аварийной посадки",
+              commandName: "bat_fs_v",
+              value: _batFsV,
+              min: 6.0,
+              max: 25.0,
+              divisions: 190,
+              unit: "В",
+              onChanged: (v) => setState(() => _batFsV = v),
+              onChangeEnd: (v) => SerialService.sendCommand("bat_fs_v $v"),
+            ),
+            XFireSliderCard(
+              title: "Скорость снижения\nпри аварийной посадке",
               commandName: "fs_vz_speed",
               value: _fsVzSpeed,
               min: 0.1,
@@ -1664,9 +1665,11 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
             XFireResetCard(hint: "Сброс настроек failsafe\n(default fs)", onReset: _resetFailsafeGroup),
             XFireBatchApplyCard(
-              hint: "Пакетная отправка настроек\nfailsafe",
+              hint: "Пакетная отправка настроек\nfailsafe и аварийной посадки",
               parameters: [
+                "fs_bat_en ${_fsBatEn.round()}",
                 "fs_rtx_en ${_fsRtxEn.round()}",
+                "bat_fs_v $_batFsV",
                 "fs_vz_speed $_fsVzSpeed",
               ],
             ),
@@ -2620,7 +2623,7 @@ class _TerminalTabState extends State<TerminalTab> {
     "gyro_filter_alpha", "acc_filter_alpha", "filter_notch_freq", "filter_notch_bw",
     "fil_amb", "fil_amb_min",
     "roll_kp", "roll_ki", "roll_kd", "pitch_kp", "pitch_ki", "pitch_kd", "yaw_kp", "yaw_ki", "yaw_kd", "vz_kp", "vz_ki", "vz_kd",
-    "cal_gyro", "cal_acc", "cal_lid", "cal_mag",
+    "cal_gyro", "cal_acc", "cal_baro", "cal_lid", "cal_mag",
     "test_mpu", "test_sx", "test_lidar", "test_motor", "test_pid", "test_rc", "test_rc_can",
     "osd_en", "rx58_en", "rx58_ch",
     "vtx_ch0", "vtx_ch1", "vtx_ch2", "vtx_ch3",
