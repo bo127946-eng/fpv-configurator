@@ -28,7 +28,7 @@ class MyApp extends StatelessWidget {
           error: Colors.redAccent.shade700,
         ),
         scaffoldBackgroundColor: const Color(0xFF0A0A0A),
-        cardTheme: CardTheme(
+        cardTheme: CardThemeData(
           color: const Color(0xFF1C1C1E),
           elevation: 2,
           margin: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 8),
@@ -38,7 +38,7 @@ class MyApp extends StatelessWidget {
           filled: true,
           fillColor: const Color(0xFF242428),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           isDense: true,
         ),
       ),
@@ -83,7 +83,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     return const Scaffold(
       backgroundColor: Color(0xFF0A0A0A),
       body: Center(
-        child: Text("XFire v3.27", style: TextStyle(fontSize: 46, fontWeight: FontWeight.bold, letterSpacing: 4.0, color: Colors.white)),
+        child: Text("XFire v3.27", style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold, letterSpacing: 4.0, color: Colors.white)),
       ),
     );
   }
@@ -146,7 +146,7 @@ class _MainContainerState extends State<MainContainer> {
           bool? openResult = await SerialService.usbPort?.open();
           if (openResult != true) {
             SerialService.appendLog(">> ERROR: Failed to open USB port\n");
-            if (mounted) showAppDialog(context, "Ошибка соединения", "Не удалось открыть USB порт устройства!", isError: true);
+            if (mounted) showAppDialog(context, "Ошибка соединения", "Не удалось открыть USB порт\nустройства!", isError: true);
           } else {
             await SerialService.usbPort!.setPortParameters(115200, UsbPort.DATABITS_8, UsbPort.STOPBITS_1, UsbPort.PARITY_NONE);
             SerialService.isConnected = true;
@@ -171,7 +171,7 @@ class _MainContainerState extends State<MainContainer> {
         centerTitle: true,
         title: Center(
           child: Container(
-            width: 300,
+            width: 310,
             padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
               color: const Color(0xFF1C1C1E),
@@ -193,7 +193,7 @@ class _MainContainerState extends State<MainContainer> {
                         _tabNames[index],
                         style: TextStyle(
                           color: index == 0 ? Colors.greenAccent : Colors.white,
-                          fontSize: 14,
+                          fontSize: 15,
                           fontWeight: FontWeight.bold,
                         ),
                         softWrap: true,
@@ -208,8 +208,8 @@ class _MainContainerState extends State<MainContainer> {
                       children: [
                         const Expanded(
                           child: Text(
-                            "Соединение USB Serial",
-                            style: TextStyle(color: Colors.amberAccent, fontSize: 13, fontWeight: FontWeight.bold),
+                            "Соединение\nUSB Serial",
+                            style: TextStyle(color: Colors.amberAccent, fontSize: 14, fontWeight: FontWeight.bold, height: 1.2),
                             softWrap: true,
                             maxLines: 2,
                           ),
@@ -297,7 +297,7 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
       if (match.start > lastMatchEnd) {
         widgets.add(Text(
           rawContent.substring(lastMatchEnd, match.start).trim(),
-          style: const TextStyle(fontSize: 13, color: Colors.white70, height: 1.45, fontFamily: 'monospace'),
+          style: const TextStyle(fontSize: 15, color: Colors.white70, height: 1.45, fontFamily: 'monospace'),
           softWrap: true,
         ));
         widgets.add(const SizedBox(height: 10));
@@ -316,7 +316,7 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
               width: double.infinity,
               alignment: Alignment.center,
               decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
-              child: Text("Изображение не найдено\n($imgTag.jpg)", textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, color: Colors.amberAccent)),
+              child: Text("Изображение не найдено\n($imgTag.jpg)", textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: Colors.amberAccent)),
             ),
           ),
         ),
@@ -327,7 +327,7 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
     if (lastMatchEnd < rawContent.length) {
       widgets.add(Text(
         rawContent.substring(lastMatchEnd).trim(),
-        style: const TextStyle(fontSize: 13, color: Colors.white70, height: 1.45, fontFamily: 'monospace'),
+        style: const TextStyle(fontSize: 15, color: Colors.white70, height: 1.45, fontFamily: 'monospace'),
         softWrap: true,
       ));
     }
@@ -351,7 +351,7 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
                     const Expanded(
                       child: Text(
                         'XFire Ecosystem',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.amberAccent),
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.amberAccent),
                         softWrap: true,
                       ),
                     ),
@@ -359,14 +359,14 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
-                      child: const Text('v.3.27 (CLI)', style: TextStyle(color: Colors.blueAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+                      child: const Text('v.3.27 (CLI)', style: TextStyle(color: Colors.blueAccent, fontSize: 13, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
                 const SizedBox(height: 10),
                 const Text(
-                  'Аппаратно-программная экосистема для управления дронами.\nМоторы: 2312, Пропы: 9450, 4S, LoRa RTX.',
-                  style: TextStyle(fontSize: 13, color: Colors.white70, height: 1.45),
+                  'Аппаратно-программная экосистема\nдля управления дронами.\nМоторы: 2312, Пропы: 9450, 4S, LoRa RTX.',
+                  style: TextStyle(fontSize: 15, color: Colors.white70, height: 1.45),
                   softWrap: true,
                 ),
               ],
@@ -376,8 +376,8 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 13, vertical: 8),
           child: Text(
-            'СПРАВОЧНИК CLI КОМАНД (doc.txt)',
-            style: TextStyle(color: Colors.amberAccent, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.1),
+            'СПРАВОЧНИК CLI КОМАНД\n(doc.txt)',
+            style: TextStyle(color: Colors.amberAccent, fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 1.1, height: 1.3),
             softWrap: true,
           ),
         ),
@@ -389,7 +389,7 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
                 child: Card(
                   margin: EdgeInsets.zero,
                   child: ExpansionTile(
-                    title: Text(sec.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white), softWrap: true),
+                    title: Text(sec.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white), softWrap: true),
                     iconColor: Colors.amberAccent,
                     collapsedIconColor: Colors.white54,
                     children: [Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: _buildContentWidgets(sec.content)))],
@@ -648,14 +648,14 @@ class _ProfilesTabState extends State<ProfilesTab> {
             ),
             XFireSliderCard(title: "Максимальный угол наклона\n(fl_roll_max)", commandName: "fl_roll_max", value: _calcMaxTilt, min: 10.0, max: 75.0, divisions: 13, unit: "°", onChanged: (v) => setState(() => _calcMaxTilt = v), onChangeEnd: (_) {}),
             XFireSliderCard(title: "Максимальная вертикальная скорость\n(fl_vz_speed_max)", commandName: "fl_vz_speed_max", value: _calcMaxVz, min: 0.5, max: 3.0, divisions: 25, unit: "м/с", onChanged: (v) => setState(() => _calcMaxVz = v), onChangeEnd: (_) {}),
-            XFireSliderCard(title: "Взлетный вес дрона (AUW)", commandName: "auw_grams", value: _auwGrams, min: 400.0, max: 3500.0, divisions: 62, unit: "г", onChanged: (v) => setState(() => _auwGrams = v), onChangeEnd: (_) {}),
+            XFireSliderCard(title: "Взлетный вес дрона\n(AUW)", commandName: "auw_grams", value: _auwGrams, min: 400.0, max: 3500.0, divisions: 62, unit: "г", onChanged: (v) => setState(() => _auwGrams = v), onChangeEnd: (_) {}),
             XFireSliderCard(title: "Емкость аккумулятора", commandName: "battery_mah", value: _batteryMah, min: 1300.0, max: 16000.0, divisions: 58, unit: "mAh", onChanged: (v) => setState(() => _batteryMah = v), onChangeEnd: (_) {}),
             XFireSliderCard(title: "Диагональ рамы\n(от мотора до мотора)", commandName: "frame_size_mm", value: _frameSizeMm, min: 220.0, max: 650.0, divisions: 43, unit: "мм", onChanged: (v) => setState(() => _frameSizeMm = v), onChangeEnd: (_) {}),
             XFireSegmentedCard(title: "Характер поведения дрона", commandName: "drone_behavior", options: const ["Плавное", "Уверенное", "Резвое"], selectedIndex: _behaviorIndex, onSelected: (val) => setState(() => _behaviorIndex = val)),
           ],
         ),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 4.0),
+          padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 5.0),
           child: Container(
             padding: const EdgeInsets.all(14.0),
             decoration: BoxDecoration(
@@ -672,12 +672,12 @@ class _ProfilesTabState extends State<ProfilesTab> {
                     Expanded(
                       child: Text(
                         "ФИЗИЧЕСКИЙ РАСЧЕТ\nИ НАГРУЗКИ (v.3.27)",
-                        style: TextStyle(color: Colors.amberAccent, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.0),
+                        style: TextStyle(color: Colors.amberAccent, fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 1.0, height: 1.3),
                         softWrap: true,
                       ),
                     ),
                     SizedBox(width: 8),
-                    Icon(Icons.insights, color: Colors.amberAccent, size: 18),
+                    Icon(Icons.insights, color: Colors.amberAccent, size: 20),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -758,7 +758,7 @@ class _ProfilesTabState extends State<ProfilesTab> {
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(fontSize: 13, color: Colors.white70, height: 1.3),
+              style: const TextStyle(fontSize: 14, color: Colors.white70, height: 1.3),
               softWrap: true,
             ),
           ),
@@ -766,7 +766,7 @@ class _ProfilesTabState extends State<ProfilesTab> {
           Text(
             value,
             textAlign: TextAlign.right,
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color, fontFamily: 'monospace', height: 1.3),
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: color, fontFamily: 'monospace', height: 1.3),
             softWrap: true,
           ),
         ],
@@ -786,7 +786,6 @@ class SettingsTab extends StatefulWidget {
 }
 
 class _SettingsTabState extends State<SettingsTab> {
-  // 1. Аппаратура, датчики и калибровка
   double _escProtocol = 0;
   double _imuAlign = 0;
   double _comAlign = 0;
@@ -803,13 +802,11 @@ class _SettingsTabState extends State<SettingsTab> {
   double _magBiasY = 0.0;
   double _magBiasZ = 0.0;
 
-  // 2. Питание и датчик тока
   double _batVoltageScale = 4.85;
   double _batFilterAlpha = 0.05;
   double _currZeroOffsetA = 0.0;
   double _currScale = 1.0;
 
-  // 3. Режимы полёта и кривые стиков (RC)
   double _flMode = 1;
   double _flRollMax = 25.0;
   double _flPitchMax = 25.0;
@@ -824,13 +821,11 @@ class _SettingsTabState extends State<SettingsTab> {
   double _rcHorizonTransition = 0.75;
   double _rcFilterSmoothing = 0.35;
 
-  // 4. Failsafe
   double _fsBatEn = 1;
   double _fsRtxEn = 1;
   double _fsVzSpeed = 0.5;
   double _batFsV = 13.8;
 
-  // 5. Фильтры (LPF, Notch, Madgwick)
   double _filAmbEn = 1;
   double _filLpfEn = 1;
   double _filNotEn = 1;
@@ -841,7 +836,6 @@ class _SettingsTabState extends State<SettingsTab> {
   double _filAmb = 0.05;
   double _filAmbMin = 0.003;
 
-  // 6. ПИД-коэффициенты (Roll, Pitch, Yaw, Vz)
   double _rollKp = 0.45, _rollKi = 0.010, _rollKd = 0.018;
   double _pitchKp = 0.45, _pitchKi = 0.010, _pitchKd = 0.018;
   double _yawKp = 0.60, _yawKi = 0.010, _yawKd = 0.0;
@@ -960,24 +954,24 @@ class _SettingsTabState extends State<SettingsTab> {
     _resetFiltersGroup();
     _resetPidGroup();
     SerialService.sendCommand("default");
-    showAppDialog(context, "Общий сброс FC", "Все настройки полётного контроллера\nсброшены по умолчанию.");
+    showAppDialog(context, "Общий сброс FC", "Все настройки полётного\nконтроллера сброшены\nпо умолчанию.");
   }
 
   Widget _buildSensorBar(String label, double value, double min, double max, String unit, Color color) {
     double percent = ((value - min) / (max - min)).clamp(0.0, 1.0);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      padding: const EdgeInsets.symmetric(vertical: 5.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(label, style: const TextStyle(fontSize: 13, color: Colors.white70)),
-              Text("${value.toStringAsFixed(2)} $unit", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color)),
+              Text(label, style: const TextStyle(fontSize: 14, color: Colors.white70)),
+              Text("${value.toStringAsFixed(2)} $unit", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: color)),
             ],
           ),
-          const SizedBox(height: 3),
+          const SizedBox(height: 4),
           LinearProgressIndicator(value: percent, color: color, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
         ],
       ),
@@ -989,10 +983,9 @@ class _SettingsTabState extends State<SettingsTab> {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
-        // 1. Аппаратура, датчики и калибровка
         XFireExpansionCard(
           title: "Аппаратура, датчики и калибровка",
-          subtitle: "ESC, ориентация IMU/компаса, ID датчиков,\nлидар и смещения",
+          subtitle: "ESC, ориентация IMU/компаса,\nID датчиков, лидар и смещения",
           icon: Icons.sensors,
           children: [
             XFireSegmentedCard(
@@ -1174,8 +1167,6 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
           ],
         ),
-
-        // 2. Питание и датчик тока
         XFireExpansionCard(
           title: "Питание и датчик тока",
           subtitle: "Делитель напряжения (PA4)\nи шунт тока 0.01 Ом (PA5)",
@@ -1237,10 +1228,8 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
           ],
         ),
-
-        // 3. Режимы полёта и кривые стиков (RC)
         XFireExpansionCard(
-          title: "Режимы полёта и кривые стиков (RC)",
+          title: "Режимы полёта и кривые стиков\n(RC)",
           subtitle: "Acro/Angle/Horizon, углы,\nVz и кривые RC",
           icon: Icons.flight,
           children: [
@@ -1287,8 +1276,6 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
           ],
         ),
-
-        // 4. Failsafe
         XFireExpansionCard(
           title: "Failsafe",
           subtitle: "Порог батареи, потеря пакетов RC\nи скорость снижения",
@@ -1346,8 +1333,6 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
           ],
         ),
-
-        // 5. Фильтры (LPF, Notch, Madgwick)
         XFireExpansionCard(
           title: "Фильтры (LPF, Notch, Madgwick)",
           subtitle: "LPF, Biquad Notch и адаптивный\nbeta Madgwick",
@@ -1403,8 +1388,6 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
           ],
         ),
-
-        // 6. ПИД-коэффициенты (Roll, Pitch, Yaw, Vz)
         XFireExpansionCard(
           title: "ПИД-коэффициенты\n(Roll, Pitch, Yaw, Vz)",
           subtitle: "Настройки Kp, Ki, Kd для осей\nRoll, Pitch, Yaw и Vz",
@@ -1506,8 +1489,6 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
           ],
         ),
-
-        // 7. Калибровки датчиков
         XFireExpansionCard(
           title: "Калибровка датчиков",
           subtitle: "Гироскоп, акселерометр,\nлидар и компас",
@@ -1521,7 +1502,7 @@ class _SettingsTabState extends State<SettingsTab> {
                   showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
                 } else {
                   SerialService.sendCommand("cal_gyro");
-                  showAppDialog(context, "Успех", "Калибровка гироскопа запущена.");
+                  showAppDialog(context, "Успех", "Калибровка гироскопа\nзапущена.");
                 }
               },
             ),
@@ -1533,7 +1514,7 @@ class _SettingsTabState extends State<SettingsTab> {
                   showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
                 } else {
                   SerialService.sendCommand("cal_acc");
-                  showAppDialog(context, "Успех", "Калибровка акселерометра запущена.");
+                  showAppDialog(context, "Успех", "Калибровка акселерометра\nзапущена.");
                 }
               },
             ),
@@ -1563,8 +1544,6 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
           ],
         ),
-
-        // 8. Тесты оборудования
         XFireExpansionCard(
           title: "Тесты оборудования",
           subtitle: "Проверки датчиков, радио,\nмоторов, PID и линка RC",
@@ -1578,7 +1557,7 @@ class _SettingsTabState extends State<SettingsTab> {
                   showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
                 } else {
                   SerialService.sendCommand("test_mpu");
-                  showAppDialog(context, "Тест IMU", "Команда test_mpu отправлена.");
+                  showAppDialog(context, "Тест IMU", "Команда test_mpu\nотправлена.");
                 }
               },
             ),
@@ -1602,7 +1581,7 @@ class _SettingsTabState extends State<SettingsTab> {
                   showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
                 } else {
                   SerialService.sendCommand("test_lidar");
-                  showAppDialog(context, "Тест лидара", "Команда test_lidar отправлена.");
+                  showAppDialog(context, "Тест лидара", "Команда test_lidar\nотправлена.");
                 }
               },
             ),
@@ -1656,8 +1635,6 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
           ],
         ),
-
-        // 9. Телеметрия (датчики и авиогоризонт)
         XFireExpansionCard(
           title: "Телеметрия",
           subtitle: "Авиогоризонт, HUD и показания\nгироскопа / акселерометра",
@@ -1684,10 +1661,10 @@ class _SettingsTabState extends State<SettingsTab> {
                           Transform.translate(
                             offset: const Offset(0, 16),
                             child: SizedBox(
-                              height: 26,
+                              height: 28,
                               child: CustomPaint(
                                 painter: YawHudScalePainter(value: yawDeg, minVal: -180, maxVal: 180, isTop: true),
-                                size: const Size(double.infinity, 26),
+                                size: const Size(double.infinity, 28),
                               ),
                             ),
                           ),
@@ -1734,10 +1711,10 @@ class _SettingsTabState extends State<SettingsTab> {
                           Transform.translate(
                             offset: const Offset(0, -16),
                             child: SizedBox(
-                              height: 26,
+                              height: 28,
                               child: CustomPaint(
                                 painter: YawHudScalePainter(value: yawDeg, minVal: -180, maxVal: 180, isTop: false),
-                                size: const Size(double.infinity, 26),
+                                size: const Size(double.infinity, 28),
                               ),
                             ),
                           ),
@@ -1752,13 +1729,13 @@ class _SettingsTabState extends State<SettingsTab> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text("GYROSCOPE", style: TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+                            const Text("GYROSCOPE", style: TextStyle(color: Colors.amberAccent, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
                             const SizedBox(height: 4),
                             _buildSensorBar("Gyro Roll", SerialService.gyroRoll, -3.14, 3.14, "rad/s", Colors.blueAccent),
                             _buildSensorBar("Gyro Pitch", SerialService.gyroPitch, -3.14, 3.14, "rad/s", Colors.blueAccent),
                             _buildSensorBar("Gyro Yaw", SerialService.gyroYaw, -3.14, 3.14, "rad/s", Colors.blueAccent),
                             const SizedBox(height: 8),
-                            const Text("ACCELEROMETER", style: TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+                            const Text("ACCELEROMETER", style: TextStyle(color: Colors.amberAccent, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
                             const SizedBox(height: 4),
                             _buildSensorBar("Accel X", SerialService.accelX, -2.0, 2.0, "G", Colors.cyanAccent),
                             _buildSensorBar("Accel Y", SerialService.accelY, -2.0, 2.0, "G", Colors.cyanAccent),
@@ -1773,8 +1750,6 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
           ],
         ),
-
-        // 10. Прошивка полетного контроллера
         XFireExpansionCard(
           title: "Прошивка полетного контроллера",
           subtitle: "Обновление прошивки STM32\n(нажмите для прошивки)",
@@ -1798,13 +1773,10 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
           ],
         ),
-
-        // 11. Общий сброс всех настроек FC
         XFireResetCard(
           hint: "Общий сброс всех настроек\nполётного контроллера (default)",
           onReset: _resetAllFcSettings,
         ),
-
         const SizedBox(height: 24),
       ],
     );
@@ -1842,7 +1814,7 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
       children: [
         XFireExpansionCard(
           title: "Калибровка стиков",
-          subtitle: "Настройка нейтрали и мертвых зон",
+          subtitle: "Настройка нейтрали\nи мертвых зон",
           icon: Icons.gamepad,
           children: [
             XFireActionCard(
@@ -1859,7 +1831,7 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
             ),
             XFireSliderCard(title: "Мертвая зона стиков\n(Deadband)", commandName: "rc_tx_deadband", value: _stickDeadband, min: 0, max: 50, divisions: 50, unit: "PWM", onChanged: (v) => setState(() => _stickDeadband = v), onChangeEnd: (v) => SerialService.sendCommand("rc_tx_deadband ${v.round()}")),
             XFireResetCard(
-              hint: "Сброс калибровки стиков пульта",
+              hint: "Сброс калибровки стиков\nпульта",
               onReset: () {
                 setState(() {
                   _stickDeadband = 10.0;
@@ -1898,7 +1870,7 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
         ),
         XFireExpansionCard(
           title: "Протокол и мощность",
-          subtitle: "Выбор протокола связи и мощности\nпередатчика",
+          subtitle: "Выбор протокола связи\nи мощности передатчика",
           icon: Icons.wifi,
           children: [
             XFireSegmentedCard(
@@ -1951,7 +1923,7 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
               },
             ),
             XFireResetCard(
-              hint: "Сброс кривых управления пульта",
+              hint: "Сброс кривых управления\nпульта",
               onReset: () {
                 setState(() {
                   _rcRate = 0.35;
@@ -1982,7 +1954,7 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text("Каналы пульта (CH1 - CH4)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white), softWrap: true),
+                  const Text("Каналы пульта (CH1 - CH4)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white), softWrap: true),
                   const SizedBox(height: 12),
                   _buildChannelBar("Channel 1 (Roll)", 1500, Colors.blueAccent),
                   _buildChannelBar("Channel 2 (Pitch)", 1500, Colors.cyanAccent),
@@ -2008,11 +1980,11 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(label, style: const TextStyle(fontSize: 13, color: Colors.white70)),
-              Text("$pwmValue PWM", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color)),
+              Text(label, style: const TextStyle(fontSize: 14, color: Colors.white70)),
+              Text("$pwmValue PWM", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: color)),
             ],
           ),
-          const SizedBox(height: 3),
+          const SizedBox(height: 4),
           LinearProgressIndicator(value: percent, color: color, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
         ],
       ),
@@ -2034,7 +2006,7 @@ class _RadioTabState extends State<RadioTab> {
   double _rtxProtId = 0;
   double _rtxId = 1;
   double _rtxEn = 1;
-  double _rtxBand = 2; // 0: 433, 1: 868, 2: 915 МГц
+  double _rtxBand = 2;
 
   bool _rtxHwCrcEn = true;
   bool _rtxAddrEn = false;
@@ -2302,7 +2274,7 @@ class _RadioTabState extends State<RadioTab> {
           ],
         ),
         XFireExpansionCard(
-          title: "Основной канал связи (Primary)",
+          title: "Основной канал связи\n(Primary)",
           subtitle: "Канал, SF6..12, BW 0..9,\nCR 1..4 и мощность -9..22 дБм",
           icon: Icons.flash_on_rounded,
           children: [
@@ -2312,7 +2284,7 @@ class _RadioTabState extends State<RadioTab> {
             XFireSliderCard(title: "Coding Rate\n(1: 4/5 .. 4: 4/8)", commandName: "rtx_pri_cr", value: _priCr, min: 1, max: 4, divisions: 3, unit: "", onChanged: (v) => setState(() => _priCr = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_pri_cr ${v.round()}")),
             XFireSliderCard(title: "Мощность передатчика\n(-9..22 дБм)", commandName: "rtx_pri_power", value: _priPower, min: -9, max: 22, divisions: 31, unit: "дБм", onChanged: (v) => setState(() => _priPower = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_pri_power ${v.round()}")),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 4.0),
+              padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 5.0),
               child: RtxLinkCalculatorCard(
                 title: "Оценка основного канала",
                 themeColor: Colors.blueAccent,
@@ -2338,7 +2310,7 @@ class _RadioTabState extends State<RadioTab> {
           ],
         ),
         XFireExpansionCard(
-          title: "Резервный канал связи (Backup)",
+          title: "Резервный канал связи\n(Backup)",
           subtitle: "Канал, SF6..12, BW 0..9,\nCR 1..4 и мощность -9..22 дБм",
           icon: Icons.shield_rounded,
           children: [
@@ -2348,7 +2320,7 @@ class _RadioTabState extends State<RadioTab> {
             XFireSliderCard(title: "Coding Rate\n(1: 4/5 .. 4: 4/8)", commandName: "rtx_bak_cr", value: _bakCr, min: 1, max: 4, divisions: 3, unit: "", onChanged: (v) => setState(() => _bakCr = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_bak_cr ${v.round()}")),
             XFireSliderCard(title: "Мощность передатчика\n(-9..22 дБм)", commandName: "rtx_bak_power", value: _bakPower, min: -9, max: 22, divisions: 31, unit: "дБм", onChanged: (v) => setState(() => _bakPower = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_bak_power ${v.round()}")),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 4.0),
+              padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 5.0),
               child: RtxLinkCalculatorCard(
                 title: "Оценка резервного канала",
                 themeColor: Colors.greenAccent,
@@ -2498,7 +2470,7 @@ class _TerminalTabState extends State<TerminalTab> {
                 reverse: true,
                 child: Text(
                   _displayLog,
-                  style: const TextStyle(fontFamily: 'monospace', color: Colors.greenAccent, fontSize: 13, height: 1.35),
+                  style: const TextStyle(fontFamily: 'monospace', color: Colors.greenAccent, fontSize: 15, height: 1.4),
                   softWrap: true,
                 ),
               ),
@@ -2529,7 +2501,7 @@ class _TerminalTabState extends State<TerminalTab> {
                       padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
                       child: Text(
                         item,
-                        style: const TextStyle(fontFamily: 'monospace', fontSize: 14, color: Colors.amberAccent, fontWeight: FontWeight.bold),
+                        style: const TextStyle(fontFamily: 'monospace', fontSize: 15, color: Colors.amberAccent, fontWeight: FontWeight.bold),
                         softWrap: true,
                       ),
                     ),
@@ -2547,18 +2519,18 @@ class _TerminalTabState extends State<TerminalTab> {
                     controller: _controller,
                     focusNode: _focusNode,
                     maxLines: null,
-                    style: const TextStyle(fontSize: 15, fontFamily: 'monospace'),
-                    decoration: const InputDecoration(hintText: "Enter CLI command..."),
+                    style: const TextStyle(fontSize: 16, fontFamily: 'monospace'),
+                    decoration: const InputDecoration(hintText: "Enter CLI command...", hintStyle: TextStyle(fontSize: 14)),
                     onSubmitted: _submitCommand,
                   ),
                 ),
                 const SizedBox(width: 8),
                 SizedBox(
-                  height: 46,
-                  width: 46,
+                  height: 48,
+                  width: 48,
                   child: IconButton.filled(
                     onPressed: () => SerialService.sendCommand("info"),
-                    icon: const Icon(Icons.info_outline, size: 20, color: Colors.white),
+                    icon: const Icon(Icons.info_outline, size: 22, color: Colors.white),
                     tooltip: "Read Config Info",
                     style: IconButton.styleFrom(
                       backgroundColor: Colors.blueAccent,
@@ -2568,14 +2540,14 @@ class _TerminalTabState extends State<TerminalTab> {
                 ),
                 const SizedBox(width: 6),
                 SizedBox(
-                  height: 46,
-                  width: 46,
+                  height: 48,
+                  width: 48,
                   child: IconButton.filled(
                     onPressed: () {
                       SerialService.terminalLog = "";
                       SerialService.logController.add("");
                     },
-                    icon: const Icon(Icons.cleaning_services, size: 20, color: Colors.white),
+                    icon: const Icon(Icons.cleaning_services, size: 22, color: Colors.white),
                     tooltip: "Clear Log",
                     style: IconButton.styleFrom(
                       backgroundColor: Colors.blueAccent,
@@ -2585,7 +2557,7 @@ class _TerminalTabState extends State<TerminalTab> {
                 ),
                 const SizedBox(width: 6),
                 IconButton.filled(
-                  icon: const Icon(Icons.send_rounded, size: 20, color: Colors.white),
+                  icon: const Icon(Icons.send_rounded, size: 22, color: Colors.white),
                   onPressed: () => _submitCommand(_controller.text),
                   style: IconButton.styleFrom(
                     backgroundColor: Colors.blueAccent,
