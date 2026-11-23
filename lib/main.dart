@@ -28,7 +28,7 @@ class MyApp extends StatelessWidget {
           error: Colors.redAccent.shade700,
         ),
         scaffoldBackgroundColor: const Color(0xFF0A0A0A),
-        cardTheme: CardTheme(
+        cardTheme: CardThemeData(
           color: const Color(0xFF1C1C1E),
           elevation: 2,
           margin: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 8),
@@ -317,7 +317,7 @@ class _MainContainerState extends State<MainContainer> {
                           child: Switch(
                             value: SerialService.isConnected,
                             onChanged: (_) {},
-                            activeColor: Colors.blueAccent,
+                            activeThumbColor: Colors.blueAccent,
                           ),
                         ),
                       ],
@@ -1829,6 +1829,15 @@ class _SettingsTabState extends State<SettingsTab> {
               kp: _rollKp,
               ki: _rollKi,
               kd: _rollKd,
+              kpMin: 0.0,
+              kpMax: 5.0,
+              kiMin: 0.0,
+              kiMax: 1.0,
+              kdMin: 0.0,
+              kdMax: 0.5,
+              kpDecimals: 3,
+              kiDecimals: 3,
+              kdDecimals: 3,
               onUpdate: (p, i, d) {
                 setState(() {
                   _rollKp = p;
@@ -1848,6 +1857,15 @@ class _SettingsTabState extends State<SettingsTab> {
               kp: _pitchKp,
               ki: _pitchKi,
               kd: _pitchKd,
+              kpMin: 0.0,
+              kpMax: 5.0,
+              kiMin: 0.0,
+              kiMax: 1.0,
+              kdMin: 0.0,
+              kdMax: 0.5,
+              kpDecimals: 3,
+              kiDecimals: 3,
+              kdDecimals: 3,
               onUpdate: (p, i, d) {
                 setState(() {
                   _pitchKp = p;
@@ -1867,6 +1885,15 @@ class _SettingsTabState extends State<SettingsTab> {
               kp: _yawKp,
               ki: _yawKi,
               kd: _yawKd,
+              kpMin: 0.0,
+              kpMax: 5.0,
+              kiMin: 0.0,
+              kiMax: 1.0,
+              kdMin: 0.0,
+              kdMax: 0.5,
+              kpDecimals: 3,
+              kiDecimals: 3,
+              kdDecimals: 3,
               onUpdate: (p, i, d) {
                 setState(() {
                   _yawKp = p;
@@ -1886,6 +1913,15 @@ class _SettingsTabState extends State<SettingsTab> {
               kp: _vzKp,
               ki: _vzKi,
               kd: _vzKd,
+              kpMin: 0.0,
+              kpMax: 30.0,
+              kiMin: 0.0,
+              kiMax: 10.0,
+              kdMin: 0.0,
+              kdMax: 5.0,
+              kpDecimals: 2,
+              kiDecimals: 2,
+              kdDecimals: 2,
               onUpdate: (p, i, d) {
                 setState(() {
                   _vzKp = p;
