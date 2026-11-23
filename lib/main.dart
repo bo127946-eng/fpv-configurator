@@ -48,6 +48,105 @@ class MyApp extends StatelessWidget {
 }
 
 // ==========================================
+// КАРТОЧКА ВЫБОРА ПО ID (ВЫПАДАЮЩИЙ СПИСОК)
+// ==========================================
+class XFireDropdownCard extends StatelessWidget {
+  final String title;
+  final String commandName;
+  final int value;
+  final Map<int, String> options;
+  final ValueChanged<int> onChanged;
+
+  const XFireDropdownCard({
+    super.key,
+    required this.title,
+    required this.commandName,
+    required this.value,
+    required this.options,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final safeValue = options.containsKey(value) ? value : options.keys.first;
+    final items = options.entries.toList();
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 11.0, vertical: 6.0),
+      color: const Color(0xFF141416),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: const BorderSide(color: Colors.white10),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white, height: 1.3),
+                    softWrap: true,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.blueAccent.withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    commandName,
+                    style: const TextStyle(fontFamily: 'monospace', fontSize: 13, color: Colors.blueAccent, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF242428),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white12),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<int>(
+                  value: safeValue,
+                  isExpanded: true,
+                  dropdownColor: const Color(0xFF242428),
+                  borderRadius: BorderRadius.circular(12),
+                  icon: const Icon(Icons.arrow_drop_down_rounded, color: Colors.amberAccent, size: 26),
+                  items: items.map((entry) {
+                    return DropdownMenuItem<int>(
+                      value: entry.key,
+                      child: Text(
+                        entry.value,
+                        style: const TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.w600),
+                        softWrap: true,
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (val) {
+                    if (val != null) onChanged(val);
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ==========================================
 // СТАРТОВАЯ ЗАСТАВКА
 // ==========================================
 class SplashScreen extends StatefulWidget {
@@ -786,27 +885,44 @@ class SettingsTab extends StatefulWidget {
 }
 
 class _SettingsTabState extends State<SettingsTab> {
+  // 1. Радиомодуль
+  double _rtxEn = 1;
+  double _rtxProtId = 0;
+  double _rtxId = 1;
+  double _rtxBand = 2;
+
+  // 2. IMU (гироскоп и акселерометр) + ESC
   double _escProtocol = 0;
-  double _imuAlign = 0;
-  double _comAlign = 0;
   double _imuId = 0;
-  double _barId = 0;
-  double _comId = 0;
-  double _lidId = 0;
-  double _baroEn = 1;
+  double _imuAlign = 0;
+
+  // 3. Компас
   double _comEn = 0;
-  double _lidarEn = 1;
-  double _lidarFilterAlpha = 0.15;
-  double _lidarOffsetM = 0.0;
+  double _comId = 0;
+  double _comAlign = 0;
   double _magBiasX = 0.0;
   double _magBiasY = 0.0;
   double _magBiasZ = 0.0;
 
+  // 4. Барометр
+  double _baroEn = 1;
+  double _barId = 0;
+
+  // 5. Лидар
+  double _lidarEn = 1;
+  double _lidId = 0;
+  double _lidarFilterAlpha = 0.15;
+  double _lidarOffsetM = 0.0;
+
+  // 6. Батарея и датчик тока
   double _batVoltageScale = 4.85;
   double _batFilterAlpha = 0.05;
   double _currZeroOffsetA = 0.0;
   double _currScale = 1.0;
+  double _fsBatEn = 1;
+  double _batFsV = 13.8;
 
+  // Полётные режимы, RC, остальные failsafe, фильтры и PID
   double _flMode = 1;
   double _flRollMax = 25.0;
   double _flPitchMax = 25.0;
@@ -821,10 +937,8 @@ class _SettingsTabState extends State<SettingsTab> {
   double _rcHorizonTransition = 0.75;
   double _rcFilterSmoothing = 0.35;
 
-  double _fsBatEn = 1;
   double _fsRtxEn = 1;
   double _fsVzSpeed = 0.5;
-  double _batFsV = 13.8;
 
   double _filAmbEn = 1;
   double _filLpfEn = 1;
@@ -853,20 +967,30 @@ class _SettingsTabState extends State<SettingsTab> {
     super.dispose();
   }
 
-  void _resetHardwareGroup() {
+  void _resetRadioGroup() {
+    setState(() {
+      _rtxEn = 1;
+      _rtxProtId = 0;
+      _rtxId = 1;
+      _rtxBand = 2;
+    });
+    SerialService.sendCommand("default rtx_common");
+  }
+
+  void _resetImuGroup() {
     setState(() {
       _escProtocol = 0;
-      _imuAlign = 0;
-      _comAlign = 0;
       _imuId = 0;
-      _barId = 0;
-      _comId = 0;
-      _lidId = 0;
-      _baroEn = 1;
+      _imuAlign = 0;
+    });
+    SerialService.sendCommand("default hw");
+  }
+
+  void _resetCompassGroup() {
+    setState(() {
       _comEn = 0;
-      _lidarEn = 1;
-      _lidarFilterAlpha = 0.15;
-      _lidarOffsetM = 0.0;
+      _comId = 0;
+      _comAlign = 0;
       _magBiasX = 0.0;
       _magBiasY = 0.0;
       _magBiasZ = 0.0;
@@ -874,12 +998,32 @@ class _SettingsTabState extends State<SettingsTab> {
     SerialService.sendCommand("default hw");
   }
 
-  void _resetPowerGroup() {
+  void _resetBaroGroup() {
+    setState(() {
+      _baroEn = 1;
+      _barId = 0;
+    });
+    SerialService.sendCommand("default hw");
+  }
+
+  void _resetLidarGroup() {
+    setState(() {
+      _lidarEn = 1;
+      _lidId = 0;
+      _lidarFilterAlpha = 0.15;
+      _lidarOffsetM = 0.0;
+    });
+    SerialService.sendCommand("default hw");
+  }
+
+  void _resetBatteryGroup() {
     setState(() {
       _batVoltageScale = 4.85;
       _batFilterAlpha = 0.05;
       _currZeroOffsetA = 0.0;
       _currScale = 1.0;
+      _fsBatEn = 1;
+      _batFsV = 13.8;
     });
     SerialService.sendCommand("default bat");
   }
@@ -947,14 +1091,27 @@ class _SettingsTabState extends State<SettingsTab> {
   }
 
   void _resetAllFcSettings() {
-    _resetHardwareGroup();
-    _resetPowerGroup();
+    _resetRadioGroup();
+    _resetImuGroup();
+    _resetCompassGroup();
+    _resetBaroGroup();
+    _resetLidarGroup();
+    _resetBatteryGroup();
     _resetFlightRcGroup();
     _resetFailsafeGroup();
     _resetFiltersGroup();
     _resetPidGroup();
     SerialService.sendCommand("default");
     showAppDialog(context, "Общий сброс FC", "Все настройки полётного\nконтроллера сброшены\nпо умолчанию.");
+  }
+
+  void _runCalOrTest(String cmd, String title, String message, {bool isWarning = false}) {
+    if (!SerialService.isConnected) {
+      showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
+    } else {
+      SerialService.sendCommand(cmd);
+      showAppDialog(context, title, message, isError: isWarning);
+    }
   }
 
   Widget _buildSensorBar(String label, double value, double min, double max, String unit, Color color) {
@@ -983,19 +1140,103 @@ class _SettingsTabState extends State<SettingsTab> {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
+        // 1. РАДИОМОДУЛЬ
         XFireExpansionCard(
-          title: "Аппаратура, датчики и калибровка",
-          subtitle: "ESC, ориентация IMU/компаса,\nID датчиков, лидар и смещения",
-          icon: Icons.sensors,
+          title: "Радиомодуль",
+          subtitle: "Питание линка, ID, диапазон\nи проверка SX126x / RC",
+          icon: Icons.cell_tower_rounded,
           children: [
+            XFireSwitchCard(
+              title: "Включение радиомодуля",
+              commandName: "rtx_en",
+              value: _rtxEn == 1,
+              onChanged: (v) {
+                setState(() => _rtxEn = v ? 1.0 : 0.0);
+                SerialService.sendCommand("rtx_en ${_rtxEn.round()}");
+              },
+            ),
+            XFireSliderCard(
+              title: "ID протокола радиоканала",
+              commandName: "rtx_prot_id",
+              value: _rtxProtId,
+              min: 0,
+              max: 255,
+              divisions: 255,
+              unit: "",
+              onChanged: (v) => setState(() => _rtxProtId = v),
+              onChangeEnd: (v) => SerialService.sendCommand("rtx_prot_id ${v.round()}"),
+            ),
+            XFireSliderCard(
+              title: "Уникальный ID пары / сети",
+              commandName: "rtx_id",
+              value: _rtxId,
+              min: 0,
+              max: 65535,
+              divisions: 255,
+              unit: "",
+              onChanged: (v) => setState(() => _rtxId = v),
+              onChangeEnd: (v) => SerialService.sendCommand("rtx_id ${v.round()}"),
+            ),
             XFireSegmentedCard(
-              title: "Протокол ESC",
-              commandName: "esc_protocol",
-              options: const ["PWM", "Oneshot125"],
-              selectedIndex: _escProtocol.round().clamp(0, 1),
+              title: "Частотный диапазон",
+              commandName: "rtx_band",
+              options: const ["0: 433 МГц", "1: 868 МГц", "2: 915 МГц"],
+              selectedIndex: _rtxBand.round().clamp(0, 2),
               onSelected: (val) {
-                setState(() => _escProtocol = val.toDouble());
-                SerialService.sendCommand("esc_protocol $val");
+                setState(() => _rtxBand = val.toDouble());
+                SerialService.sendCommand("rtx_band $val");
+              },
+            ),
+            XFireActionCard(
+              title: "Тест радиомодуля SX126x",
+              commandName: "test_sx",
+              onTap: () => _runCalOrTest("test_sx", "Тест SX126x", "Проверка SPI радиомодуля\nзапущена."),
+            ),
+            XFireActionCard(
+              title: "Тест связи с пультом",
+              commandName: "test_rc",
+              onTap: () => _runCalOrTest("test_rc", "Тест RC", "Диагностика связи с пультом\nзапущена."),
+            ),
+            XFireActionCard(
+              title: "Тест смены канала связи",
+              commandName: "test_rc_can",
+              onTap: () => _runCalOrTest("test_rc_can", "Смена канала", "Команда test_rc_can\nотправлена."),
+            ),
+            XFireResetCard(hint: "Сброс группы радиомодуля\n(default rtx_common)", onReset: _resetRadioGroup),
+            XFireBatchApplyCard(
+              hint: "Пакетная отправка настроек\nрадиомодуля",
+              parameters: [
+                "rtx_en ${_rtxEn.round()}",
+                "rtx_prot_id ${_rtxProtId.round()}",
+                "rtx_id ${_rtxId.round()}",
+                "rtx_band ${_rtxBand.round()}",
+              ],
+            ),
+          ],
+        ),
+
+        // 2. IMU (ГИРОСКОП И АКСЕЛЕРОМЕТР)
+        XFireExpansionCard(
+          title: "IMU (гироскоп и акселерометр)",
+          subtitle: "Тип IMU, ориентация осей,\nкалибровка гиро/аксель и тест",
+          icon: Icons.screen_rotation_alt_rounded,
+          children: [
+            XFireDropdownCard(
+              title: "Тип IMU",
+              commandName: "imu_id",
+              value: _imuId.round(),
+              options: const {
+                0: "0 — автоопределение",
+                1: "1 — MPU6050",
+                2: "2 — MPU6500",
+                3: "3 — MPU9250",
+                4: "4 — ICM20602",
+                5: "5 — BMI160",
+                6: "6 — QMI8658",
+              },
+              onChanged: (val) {
+                setState(() => _imuId = val.toDouble());
+                SerialService.sendCommand("imu_id $val");
               },
             ),
             XFireSegmentedCard(
@@ -1009,68 +1250,48 @@ class _SettingsTabState extends State<SettingsTab> {
               },
             ),
             XFireSegmentedCard(
-              title: "Поворот XY осей компаса",
-              commandName: "com_align",
-              options: const ["0°", "90°", "180°", "270°"],
-              selectedIndex: _comAlign.round().clamp(0, 3),
+              title: "Протокол ESC",
+              commandName: "esc_protocol",
+              options: const ["PWM", "Oneshot125"],
+              selectedIndex: _escProtocol.round().clamp(0, 1),
               onSelected: (val) {
-                setState(() => _comAlign = val.toDouble());
-                SerialService.sendCommand("com_align $val");
+                setState(() => _escProtocol = val.toDouble());
+                SerialService.sendCommand("esc_protocol $val");
               },
             ),
-            XFireSliderCard(
-              title: "Тип IMU\n(0-авто, 1-MPU6050..6-QMI8658)",
-              commandName: "imu_id",
-              value: _imuId,
-              min: 0,
-              max: 6,
-              divisions: 6,
-              unit: "ID",
-              onChanged: (v) => setState(() => _imuId = v),
-              onChangeEnd: (v) => SerialService.sendCommand("imu_id ${v.round()}"),
+            XFireActionCard(
+              title: "Калибровка гироскопа",
+              commandName: "cal_gyro",
+              onTap: () => _runCalOrTest("cal_gyro", "Калибровка гироскопа", "Калибровка гироскопа\nзапущена."),
             ),
-            XFireSliderCard(
-              title: "Тип барометра\n(0-авто..7-DPS310)",
-              commandName: "bar_id",
-              value: _barId,
-              min: 0,
-              max: 7,
-              divisions: 7,
-              unit: "ID",
-              onChanged: (v) => setState(() => _barId = v),
-              onChangeEnd: (v) => SerialService.sendCommand("bar_id ${v.round()}"),
+            XFireActionCard(
+              title: "Калибровка акселерометра",
+              commandName: "cal_acc",
+              onTap: () => _runCalOrTest("cal_acc", "Калибровка акселерометра", "Калибровка акселерометра\nзапущена."),
             ),
-            XFireSliderCard(
-              title: "Тип компаса\n(0-авто..6-AK09911)",
-              commandName: "com_id",
-              value: _comId,
-              min: 0,
-              max: 6,
-              divisions: 6,
-              unit: "ID",
-              onChanged: (v) => setState(() => _comId = v),
-              onChangeEnd: (v) => SerialService.sendCommand("com_id ${v.round()}"),
+            XFireActionCard(
+              title: "Тест IMU (MPU / датчики)",
+              commandName: "test_mpu",
+              onTap: () => _runCalOrTest("test_mpu", "Тест IMU", "Команда test_mpu\nотправлена."),
             ),
-            XFireSliderCard(
-              title: "Тип лидара\n(0-авто..4-VL53L4CX)",
-              commandName: "lid_id",
-              value: _lidId,
-              min: 0,
-              max: 4,
-              divisions: 4,
-              unit: "ID",
-              onChanged: (v) => setState(() => _lidId = v),
-              onChangeEnd: (v) => SerialService.sendCommand("lid_id ${v.round()}"),
+            XFireResetCard(hint: "Сброс группы IMU\n(default hw)", onReset: _resetImuGroup),
+            XFireBatchApplyCard(
+              hint: "Пакетная отправка настроек\nIMU и ESC",
+              parameters: [
+                "imu_id ${_imuId.round()}",
+                "imu_align ${_imuAlign.round()}",
+                "esc_protocol ${_escProtocol.round()}",
+              ],
             ),
-            XFireSwitchCard(
-              title: "Включение опроса барометра",
-              commandName: "baro_en",
-              value: _baroEn == 1,
-              onChanged: (v) {
-                setState(() => _baroEn = v ? 1.0 : 0.0);
-                SerialService.sendCommand("baro_en ${_baroEn.round()}");
-              },
-            ),
+          ],
+        ),
+
+        // 3. КОМПАС
+        XFireExpansionCard(
+          title: "Компас",
+          subtitle: "Опрос, тип, ориентация,\nсмещения X/Y/Z и калибровка",
+          icon: Icons.explore_rounded,
+          children: [
             XFireSwitchCard(
               title: "Включение опроса компаса",
               commandName: "com_en",
@@ -1080,36 +1301,33 @@ class _SettingsTabState extends State<SettingsTab> {
                 SerialService.sendCommand("com_en ${_comEn.round()}");
               },
             ),
-            XFireSwitchCard(
-              title: "Включение опроса лидара",
-              commandName: "lidar_en",
-              value: _lidarEn == 1,
-              onChanged: (v) {
-                setState(() => _lidarEn = v ? 1.0 : 0.0);
-                SerialService.sendCommand("lidar_en ${_lidarEn.round()}");
+            XFireDropdownCard(
+              title: "Тип компаса / магнетометра",
+              commandName: "com_id",
+              value: _comId.round(),
+              options: const {
+                0: "0 — автоопределение",
+                1: "1 — HMC5883L",
+                2: "2 — QMC5883L",
+                3: "3 — AK8963",
+                4: "4 — IST8310",
+                5: "5 — HSCDTD008A",
+                6: "6 — AK09911",
+              },
+              onChanged: (val) {
+                setState(() => _comId = val.toDouble());
+                SerialService.sendCommand("com_id $val");
               },
             ),
-            XFireSliderCard(
-              title: "Сглаживание лидара\n(медиана + EMA)",
-              commandName: "lidar_filter_alpha",
-              value: _lidarFilterAlpha,
-              min: 0.01,
-              max: 1.0,
-              divisions: 99,
-              unit: "",
-              onChanged: (v) => setState(() => _lidarFilterAlpha = v),
-              onChangeEnd: (v) => SerialService.sendCommand("lidar_filter_alpha $v"),
-            ),
-            XFireSliderCard(
-              title: "Смещение высоты лидара",
-              commandName: "lidar_offset_m",
-              value: _lidarOffsetM,
-              min: -1.0,
-              max: 1.0,
-              divisions: 200,
-              unit: "м",
-              onChanged: (v) => setState(() => _lidarOffsetM = v),
-              onChangeEnd: (v) => SerialService.sendCommand("lidar_offset_m $v"),
+            XFireSegmentedCard(
+              title: "Поворот XY осей компаса",
+              commandName: "com_align",
+              options: const ["0°", "90°", "180°", "270°"],
+              selectedIndex: _comAlign.round().clamp(0, 3),
+              onSelected: (val) {
+                setState(() => _comAlign = val.toDouble());
+                SerialService.sendCommand("com_align $val");
+              },
             ),
             XFireSliderCard(
               title: "Смещение компаса X",
@@ -1144,22 +1362,18 @@ class _SettingsTabState extends State<SettingsTab> {
               onChanged: (v) => setState(() => _magBiasZ = v),
               onChangeEnd: (v) => SerialService.sendCommand("mag_bias_z $v"),
             ),
-            XFireResetCard(hint: "Сброс группы аппаратуры\n(default hw)", onReset: _resetHardwareGroup),
+            XFireActionCard(
+              title: "Калибровка компаса",
+              commandName: "cal_mag",
+              onTap: () => _runCalOrTest("cal_mag", "Калибровка компаса", "Калибровка компаса (cal_mag)\nзапущена."),
+            ),
+            XFireResetCard(hint: "Сброс группы компаса\n(default hw)", onReset: _resetCompassGroup),
             XFireBatchApplyCard(
-              hint: "Пакетная отправка аппаратуры\nи смещений датчиков",
+              hint: "Пакетная отправка настроек\nкомпаса",
               parameters: [
-                "esc_protocol ${_escProtocol.round()}",
-                "imu_align ${_imuAlign.round()}",
-                "com_align ${_comAlign.round()}",
-                "imu_id ${_imuId.round()}",
-                "bar_id ${_barId.round()}",
-                "com_id ${_comId.round()}",
-                "lid_id ${_lidId.round()}",
-                "baro_en ${_baroEn.round()}",
                 "com_en ${_comEn.round()}",
-                "lidar_en ${_lidarEn.round()}",
-                "lidar_filter_alpha $_lidarFilterAlpha",
-                "lidar_offset_m $_lidarOffsetM",
+                "com_id ${_comId.round()}",
+                "com_align ${_comAlign.round()}",
                 "mag_bias_x $_magBiasX",
                 "mag_bias_y $_magBiasY",
                 "mag_bias_z $_magBiasZ",
@@ -1167,9 +1381,132 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
           ],
         ),
+
+        // 4. БАРОМЕТР
         XFireExpansionCard(
-          title: "Питание и датчик тока",
-          subtitle: "Делитель напряжения (PA4)\nи шунт тока 0.01 Ом (PA5)",
+          title: "Барометр",
+          subtitle: "Опрос и выбор чипа\nбарометра",
+          icon: Icons.compress_rounded,
+          children: [
+            XFireSwitchCard(
+              title: "Включение опроса барометра",
+              commandName: "baro_en",
+              value: _baroEn == 1,
+              onChanged: (v) {
+                setState(() => _baroEn = v ? 1.0 : 0.0);
+                SerialService.sendCommand("baro_en ${_baroEn.round()}");
+              },
+            ),
+            XFireDropdownCard(
+              title: "Тип барометра",
+              commandName: "bar_id",
+              value: _barId.round(),
+              options: const {
+                0: "0 — автоопределение",
+                1: "1 — BMP280",
+                2: "2 — BME280",
+                3: "3 — MS5611",
+                4: "4 — BMP180",
+                5: "5 — BMP388",
+                6: "6 — BMP390",
+                7: "7 — DPS310",
+              },
+              onChanged: (val) {
+                setState(() => _barId = val.toDouble());
+                SerialService.sendCommand("bar_id $val");
+              },
+            ),
+            XFireResetCard(hint: "Сброс группы барометра\n(default hw)", onReset: _resetBaroGroup),
+            XFireBatchApplyCard(
+              hint: "Пакетная отправка настроек\nбарометра",
+              parameters: [
+                "baro_en ${_baroEn.round()}",
+                "bar_id ${_barId.round()}",
+              ],
+            ),
+          ],
+        ),
+
+        // 5. ЛИДАР
+        XFireExpansionCard(
+          title: "Лидар",
+          subtitle: "Опрос, тип VL53Lxx,\nфильтр, смещение и калибровка",
+          icon: Icons.radar_rounded,
+          children: [
+            XFireSwitchCard(
+              title: "Включение опроса лидара",
+              commandName: "lidar_en",
+              value: _lidarEn == 1,
+              onChanged: (v) {
+                setState(() => _lidarEn = v ? 1.0 : 0.0);
+                SerialService.sendCommand("lidar_en ${_lidarEn.round()}");
+              },
+            ),
+            XFireDropdownCard(
+              title: "Тип лидара / датчика расстояния",
+              commandName: "lid_id",
+              value: _lidId.round(),
+              options: const {
+                0: "0 — автоопределение / нет",
+                1: "1 — VL53L0X",
+                2: "2 — VL53L1X",
+                3: "3 — VL53L3CX",
+                4: "4 — VL53L4CX",
+              },
+              onChanged: (val) {
+                setState(() => _lidId = val.toDouble());
+                SerialService.sendCommand("lid_id $val");
+              },
+            ),
+            XFireSliderCard(
+              title: "Сглаживание лидара\n(медиана + EMA)",
+              commandName: "lidar_filter_alpha",
+              value: _lidarFilterAlpha,
+              min: 0.01,
+              max: 1.0,
+              divisions: 99,
+              unit: "",
+              onChanged: (v) => setState(() => _lidarFilterAlpha = v),
+              onChangeEnd: (v) => SerialService.sendCommand("lidar_filter_alpha $v"),
+            ),
+            XFireSliderCard(
+              title: "Смещение высоты лидара",
+              commandName: "lidar_offset_m",
+              value: _lidarOffsetM,
+              min: -1.0,
+              max: 1.0,
+              divisions: 200,
+              unit: "м",
+              onChanged: (v) => setState(() => _lidarOffsetM = v),
+              onChangeEnd: (v) => SerialService.sendCommand("lidar_offset_m $v"),
+            ),
+            XFireActionCard(
+              title: "Калибровка смещения лидара",
+              commandName: "cal_lid",
+              onTap: () => _runCalOrTest("cal_lid", "Калибровка лидара", "Калибровка лидара (cal_lid)\nзапущена."),
+            ),
+            XFireActionCard(
+              title: "Тест лидара",
+              commandName: "test_lidar",
+              onTap: () => _runCalOrTest("test_lidar", "Тест лидара", "Команда test_lidar\nотправлена."),
+            ),
+            XFireResetCard(hint: "Сброс группы лидара\n(default hw)", onReset: _resetLidarGroup),
+            XFireBatchApplyCard(
+              hint: "Пакетная отправка настроек\nлидара",
+              parameters: [
+                "lidar_en ${_lidarEn.round()}",
+                "lid_id ${_lidId.round()}",
+                "lidar_filter_alpha $_lidarFilterAlpha",
+                "lidar_offset_m $_lidarOffsetM",
+              ],
+            ),
+          ],
+        ),
+
+        // 6. БАТАРЕЯ
+        XFireExpansionCard(
+          title: "Батарея",
+          subtitle: "Делитель (PA4), шунт тока (PA5)\nи порог failsafe по напряжению",
           icon: Icons.battery_charging_full,
           children: [
             XFireSliderCard(
@@ -1216,18 +1553,42 @@ class _SettingsTabState extends State<SettingsTab> {
               onChanged: (v) => setState(() => _currScale = v),
               onChangeEnd: (v) => SerialService.sendCommand("curr_scale $v"),
             ),
-            XFireResetCard(hint: "Сброс питания и тока\n(default bat)", onReset: _resetPowerGroup),
+            XFireSwitchCard(
+              title: "Failsafe по низкому напряжению\nбатареи",
+              commandName: "fs_bat_en",
+              value: _fsBatEn == 1,
+              onChanged: (v) {
+                setState(() => _fsBatEn = v ? 1.0 : 0.0);
+                SerialService.sendCommand("fs_bat_en ${_fsBatEn.round()}");
+              },
+            ),
+            XFireSliderCard(
+              title: "Порог напряжения батареи\nдля failsafe",
+              commandName: "bat_fs_v",
+              value: _batFsV,
+              min: 6.0,
+              max: 25.0,
+              divisions: 190,
+              unit: "В",
+              onChanged: (v) => setState(() => _batFsV = v),
+              onChangeEnd: (v) => SerialService.sendCommand("bat_fs_v $v"),
+            ),
+            XFireResetCard(hint: "Сброс группы батареи\n(default bat)", onReset: _resetBatteryGroup),
             XFireBatchApplyCard(
-              hint: "Пакетная отправка параметров\nпитания и тока",
+              hint: "Пакетная отправка настроек\nбатареи и тока",
               parameters: [
                 "bat_voltage_scale $_batVoltageScale",
                 "bat_filter_alpha $_batFilterAlpha",
                 "curr_zero_offset_a $_currZeroOffsetA",
                 "curr_scale $_currScale",
+                "fs_bat_en ${_fsBatEn.round()}",
+                "bat_fs_v $_batFsV",
               ],
             ),
           ],
         ),
+
+        // ОСТАЛЬНЫЕ БЛОКИ FC
         XFireExpansionCard(
           title: "Режимы полёта и кривые стиков\n(RC)",
           subtitle: "Acro/Angle/Horizon, углы,\nVz и кривые RC",
@@ -1277,19 +1638,10 @@ class _SettingsTabState extends State<SettingsTab> {
           ],
         ),
         XFireExpansionCard(
-          title: "Failsafe",
-          subtitle: "Порог батареи, потеря пакетов RC\nи скорость снижения",
+          title: "Failsafe (RC и автоснижение)",
+          subtitle: "Потеря пакетов RC\nи скорость снижения",
           icon: Icons.warning_amber_rounded,
           children: [
-            XFireSwitchCard(
-              title: "Failsafe по низкому напряжению\nбатареи",
-              commandName: "fs_bat_en",
-              value: _fsBatEn == 1,
-              onChanged: (v) {
-                setState(() => _fsBatEn = v ? 1.0 : 0.0);
-                SerialService.sendCommand("fs_bat_en ${_fsBatEn.round()}");
-              },
-            ),
             XFireSwitchCard(
               title: "Failsafe при потере\nпакетов RC",
               commandName: "fs_rtx_en",
@@ -1310,25 +1662,12 @@ class _SettingsTabState extends State<SettingsTab> {
               onChanged: (v) => setState(() => _fsVzSpeed = v),
               onChangeEnd: (v) => SerialService.sendCommand("fs_vz_speed $v"),
             ),
-            XFireSliderCard(
-              title: "Порог напряжения батареи\nдля failsafe",
-              commandName: "bat_fs_v",
-              value: _batFsV,
-              min: 6.0,
-              max: 25.0,
-              divisions: 190,
-              unit: "В",
-              onChanged: (v) => setState(() => _batFsV = v),
-              onChangeEnd: (v) => SerialService.sendCommand("bat_fs_v $v"),
-            ),
             XFireResetCard(hint: "Сброс настроек failsafe\n(default fs)", onReset: _resetFailsafeGroup),
             XFireBatchApplyCard(
               hint: "Пакетная отправка настроек\nfailsafe",
               parameters: [
-                "fs_bat_en ${_fsBatEn.round()}",
                 "fs_rtx_en ${_fsRtxEn.round()}",
                 "fs_vz_speed $_fsVzSpeed",
-                "bat_fs_v $_batFsV",
               ],
             ),
           ],
@@ -1490,148 +1829,19 @@ class _SettingsTabState extends State<SettingsTab> {
           ],
         ),
         XFireExpansionCard(
-          title: "Калибровка датчиков",
-          subtitle: "Гироскоп, акселерометр,\nлидар и компас",
-          icon: Icons.explore,
-          children: [
-            XFireActionCard(
-              title: "Калибровка гироскопа",
-              commandName: "cal_gyro",
-              onTap: () {
-                if (!SerialService.isConnected) {
-                  showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
-                } else {
-                  SerialService.sendCommand("cal_gyro");
-                  showAppDialog(context, "Успех", "Калибровка гироскопа\nзапущена.");
-                }
-              },
-            ),
-            XFireActionCard(
-              title: "Калибровка акселерометра",
-              commandName: "cal_acc",
-              onTap: () {
-                if (!SerialService.isConnected) {
-                  showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
-                } else {
-                  SerialService.sendCommand("cal_acc");
-                  showAppDialog(context, "Успех", "Калибровка акселерометра\nзапущена.");
-                }
-              },
-            ),
-            XFireActionCard(
-              title: "Калибровка смещения лидара",
-              commandName: "cal_lid",
-              onTap: () {
-                if (!SerialService.isConnected) {
-                  showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
-                } else {
-                  SerialService.sendCommand("cal_lid");
-                  showAppDialog(context, "Успех", "Калибровка лидара (cal_lid)\nзапущена.");
-                }
-              },
-            ),
-            XFireActionCard(
-              title: "Калибровка компаса",
-              commandName: "cal_mag",
-              onTap: () {
-                if (!SerialService.isConnected) {
-                  showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
-                } else {
-                  SerialService.sendCommand("cal_mag");
-                  showAppDialog(context, "Успех", "Калибровка компаса (cal_mag)\nзапущена.");
-                }
-              },
-            ),
-          ],
-        ),
-        XFireExpansionCard(
-          title: "Тесты оборудования",
-          subtitle: "Проверки датчиков, радио,\nмоторов, PID и линка RC",
+          title: "Тесты моторов и PID",
+          subtitle: "Проверка моторов (25%)\nи стабилизации PID (25%)",
           icon: Icons.rule,
           children: [
             XFireActionCard(
-              title: "Тест IMU\n(MPU / датчики)",
-              commandName: "test_mpu",
-              onTap: () {
-                if (!SerialService.isConnected) {
-                  showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
-                } else {
-                  SerialService.sendCommand("test_mpu");
-                  showAppDialog(context, "Тест IMU", "Команда test_mpu\nотправлена.");
-                }
-              },
-            ),
-            XFireActionCard(
-              title: "Тест радиомодуля\nSX126x (915 МГц)",
-              commandName: "test_sx",
-              onTap: () {
-                if (!SerialService.isConnected) {
-                  showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
-                } else {
-                  SerialService.sendCommand("test_sx");
-                  showAppDialog(context, "Тест SX126x", "Проверка SPI радиомодуля\nзапущена.");
-                }
-              },
-            ),
-            XFireActionCard(
-              title: "Тест лидара",
-              commandName: "test_lidar",
-              onTap: () {
-                if (!SerialService.isConnected) {
-                  showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
-                } else {
-                  SerialService.sendCommand("test_lidar");
-                  showAppDialog(context, "Тест лидара", "Команда test_lidar\nотправлена.");
-                }
-              },
-            ),
-            XFireActionCard(
               title: "Тест моторов (25%)",
               commandName: "test_motor",
-              onTap: () {
-                if (!SerialService.isConnected) {
-                  showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
-                } else {
-                  SerialService.sendCommand("test_motor");
-                  showAppDialog(context, "Внимание", "Тест моторов (25%)\nактивирован!", isError: true);
-                }
-              },
+              onTap: () => _runCalOrTest("test_motor", "Внимание", "Тест моторов (25%)\nактивирован!", isWarning: true),
             ),
             XFireActionCard(
               title: "Тест PID (25%)",
               commandName: "test_pid",
-              onTap: () {
-                if (!SerialService.isConnected) {
-                  showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
-                } else {
-                  SerialService.sendCommand("test_pid");
-                  showAppDialog(context, "Тест PID", "Тест PID активирован.");
-                }
-              },
-            ),
-            XFireActionCard(
-              title: "Тест связи с пультом",
-              commandName: "test_rc",
-              onTap: () {
-                if (!SerialService.isConnected) {
-                  showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
-                } else {
-                  SerialService.sendCommand("test_rc");
-                  showAppDialog(context, "Тест RC", "Диагностика связи с пультом\nзапущена.");
-                }
-              },
-            ),
-            XFireActionCard(
-              title: "Тест смены канала\nсвязи с пультом",
-              commandName: "test_rc_can",
-              onTap: () {
-                if (!SerialService.isConnected) {
-                  showAppDialog(context, "Ошибка", "Устройство не подключено!", isError: true);
-                } else {
-                  SerialService.sendCommand("test_rc_can");
-                  showAppDialog(context, "Смена канала", "Команда test_rc_can\nотправлена.");
-                }
-              },
+              onTap: () => _runCalOrTest("test_pid", "Тест PID", "Тест PID активирован."),
             ),
           ],
         ),
