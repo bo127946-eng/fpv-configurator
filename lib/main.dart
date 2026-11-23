@@ -1784,7 +1784,7 @@ class _SettingsTabState extends State<SettingsTab> {
 }
 
 // ==========================================
-// ВКЛАДКА 2: ПУЛЬТ RC
+// ВКЛАДКА 2: ПУЛЬТ RC (OSD / RX5808 / VTX)
 // ==========================================
 class RemoteControlTab extends StatefulWidget {
   const RemoteControlTab({super.key});
@@ -1794,18 +1794,53 @@ class RemoteControlTab extends StatefulWidget {
 }
 
 class _RemoteControlTabState extends State<RemoteControlTab> {
-  double _stickDeadband = 10.0;
-  double _rcProtocol = 1.0;
-  double _txPowerW = 100.0;
-  double _rcRate = 0.35;
-  double _rcSuperExpo = 0.03;
-  double _rcStickExpo = 0.45;
-  double _rcYawRate = 0.30;
-  double _rcYawSuperExpo = 0.03;
-  double _rcYawExpo = 0.35;
-  double _rcDeadband = 15.0;
-  double _rcFilterSmoothing = 0.35;
-  double _rcFsEn = 1.0;
+  bool _osdEn = true;
+  bool _rx58En = true;
+  double _rx58Ch = 32.0;
+
+  double _vtxCh0 = 32.0;
+  double _vtxCh1 = 33.0;
+  double _vtxCh2 = 34.0;
+  double _vtxCh3 = 35.0;
+
+  double _vtxRssiTh = 50.0;
+  double _vtxRssiHyst = 12.0;
+  bool _vtxAutoStart = true;
+  int _vtxBtnMode = 0;
+
+  void _resetRcDefaults() {
+    setState(() {
+      _osdEn = true;
+      _rx58En = true;
+      _rx58Ch = 32.0;
+      _vtxCh0 = 32.0;
+      _vtxCh1 = 33.0;
+      _vtxCh2 = 34.0;
+      _vtxCh3 = 35.0;
+      _vtxRssiTh = 50.0;
+      _vtxRssiHyst = 12.0;
+      _vtxAutoStart = true;
+      _vtxBtnMode = 0;
+    });
+    SerialService.sendCommand("default");
+    showAppDialog(context, "Сброс настроек пульта", "Настройки OSD, RX5808 и VTX\nсброшены по умолчанию (default).");
+  }
+
+  List<String> _buildBatchParams() {
+    return [
+      "osd_en ${_osdEn ? 1 : 0}",
+      "rx58_en ${_rx58En ? 1 : 0}",
+      "rx58_ch ${_rx58Ch.round()}",
+      "vtx_ch0 ${_vtxCh0.round()}",
+      "vtx_ch1 ${_vtxCh1.round()}",
+      "vtx_ch2 ${_vtxCh2.round()}",
+      "vtx_ch3 ${_vtxCh3.round()}",
+      "vtx_rssi_th ${_vtxRssiTh.round()}",
+      "vtx_rssi_hyst ${_vtxRssiHyst.round()}",
+      "vtx_auto_start ${_vtxAutoStart ? 1 : 0}",
+      "vtx_btn_mode $_vtxBtnMode",
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1813,181 +1848,150 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
         XFireExpansionCard(
-          title: "Калибровка стиков",
-          subtitle: "Настройка нейтрали\nи мертвых зон",
-          icon: Icons.gamepad,
+          title: "OSD (MAX7456) и приёмник RX5808",
+          subtitle: "Включение OSD и RX5808,\nиндекс канала RX5808 (0..39)",
+          icon: Icons.tv_rounded,
           children: [
-            XFireActionCard(
-              title: "Калибровка нейтрали стиков",
-              commandName: "rc_cal_sticks",
-              onTap: () {
-                if (!SerialService.isConnected) {
-                  showAppDialog(context, "Ошибка", "Устройство пульта\nне подключено!", isError: true);
-                } else {
-                  SerialService.sendCommand("rc_cal_sticks");
-                  showAppDialog(context, "Калибровка", "Команда калибровки нейтрали\nотправлена в пульт.");
-                }
-              },
-            ),
-            XFireSliderCard(title: "Мертвая зона стиков\n(Deadband)", commandName: "rc_tx_deadband", value: _stickDeadband, min: 0, max: 50, divisions: 50, unit: "PWM", onChanged: (v) => setState(() => _stickDeadband = v), onChangeEnd: (v) => SerialService.sendCommand("rc_tx_deadband ${v.round()}")),
-            XFireResetCard(
-              hint: "Сброс калибровки стиков\nпульта",
-              onReset: () {
-                setState(() {
-                  _stickDeadband = 10.0;
-                });
-                SerialService.sendCommand("default rc_sticks");
-              },
-            ),
-            XFireBatchApplyCard(
-              hint: "Пакетная отправка мертвой зоны\nстиков пульта",
-              parameters: ["rc_tx_deadband ${_stickDeadband.round()}"],
-            ),
-          ],
-        ),
-        XFireExpansionCard(
-          title: "Прошивка пульта управления",
-          subtitle: "Обновление ПО пульта\n(нажмите для прошивки)",
-          icon: Icons.memory,
-          children: [
-            XFireFlashCard(
-              title: "Прошить пульт управления\n(v3.27)",
-              targetName: "Пульт управления RC",
-              onFlash: (onProgress) async {
-                onProgress("Стирание памяти пульта...", 0.25);
-                await Future.delayed(const Duration(milliseconds: 700));
-                if (SerialService.isConnected && SerialService.usbPort != null) {
-                  await SerialService.usbPort!.write(Uint8List.fromList([0x7F]));
-                }
-                onProgress("Запись прошивки пульта v3.27...", 0.65);
-                await Future.delayed(const Duration(milliseconds: 1300));
-                onProgress("Проверка целостности...", 0.9);
-                await Future.delayed(const Duration(milliseconds: 500));
-                onProgress("Готово!", 1.0);
-              },
-            ),
-          ],
-        ),
-        XFireExpansionCard(
-          title: "Протокол и мощность",
-          subtitle: "Выбор протокола связи\nи мощности передатчика",
-          icon: Icons.wifi,
-          children: [
-            XFireSegmentedCard(
-              title: "Протокол связи с модулем",
-              commandName: "rc_proto",
-              options: const ["CRSF", "XFire RTX", "SBUS"],
-              selectedIndex: _rcProtocol.round(),
-              onSelected: (val) {
-                setState(() => _rcProtocol = val.toDouble());
-                SerialService.sendCommand("rc_proto $val");
-              },
-            ),
-            XFireSliderCard(title: "Выходная мощность передатчика\nпульта", commandName: "tx_power_mw", value: _txPowerW, min: 10, max: 1000, divisions: 99, unit: "мВт", onChanged: (v) => setState(() => _txPowerW = v), onChangeEnd: (v) => SerialService.sendCommand("tx_power_mw ${v.round()}")),
-            XFireResetCard(
-              hint: "Сброс протокола и мощности\nпередатчика",
-              onReset: () {
-                setState(() {
-                  _rcProtocol = 1.0;
-                  _txPowerW = 100.0;
-                });
-                SerialService.sendCommand("default rc_proto");
-              },
-            ),
-            XFireBatchApplyCard(
-              hint: "Пакетная отправка типа протокола\nи мощности Tx",
-              parameters: ["rc_proto ${_rcProtocol.round()}", "tx_power_mw ${_txPowerW.round()}"],
-            ),
-          ],
-        ),
-        XFireExpansionCard(
-          title: "Радиоуправление и экспоненты\nпульта",
-          subtitle: "RC Rate, Super Expo,\nкривые и сглаживание",
-          icon: Icons.tune,
-          children: [
-            XFireSliderCard(title: "RC Rate\n(Roll/Pitch)", commandName: "rc_rate", value: _rcRate, min: 0.1, max: 2.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcRate = v), onChangeEnd: (v) => SerialService.sendCommand("rc_rate $v")),
-            XFireSliderCard(title: "RC Super Expo", commandName: "rc_super_expo", value: _rcSuperExpo, min: 0.0, max: 0.9, divisions: 18, unit: "", onChanged: (v) => setState(() => _rcSuperExpo = v), onChangeEnd: (v) => SerialService.sendCommand("rc_super_expo $v")),
-            XFireSliderCard(title: "RC Stick Expo", commandName: "rc_stick_expo", value: _rcStickExpo, min: 0.0, max: 1.0, divisions: 20, unit: "", onChanged: (v) => setState(() => _rcStickExpo = v), onChangeEnd: (v) => SerialService.sendCommand("rc_stick_expo $v")),
-            XFireSliderCard(title: "Yaw Rate", commandName: "rc_yaw_rate", value: _rcYawRate, min: 0.1, max: 2.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcYawRate = v), onChangeEnd: (v) => SerialService.sendCommand("rc_yaw_rate $v")),
-            XFireSliderCard(title: "Yaw Super Expo", commandName: "rc_yaw_super_expo", value: _rcYawSuperExpo, min: 0.0, max: 0.9, divisions: 18, unit: "", onChanged: (v) => setState(() => _rcYawSuperExpo = v), onChangeEnd: (v) => SerialService.sendCommand("rc_yaw_super_expo $v")),
-            XFireSliderCard(title: "Yaw Expo", commandName: "rc_yaw_expo", value: _rcYawExpo, min: 0.0, max: 1.0, divisions: 20, unit: "", onChanged: (v) => setState(() => _rcYawExpo = v), onChangeEnd: (v) => SerialService.sendCommand("rc_yaw_expo $v")),
-            XFireSliderCard(title: "Мертвая зона стиков", commandName: "rc_deadband", value: _rcDeadband, min: 0, max: 50, divisions: 50, unit: "PWM", onChanged: (v) => setState(() => _rcDeadband = v), onChangeEnd: (v) => SerialService.sendCommand("rc_deadband $v")),
-            XFireSliderCard(title: "Сглаживание RC", commandName: "rc_filter_smoothing", value: _rcFilterSmoothing, min: 0.05, max: 1.0, divisions: 19, unit: "", onChanged: (v) => setState(() => _rcFilterSmoothing = v), onChangeEnd: (v) => SerialService.sendCommand("rc_filter_smoothing $v")),
             XFireSwitchCard(
-              title: "RC Failsafe\n(пакеты пульта)",
-              commandName: "rc_fs_en",
-              value: _rcFsEn == 1,
+              title: "Включение MAX7456 OSD",
+              commandName: "osd_en",
+              value: _osdEn,
               onChanged: (v) {
-                setState(() => _rcFsEn = v ? 1.0 : 0.0);
-                SerialService.sendCommand("rc_fs_en ${_rcFsEn.round()}");
+                setState(() => _osdEn = v);
+                SerialService.sendCommand("osd_en ${v ? 1 : 0}");
               },
             ),
-            XFireResetCard(
-              hint: "Сброс кривых управления\nпульта",
-              onReset: () {
-                setState(() {
-                  _rcRate = 0.35;
-                  _rcSuperExpo = 0.03;
-                  _rcStickExpo = 0.45;
-                  _rcYawRate = 0.30;
-                  _rcYawSuperExpo = 0.03;
-                  _rcYawExpo = 0.35;
-                  _rcDeadband = 15.0;
-                  _rcFilterSmoothing = 0.35;
-                  _rcFsEn = 1.0;
-                });
-                SerialService.sendCommand("default rc_expos");
+            XFireSwitchCard(
+              title: "Приёмник RX5808 и авто-RSSI",
+              commandName: "rx58_en",
+              value: _rx58En,
+              onChanged: (v) {
+                setState(() => _rx58En = v);
+                SerialService.sendCommand("rx58_en ${v ? 1 : 0}");
               },
             ),
-            XFireBatchApplyCard(
-              hint: "Пакетная отправка кривых управления\nи сглаживания",
-              parameters: ["rc_rate $_rcRate", "rc_super_expo $_rcSuperExpo", "rc_stick_expo $_rcStickExpo", "rc_yaw_rate $_rcYawRate", "rc_yaw_super_expo $_rcYawSuperExpo", "rc_yaw_expo $_rcYawExpo", "rc_deadband $_rcDeadband", "rc_filter_smoothing $_rcFilterSmoothing", "rc_fs_en ${_rcFsEn.round()}"],
+            XFireSliderCard(
+              title: "Индекс канала RX5808\n(0..39 по таблице частот)",
+              commandName: "rx58_ch",
+              value: _rx58Ch,
+              min: 0,
+              max: 39,
+              divisions: 39,
+              unit: "CH",
+              onChanged: (v) => setState(() => _rx58Ch = v),
+              onChangeEnd: (v) => SerialService.sendCommand("rx58_ch ${v.round()}"),
             ),
           ],
         ),
         XFireExpansionCard(
-          title: "Тест каналов",
-          subtitle: "Монитор каналов управления\nв реальном времени",
-          icon: Icons.bar_chart,
+          title: "Каналы VTX по ступеням (0..3)",
+          subtitle: "Индексы каналов 0..39\nдля ступеней VTX 0..3",
+          icon: Icons.settings_input_antenna,
           children: [
-            XFireCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text("Каналы пульта (CH1 - CH4)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white), softWrap: true),
-                  const SizedBox(height: 12),
-                  _buildChannelBar("Channel 1 (Roll)", 1500, Colors.blueAccent),
-                  _buildChannelBar("Channel 2 (Pitch)", 1500, Colors.cyanAccent),
-                  _buildChannelBar("Channel 3 (Throttle)", 1000, Colors.greenAccent),
-                  _buildChannelBar("Channel 4 (Yaw)", 1500, Colors.amberAccent),
-                ],
-              ),
+            XFireSliderCard(
+              title: "Канал VTX — ступень 0\n(по умолч. 32)",
+              commandName: "vtx_ch0",
+              value: _vtxCh0,
+              min: 0,
+              max: 39,
+              divisions: 39,
+              unit: "CH",
+              onChanged: (v) => setState(() => _vtxCh0 = v),
+              onChangeEnd: (v) => SerialService.sendCommand("vtx_ch0 ${v.round()}"),
+            ),
+            XFireSliderCard(
+              title: "Канал VTX — ступень 1\n(по умолч. 33)",
+              commandName: "vtx_ch1",
+              value: _vtxCh1,
+              min: 0,
+              max: 39,
+              divisions: 39,
+              unit: "CH",
+              onChanged: (v) => setState(() => _vtxCh1 = v),
+              onChangeEnd: (v) => SerialService.sendCommand("vtx_ch1 ${v.round()}"),
+            ),
+            XFireSliderCard(
+              title: "Канал VTX — ступень 2\n(по умолч. 34)",
+              commandName: "vtx_ch2",
+              value: _vtxCh2,
+              min: 0,
+              max: 39,
+              divisions: 39,
+              unit: "CH",
+              onChanged: (v) => setState(() => _vtxCh2 = v),
+              onChangeEnd: (v) => SerialService.sendCommand("vtx_ch2 ${v.round()}"),
+            ),
+            XFireSliderCard(
+              title: "Канал VTX — ступень 3\n(по умолч. 35)",
+              commandName: "vtx_ch3",
+              value: _vtxCh3,
+              min: 0,
+              max: 39,
+              divisions: 39,
+              unit: "CH",
+              onChanged: (v) => setState(() => _vtxCh3 = v),
+              onChangeEnd: (v) => SerialService.sendCommand("vtx_ch3 ${v.round()}"),
             ),
           ],
+        ),
+        XFireExpansionCard(
+          title: "Авто-RSSI и кнопка VTX",
+          subtitle: "Порог и гистерезис RSSI,\nстарт и режим кнопки VTX",
+          icon: Icons.smart_button_rounded,
+          children: [
+            XFireSliderCard(
+              title: "Целевой порог RSSI RX5808\nдля авто-ступеней VTX",
+              commandName: "vtx_rssi_th",
+              value: _vtxRssiTh,
+              min: 0,
+              max: 100,
+              divisions: 100,
+              unit: "%",
+              onChanged: (v) => setState(() => _vtxRssiTh = v),
+              onChangeEnd: (v) => SerialService.sendCommand("vtx_rssi_th ${v.round()}"),
+            ),
+            XFireSliderCard(
+              title: "Гистерезис вокруг порога RSSI\n(th - hyst / th + hyst)",
+              commandName: "vtx_rssi_hyst",
+              value: _vtxRssiHyst,
+              min: 0,
+              max: 40,
+              divisions: 40,
+              unit: "%",
+              onChanged: (v) => setState(() => _vtxRssiHyst = v),
+              onChangeEnd: (v) => SerialService.sendCommand("vtx_rssi_hyst ${v.round()}"),
+            ),
+            XFireSwitchCard(
+              title: "Старт в AUTO RSSI\n(выкл = старт в MIN / ступень 0)",
+              commandName: "vtx_auto_start",
+              value: _vtxAutoStart,
+              onChanged: (v) {
+                setState(() => _vtxAutoStart = v);
+                SerialService.sendCommand("vtx_auto_start ${v ? 1 : 0}");
+              },
+            ),
+            XFireSegmentedCard(
+              title: "Режим кнопки VTX\n(при vtx_btn_mode = 0 старт по vtx_auto_start)",
+              commandName: "vtx_btn_mode",
+              options: const ["0: MIN <-> AUTO RSSI", "1: MIN <-> MAX (ст. 3)"],
+              selectedIndex: _vtxBtnMode.clamp(0, 1),
+              onSelected: (val) {
+                setState(() => _vtxBtnMode = val);
+                SerialService.sendCommand("vtx_btn_mode $val");
+              },
+            ),
+          ],
+        ),
+        XFireResetCard(
+          hint: "Сброс настроек пульта\nпо умолчанию (default)",
+          onReset: _resetRcDefaults,
+        ),
+        XFireBatchApplyCard(
+          hint: "Пакетная отправка настроек\nOSD, RX5808 и VTX (config)",
+          parameters: _buildBatchParams(),
         ),
         const SizedBox(height: 24),
       ],
-    );
-  }
-
-  Widget _buildChannelBar(String label, int pwmValue, Color color) {
-    double percent = ((pwmValue - 1000) / 1000.0).clamp(0.0, 1.0);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(label, style: const TextStyle(fontSize: 16, color: Colors.white70)),
-              Text("$pwmValue PWM", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
-            ],
-          ),
-          const SizedBox(height: 4),
-          LinearProgressIndicator(value: percent, color: color, backgroundColor: Colors.white12, minHeight: 7, borderRadius: BorderRadius.circular(4)),
-        ],
-      ),
     );
   }
 }
@@ -2408,7 +2412,9 @@ class _TerminalTabState extends State<TerminalTab> {
     "roll_kp", "roll_ki", "roll_kd", "pitch_kp", "pitch_ki", "pitch_kd", "yaw_kp", "yaw_ki", "yaw_kd", "vz_kp", "vz_ki", "vz_kd",
     "cal_gyro", "cal_acc", "cal_lid", "cal_mag",
     "test_mpu", "test_sx", "test_lidar", "test_motor", "test_pid", "test_rc", "test_rc_can",
-    "rc_cal_sticks", "rc_tx_deadband", "rc_proto", "tx_power_mw",
+    "osd_en", "rx58_en", "rx58_ch",
+    "vtx_ch0", "vtx_ch1", "vtx_ch2", "vtx_ch3",
+    "vtx_rssi_th", "vtx_rssi_hyst", "vtx_auto_start", "vtx_btn_mode",
     "rtx_prot_id", "rtx_id", "rtx_en", "rtx_band", "rtx_hw_crc_en", "rtx_addr_en", "rtx_addr", "rtx_sync_word", "rtx_iq_inv",
     "rtx_pri_chan", "rtx_pri_sf", "rtx_pri_bw", "rtx_pri_cr", "rtx_pri_power",
     "rtx_bak_chan", "rtx_bak_sf", "rtx_bak_bw", "rtx_bak_cr", "rtx_bak_power",
