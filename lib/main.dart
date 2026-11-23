@@ -38,7 +38,7 @@ class MyApp extends StatelessWidget {
           filled: true,
           fillColor: const Color(0xFF242428),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
           isDense: true,
         ),
       ),
@@ -83,7 +83,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     return const Scaffold(
       backgroundColor: Color(0xFF0A0A0A),
       body: Center(
-        child: Text("XFire v3.27", style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold, letterSpacing: 4.0, color: Colors.white)),
+        child: Text("XFire v3.27", style: TextStyle(fontSize: 52, fontWeight: FontWeight.bold, letterSpacing: 4.0, color: Colors.white)),
       ),
     );
   }
@@ -171,7 +171,7 @@ class _MainContainerState extends State<MainContainer> {
         centerTitle: true,
         title: Center(
           child: Container(
-            width: 310,
+            width: 315,
             padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
               color: const Color(0xFF1C1C1E),
@@ -193,7 +193,7 @@ class _MainContainerState extends State<MainContainer> {
                         _tabNames[index],
                         style: TextStyle(
                           color: index == 0 ? Colors.greenAccent : Colors.white,
-                          fontSize: 15,
+                          fontSize: 17,
                           fontWeight: FontWeight.bold,
                         ),
                         softWrap: true,
@@ -209,7 +209,7 @@ class _MainContainerState extends State<MainContainer> {
                         const Expanded(
                           child: Text(
                             "Соединение\nUSB Serial",
-                            style: TextStyle(color: Colors.amberAccent, fontSize: 14, fontWeight: FontWeight.bold, height: 1.2),
+                            style: TextStyle(color: Colors.amberAccent, fontSize: 16, fontWeight: FontWeight.bold, height: 1.2),
                             softWrap: true,
                             maxLines: 2,
                           ),
@@ -297,7 +297,7 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
       if (match.start > lastMatchEnd) {
         widgets.add(Text(
           rawContent.substring(lastMatchEnd, match.start).trim(),
-          style: const TextStyle(fontSize: 15, color: Colors.white70, height: 1.45, fontFamily: 'monospace'),
+          style: const TextStyle(fontSize: 17, color: Colors.white70, height: 1.45, fontFamily: 'monospace'),
           softWrap: true,
         ));
         widgets.add(const SizedBox(height: 10));
@@ -316,7 +316,7 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
               width: double.infinity,
               alignment: Alignment.center,
               decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
-              child: Text("Изображение не найдено\n($imgTag.jpg)", textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: Colors.amberAccent)),
+              child: Text("Изображение не найдено\n($imgTag.jpg)", textAlign: TextAlign.center, style: const TextStyle(fontSize: 15, color: Colors.amberAccent)),
             ),
           ),
         ),
@@ -327,7 +327,7 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
     if (lastMatchEnd < rawContent.length) {
       widgets.add(Text(
         rawContent.substring(lastMatchEnd).trim(),
-        style: const TextStyle(fontSize: 15, color: Colors.white70, height: 1.45, fontFamily: 'monospace'),
+        style: const TextStyle(fontSize: 17, color: Colors.white70, height: 1.45, fontFamily: 'monospace'),
         softWrap: true,
       ));
     }
@@ -351,22 +351,22 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
                     const Expanded(
                       child: Text(
                         'XFire Ecosystem',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.amberAccent),
+                        style: TextStyle(fontSize: 21, fontWeight: FontWeight.bold, color: Colors.amberAccent),
                         softWrap: true,
                       ),
                     ),
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                       decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
-                      child: const Text('v.3.27 (CLI)', style: TextStyle(color: Colors.blueAccent, fontSize: 13, fontWeight: FontWeight.bold)),
+                      child: const Text('v.3.27 (CLI)', style: TextStyle(color: Colors.blueAccent, fontSize: 15, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
                 const SizedBox(height: 10),
                 const Text(
                   'Аппаратно-программная экосистема\nдля управления дронами.\nМоторы: 2312, Пропы: 9450, 4S, LoRa RTX.',
-                  style: TextStyle(fontSize: 15, color: Colors.white70, height: 1.45),
+                  style: TextStyle(fontSize: 17, color: Colors.white70, height: 1.45),
                   softWrap: true,
                 ),
               ],
@@ -377,7 +377,7 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
           padding: EdgeInsets.symmetric(horizontal: 13, vertical: 8),
           child: Text(
             'СПРАВОЧНИК CLI КОМАНД\n(doc.txt)',
-            style: TextStyle(color: Colors.amberAccent, fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 1.1, height: 1.3),
+            style: TextStyle(color: Colors.amberAccent, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.1, height: 1.3),
             softWrap: true,
           ),
         ),
@@ -389,7 +389,7 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
                 child: Card(
                   margin: EdgeInsets.zero,
                   child: ExpansionTile(
-                    title: Text(sec.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white), softWrap: true),
+                    title: Text(sec.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Colors.white), softWrap: true),
                     iconColor: Colors.amberAccent,
                     collapsedIconColor: Colors.white54,
                     children: [Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: _buildContentWidgets(sec.content)))],
@@ -655,9 +655,9 @@ class _ProfilesTabState extends State<ProfilesTab> {
           ],
         ),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 5.0),
+          padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 6.0),
           child: Container(
-            padding: const EdgeInsets.all(14.0),
+            padding: const EdgeInsets.all(15.0),
             decoration: BoxDecoration(
               color: const Color(0xFF1C1C1E),
               borderRadius: BorderRadius.circular(14),
@@ -672,12 +672,12 @@ class _ProfilesTabState extends State<ProfilesTab> {
                     Expanded(
                       child: Text(
                         "ФИЗИЧЕСКИЙ РАСЧЕТ\nИ НАГРУЗКИ (v.3.27)",
-                        style: TextStyle(color: Colors.amberAccent, fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 1.0, height: 1.3),
+                        style: TextStyle(color: Colors.amberAccent, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.0, height: 1.3),
                         softWrap: true,
                       ),
                     ),
                     SizedBox(width: 8),
-                    Icon(Icons.insights, color: Colors.amberAccent, size: 20),
+                    Icon(Icons.insights, color: Colors.amberAccent, size: 22),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -758,7 +758,7 @@ class _ProfilesTabState extends State<ProfilesTab> {
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(fontSize: 14, color: Colors.white70, height: 1.3),
+              style: const TextStyle(fontSize: 16, color: Colors.white70, height: 1.3),
               softWrap: true,
             ),
           ),
@@ -766,7 +766,7 @@ class _ProfilesTabState extends State<ProfilesTab> {
           Text(
             value,
             textAlign: TextAlign.right,
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: color, fontFamily: 'monospace', height: 1.3),
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color, fontFamily: 'monospace', height: 1.3),
             softWrap: true,
           ),
         ],
@@ -967,12 +967,12 @@ class _SettingsTabState extends State<SettingsTab> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(label, style: const TextStyle(fontSize: 14, color: Colors.white70)),
-              Text("${value.toStringAsFixed(2)} $unit", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: color)),
+              Text(label, style: const TextStyle(fontSize: 16, color: Colors.white70)),
+              Text("${value.toStringAsFixed(2)} $unit", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
             ],
           ),
           const SizedBox(height: 4),
-          LinearProgressIndicator(value: percent, color: color, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
+          LinearProgressIndicator(value: percent, color: color, backgroundColor: Colors.white12, minHeight: 7, borderRadius: BorderRadius.circular(4)),
         ],
       ),
     );
@@ -1724,18 +1724,18 @@ class _SettingsTabState extends State<SettingsTab> {
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 4.0),
                       child: Container(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(color: const Color(0xFF1C1C1E), borderRadius: BorderRadius.circular(16)),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text("GYROSCOPE", style: TextStyle(color: Colors.amberAccent, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+                            const Text("GYROSCOPE", style: TextStyle(color: Colors.amberAccent, fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
                             const SizedBox(height: 4),
                             _buildSensorBar("Gyro Roll", SerialService.gyroRoll, -3.14, 3.14, "rad/s", Colors.blueAccent),
                             _buildSensorBar("Gyro Pitch", SerialService.gyroPitch, -3.14, 3.14, "rad/s", Colors.blueAccent),
                             _buildSensorBar("Gyro Yaw", SerialService.gyroYaw, -3.14, 3.14, "rad/s", Colors.blueAccent),
                             const SizedBox(height: 8),
-                            const Text("ACCELEROMETER", style: TextStyle(color: Colors.amberAccent, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+                            const Text("ACCELEROMETER", style: TextStyle(color: Colors.amberAccent, fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
                             const SizedBox(height: 4),
                             _buildSensorBar("Accel X", SerialService.accelX, -2.0, 2.0, "G", Colors.cyanAccent),
                             _buildSensorBar("Accel Y", SerialService.accelY, -2.0, 2.0, "G", Colors.cyanAccent),
@@ -1954,7 +1954,7 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text("Каналы пульта (CH1 - CH4)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white), softWrap: true),
+                  const Text("Каналы пульта (CH1 - CH4)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white), softWrap: true),
                   const SizedBox(height: 12),
                   _buildChannelBar("Channel 1 (Roll)", 1500, Colors.blueAccent),
                   _buildChannelBar("Channel 2 (Pitch)", 1500, Colors.cyanAccent),
@@ -1980,12 +1980,12 @@ class _RemoteControlTabState extends State<RemoteControlTab> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(label, style: const TextStyle(fontSize: 14, color: Colors.white70)),
-              Text("$pwmValue PWM", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: color)),
+              Text(label, style: const TextStyle(fontSize: 16, color: Colors.white70)),
+              Text("$pwmValue PWM", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
             ],
           ),
           const SizedBox(height: 4),
-          LinearProgressIndicator(value: percent, color: color, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
+          LinearProgressIndicator(value: percent, color: color, backgroundColor: Colors.white12, minHeight: 7, borderRadius: BorderRadius.circular(4)),
         ],
       ),
     );
@@ -2284,7 +2284,7 @@ class _RadioTabState extends State<RadioTab> {
             XFireSliderCard(title: "Coding Rate\n(1: 4/5 .. 4: 4/8)", commandName: "rtx_pri_cr", value: _priCr, min: 1, max: 4, divisions: 3, unit: "", onChanged: (v) => setState(() => _priCr = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_pri_cr ${v.round()}")),
             XFireSliderCard(title: "Мощность передатчика\n(-9..22 дБм)", commandName: "rtx_pri_power", value: _priPower, min: -9, max: 22, divisions: 31, unit: "дБм", onChanged: (v) => setState(() => _priPower = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_pri_power ${v.round()}")),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 5.0),
+              padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 6.0),
               child: RtxLinkCalculatorCard(
                 title: "Оценка основного канала",
                 themeColor: Colors.blueAccent,
@@ -2320,7 +2320,7 @@ class _RadioTabState extends State<RadioTab> {
             XFireSliderCard(title: "Coding Rate\n(1: 4/5 .. 4: 4/8)", commandName: "rtx_bak_cr", value: _bakCr, min: 1, max: 4, divisions: 3, unit: "", onChanged: (v) => setState(() => _bakCr = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_bak_cr ${v.round()}")),
             XFireSliderCard(title: "Мощность передатчика\n(-9..22 дБм)", commandName: "rtx_bak_power", value: _bakPower, min: -9, max: 22, divisions: 31, unit: "дБм", onChanged: (v) => setState(() => _bakPower = v), onChangeEnd: (v) => SerialService.sendCommand("rtx_bak_power ${v.round()}")),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 5.0),
+              padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 6.0),
               child: RtxLinkCalculatorCard(
                 title: "Оценка резервного канала",
                 themeColor: Colors.greenAccent,
@@ -2470,7 +2470,7 @@ class _TerminalTabState extends State<TerminalTab> {
                 reverse: true,
                 child: Text(
                   _displayLog,
-                  style: const TextStyle(fontFamily: 'monospace', color: Colors.greenAccent, fontSize: 15, height: 1.4),
+                  style: const TextStyle(fontFamily: 'monospace', color: Colors.greenAccent, fontSize: 17, height: 1.4),
                   softWrap: true,
                 ),
               ),
@@ -2479,7 +2479,7 @@ class _TerminalTabState extends State<TerminalTab> {
           if (_suggestions.isNotEmpty)
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 13),
-              constraints: const BoxConstraints(maxHeight: 160),
+              constraints: const BoxConstraints(maxHeight: 170),
               decoration: BoxDecoration(
                 color: const Color(0xFF1C1C1E),
                 borderRadius: BorderRadius.circular(12),
@@ -2498,10 +2498,10 @@ class _TerminalTabState extends State<TerminalTab> {
                       setState(() => _suggestions = []);
                     },
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
+                      padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 11.0),
                       child: Text(
                         item,
-                        style: const TextStyle(fontFamily: 'monospace', fontSize: 15, color: Colors.amberAccent, fontWeight: FontWeight.bold),
+                        style: const TextStyle(fontFamily: 'monospace', fontSize: 17, color: Colors.amberAccent, fontWeight: FontWeight.bold),
                         softWrap: true,
                       ),
                     ),
@@ -2519,8 +2519,8 @@ class _TerminalTabState extends State<TerminalTab> {
                     controller: _controller,
                     focusNode: _focusNode,
                     maxLines: null,
-                    style: const TextStyle(fontSize: 16, fontFamily: 'monospace'),
-                    decoration: const InputDecoration(hintText: "Enter CLI command...", hintStyle: TextStyle(fontSize: 14)),
+                    style: const TextStyle(fontSize: 18, fontFamily: 'monospace'),
+                    decoration: const InputDecoration(hintText: "Enter CLI command...", hintStyle: TextStyle(fontSize: 15)),
                     onSubmitted: _submitCommand,
                   ),
                 ),
