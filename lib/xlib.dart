@@ -75,12 +75,20 @@ void showAppDialog(BuildContext context, String title, String message, {bool isE
     builder: (context) => AlertDialog(
       backgroundColor: const Color(0xFF1C1C1E),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: Text(title, style: TextStyle(color: isError ? Colors.redAccent : Colors.amberAccent, fontSize: 16, fontWeight: FontWeight.bold)),
-      content: Text(message, style: const TextStyle(fontSize: 13, color: Colors.white70)),
+      title: Text(
+        title,
+        style: TextStyle(color: isError ? Colors.redAccent : Colors.amberAccent, fontSize: 18, fontWeight: FontWeight.bold),
+        softWrap: true,
+      ),
+      content: Text(
+        message,
+        style: const TextStyle(fontSize: 15, color: Colors.white70, height: 1.4),
+        softWrap: true,
+      ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text("ОК", style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold)),
+          child: const Text("ОК", style: TextStyle(color: Colors.blueAccent, fontSize: 15, fontWeight: FontWeight.bold)),
         ),
       ],
     ),
@@ -143,7 +151,7 @@ class XFireCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 4.0),
+      padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 5.0),
       child: Container(
         padding: const EdgeInsets.all(14.0),
         decoration: BoxDecoration(
@@ -174,13 +182,24 @@ class XFireExpansionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 11.0, vertical: 4.0),
+      padding: const EdgeInsets.symmetric(horizontal: 11.0, vertical: 5.0),
       child: Card(
         margin: EdgeInsets.zero,
         child: ExpansionTile(
-          leading: Icon(icon, color: Colors.amberAccent, size: 20),
-          title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amberAccent)),
-          subtitle: Text(subtitle, style: const TextStyle(fontSize: 10, color: Colors.white70)),
+          leading: Icon(icon, color: Colors.amberAccent, size: 22),
+          title: Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.amberAccent, height: 1.25),
+            softWrap: true,
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 3.0),
+            child: Text(
+              subtitle,
+              style: const TextStyle(fontSize: 12, color: Colors.white70, height: 1.3),
+              softWrap: true,
+            ),
+          ),
           iconColor: Colors.amberAccent,
           collapsedIconColor: Colors.white54,
           children: [
@@ -219,13 +238,18 @@ class XFireActionCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-                  const SizedBox(height: 2),
-                  Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
+                  Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white, height: 1.25), softWrap: true),
+                  const SizedBox(height: 3),
+                  Text(
+                    commandName,
+                    style: TextStyle(color: Colors.amberAccent.withOpacity(0.85), fontSize: 12, fontFamily: 'monospace', fontWeight: FontWeight.w600),
+                    softWrap: true,
+                  ),
                 ],
               ),
             ),
-            const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.white54),
+            const SizedBox(width: 8),
+            const Icon(Icons.arrow_forward_ios, size: 15, color: Colors.white54),
           ],
         ),
       ),
@@ -256,13 +280,18 @@ class XFireResetCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text("Сбросить настройки", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-                  const SizedBox(height: 2),
-                  Text(hint, style: const TextStyle(color: Colors.white70, fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
+                  const Text("Сбросить настройки", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white)),
+                  const SizedBox(height: 3),
+                  Text(
+                    hint,
+                    style: const TextStyle(color: Colors.white70, fontSize: 12, fontFamily: 'monospace', fontWeight: FontWeight.w600, height: 1.3),
+                    softWrap: true,
+                  ),
                 ],
               ),
             ),
-            const Icon(Icons.refresh_rounded, size: 16, color: Colors.amberAccent),
+            const SizedBox(width: 8),
+            const Icon(Icons.refresh_rounded, size: 18, color: Colors.amberAccent),
           ],
         ),
       ),
@@ -288,12 +317,12 @@ class XFireBatchApplyCard extends StatelessWidget {
       child: InkWell(
         onTap: () {
           if (!SerialService.isConnected) {
-            showAppDialog(context, "Ошибка соединения", "Устройство не подключено по USB!", isError: true);
+            showAppDialog(context, "Ошибка соединения", "Устройство не подключено\nпо USB!", isError: true);
             return;
           }
           SerialService.sendBatchConfig(parameters);
           if (onApplied != null) onApplied!();
-          showAppDialog(context, "Пакет настроек", "Конфигурация успешно применена!");
+          showAppDialog(context, "Пакет настроек", "Конфигурация успешно\nприменена!");
         },
         borderRadius: BorderRadius.circular(10),
         child: Row(
@@ -303,13 +332,18 @@ class XFireBatchApplyCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text("Применить настройки", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-                  const SizedBox(height: 2),
-                  Text(hint, style: const TextStyle(color: Colors.white70, fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
+                  const Text("Применить настройки", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white)),
+                  const SizedBox(height: 3),
+                  Text(
+                    hint,
+                    style: const TextStyle(color: Colors.white70, fontSize: 12, fontFamily: 'monospace', fontWeight: FontWeight.w600, height: 1.3),
+                    softWrap: true,
+                  ),
                 ],
               ),
             ),
-            const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.white54),
+            const SizedBox(width: 8),
+            const Icon(Icons.arrow_forward_ios, size: 15, color: Colors.white54),
           ],
         ),
       ),
@@ -366,27 +400,19 @@ class _XFireTextHexCardState extends State<XFireTextHexCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(widget.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-                    const SizedBox(height: 2),
-                    Text(widget.commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
-                  ],
-                ),
-              ),
-            ],
+          Text(widget.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white, height: 1.25), softWrap: true),
+          const SizedBox(height: 3),
+          Text(
+            widget.commandName,
+            style: TextStyle(color: Colors.amberAccent.withOpacity(0.85), fontSize: 12, fontFamily: 'monospace', fontWeight: FontWeight.w600),
+            softWrap: true,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           TextField(
             controller: _controller,
             inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9a-fA-FxX]'))],
-            style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-            decoration: const InputDecoration(hintText: "например, 0x1424", isDense: true),
+            style: const TextStyle(fontFamily: 'monospace', fontSize: 15),
+            decoration: const InputDecoration(hintText: "например, 0x1424", hintStyle: TextStyle(fontSize: 14), isDense: true),
             onChanged: widget.onChanged,
             onSubmitted: widget.onSubmitEnd,
           ),
@@ -420,7 +446,7 @@ class _XFireFlashCardState extends State<XFireFlashCard> {
   Future<void> _startFlashing() async {
     if (_isFlashing) return;
     if (!SerialService.isConnected) {
-      showAppDialog(context, "Ошибка соединения", "Устройство не подключено по USB!", isError: true);
+      showAppDialog(context, "Ошибка соединения", "Устройство не подключено\nпо USB!", isError: true);
       return;
     }
     setState(() {
@@ -440,18 +466,18 @@ class _XFireFlashCardState extends State<XFireFlashCard> {
       });
       if (mounted) {
         setState(() {
-          _statusState = "Прошивка успешно завершена (v3.27)!";
+          _statusState = "Прошивка успешно завершена\n(v3.27)!";
           _progress = 1.0;
         });
-        showAppDialog(context, "Успех", "${widget.targetName} успешно прошит!");
+        showAppDialog(context, "Успех", "${widget.targetName}\nуспешно прошит!");
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _statusState = "Ошибка прошивки: $e";
+          _statusState = "Ошибка прошивки:\n$e";
           _progress = 0.0;
         });
-        showAppDialog(context, "Ошибка", "Сбой прошивки ${widget.targetName}: $e", isError: true);
+        showAppDialog(context, "Ошибка", "Сбой прошивки\n${widget.targetName}:\n$e", isError: true);
       }
     } finally {
       if (mounted) {
@@ -471,7 +497,7 @@ class _XFireFlashCardState extends State<XFireFlashCard> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 4.0),
+      padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 5.0),
       child: Container(
         decoration: BoxDecoration(
           color: const Color(0xFF141416),
@@ -495,13 +521,18 @@ class _XFireFlashCardState extends State<XFireFlashCard> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(widget.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-                            const SizedBox(height: 2),
-                            Text(_statusState, style: TextStyle(color: _isFlashing ? Colors.amberAccent : Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
+                            Text(widget.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white, height: 1.25), softWrap: true),
+                            const SizedBox(height: 3),
+                            Text(
+                              _statusState,
+                              style: TextStyle(color: _isFlashing ? Colors.amberAccent : Colors.white70, fontSize: 13, fontWeight: FontWeight.w600, height: 1.3),
+                              softWrap: true,
+                            ),
                           ],
                         ),
                       ),
-                      Icon(_isFlashing ? Icons.hourglass_top_rounded : Icons.arrow_forward_ios, size: _isFlashing ? 20 : 14, color: _isFlashing ? Colors.amberAccent : Colors.white54),
+                      const SizedBox(width: 8),
+                      Icon(_isFlashing ? Icons.hourglass_top_rounded : Icons.arrow_forward_ios, size: _isFlashing ? 22 : 15, color: _isFlashing ? Colors.amberAccent : Colors.white54),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -549,7 +580,7 @@ class XFireSliderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 4.0),
+      padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 5.0),
       child: Container(
         padding: const EdgeInsets.all(14.0),
         decoration: BoxDecoration(
@@ -562,21 +593,31 @@ class XFireSliderCard extends StatelessWidget {
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-                      const SizedBox(height: 2),
-                      Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
+                      Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white, height: 1.25), softWrap: true),
+                      const SizedBox(height: 3),
+                      Text(
+                        commandName,
+                        style: TextStyle(color: Colors.amberAccent.withOpacity(0.85), fontSize: 12, fontFamily: 'monospace', fontWeight: FontWeight.w600),
+                        softWrap: true,
+                      ),
                     ],
                   ),
                 ),
+                const SizedBox(width: 10),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
-                  child: Text("${value.toStringAsFixed(value.truncate() == value ? 0 : 2)} $unit", style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 11)),
+                  child: Text(
+                    "${value.toStringAsFixed(value.truncate() == value ? 0 : 2)} $unit".trim(),
+                    style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 13),
+                    softWrap: true,
+                  ),
                 ),
               ],
             ),
@@ -634,12 +675,17 @@ class XFireSwitchCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-                const SizedBox(height: 2),
-                Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
+                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white, height: 1.25), softWrap: true),
+                const SizedBox(height: 3),
+                Text(
+                  commandName,
+                  style: TextStyle(color: Colors.amberAccent.withOpacity(0.85), fontSize: 12, fontFamily: 'monospace', fontWeight: FontWeight.w600),
+                  softWrap: true,
+                ),
               ],
             ),
           ),
+          const SizedBox(width: 8),
           Switch(value: value, onChanged: onChanged, activeColor: Colors.blueAccent),
         ],
       ),
@@ -669,9 +715,13 @@ class XFireSegmentedCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-          const SizedBox(height: 2),
-          Text(commandName, style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
+          Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white, height: 1.25), softWrap: true),
+          const SizedBox(height: 3),
+          Text(
+            commandName,
+            style: TextStyle(color: Colors.amberAccent.withOpacity(0.85), fontSize: 12, fontFamily: 'monospace', fontWeight: FontWeight.w600),
+            softWrap: true,
+          ),
           const SizedBox(height: 10),
           LayoutBuilder(
             builder: (context, constraints) {
@@ -682,8 +732,13 @@ class XFireSegmentedCard extends StatelessWidget {
                 selectedColor: Colors.white,
                 fillColor: Colors.blueAccent,
                 color: Colors.white70,
-                constraints: BoxConstraints(minHeight: 36, minWidth: (constraints.maxWidth - (options.length - 1)) / options.length),
-                children: options.map((opt) => Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Text(opt, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)))).toList(),
+                constraints: BoxConstraints(minHeight: 40, minWidth: (constraints.maxWidth - (options.length - 1)) / options.length),
+                children: options
+                    .map((opt) => Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                          child: Text(opt, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, height: 1.2), softWrap: true),
+                        ))
+                    .toList(),
               );
             },
           ),
@@ -753,17 +808,54 @@ class _PidAxisCardWidgetState extends State<PidAxisCardWidget> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(widget.axisName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-          const SizedBox(height: 2),
-          Text("${widget.kpCmd} / ${widget.kiCmd} / ${widget.kdCmd}", style: TextStyle(color: Colors.amberAccent.withOpacity(0.8), fontSize: 9, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
+          Text(widget.axisName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white), softWrap: true),
+          const SizedBox(height: 3),
+          Text(
+            "${widget.kpCmd} / ${widget.kiCmd} / ${widget.kdCmd}",
+            style: TextStyle(color: Colors.amberAccent.withOpacity(0.85), fontSize: 11, fontFamily: 'monospace', fontWeight: FontWeight.w600),
+            softWrap: true,
+          ),
+          const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: TextField(decoration: const InputDecoration(labelText: 'Kp', isDense: true), keyboardType: TextInputType.number, controller: _kpController, onSubmitted: (val) { double? np = double.tryParse(val); if (np != null) widget.onUpdate(np, widget.ki, widget.kd); })),
+              Expanded(
+                child: TextField(
+                  style: const TextStyle(fontSize: 14),
+                  decoration: const InputDecoration(labelText: 'Kp', labelStyle: TextStyle(fontSize: 13), isDense: true),
+                  keyboardType: TextInputType.number,
+                  controller: _kpController,
+                  onSubmitted: (val) {
+                    double? np = double.tryParse(val);
+                    if (np != null) widget.onUpdate(np, widget.ki, widget.kd);
+                  },
+                ),
+              ),
               const SizedBox(width: 8),
-              Expanded(child: TextField(decoration: const InputDecoration(labelText: 'Ki', isDense: true), keyboardType: TextInputType.number, controller: _kiController, onSubmitted: (val) { double? ni = double.tryParse(val); if (ni != null) widget.onUpdate(widget.kp, ni, widget.kd); })),
+              Expanded(
+                child: TextField(
+                  style: const TextStyle(fontSize: 14),
+                  decoration: const InputDecoration(labelText: 'Ki', labelStyle: TextStyle(fontSize: 13), isDense: true),
+                  keyboardType: TextInputType.number,
+                  controller: _kiController,
+                  onSubmitted: (val) {
+                    double? ni = double.tryParse(val);
+                    if (ni != null) widget.onUpdate(widget.kp, ni, widget.kd);
+                  },
+                ),
+              ),
               const SizedBox(width: 8),
-              Expanded(child: TextField(decoration: const InputDecoration(labelText: 'Kd', isDense: true), keyboardType: TextInputType.number, controller: _kdController, onSubmitted: (val) { double? nd = double.tryParse(val); if (nd != null) widget.onUpdate(widget.kp, widget.ki, nd); })),
+              Expanded(
+                child: TextField(
+                  style: const TextStyle(fontSize: 14),
+                  decoration: const InputDecoration(labelText: 'Kd', labelStyle: TextStyle(fontSize: 13), isDense: true),
+                  keyboardType: TextInputType.number,
+                  controller: _kdController,
+                  onSubmitted: (val) {
+                    double? nd = double.tryParse(val);
+                    if (nd != null) widget.onUpdate(widget.kp, widget.ki, nd);
+                  },
+                ),
+              ),
             ],
           ),
         ],
@@ -806,9 +898,14 @@ class RtxLinkCalculatorCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Text("ЧАСТОТА: ${currentFreqMhz.toStringAsFixed(0)} МГц", style: TextStyle(fontSize: 10, color: themeColor, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+          Text(
+            "$title\nЧАСТОТА: ${currentFreqMhz.toStringAsFixed(0)} МГц",
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12, color: themeColor, fontWeight: FontWeight.bold, letterSpacing: 1.0, height: 1.3),
+            softWrap: true,
+          ),
           const SizedBox(height: 8),
-          Text(distFormatted, style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: themeColor)),
+          Text(distFormatted, style: TextStyle(fontSize: 34, fontWeight: FontWeight.bold, color: themeColor)),
           const SizedBox(height: 12),
           const Divider(color: Colors.white12),
           const SizedBox(height: 8),
@@ -817,13 +914,16 @@ class RtxLinkCalculatorCard extends StatelessWidget {
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Flexible(child: Text("Чувствительность приемника (Sensitivity):", style: TextStyle(fontSize: 11, color: Colors.white70), overflow: TextOverflow.ellipsis)),
+                  const Expanded(
+                    child: Text("Чувствительность приемника\n(Sensitivity):", style: TextStyle(fontSize: 13, color: Colors.white70, height: 1.25), softWrap: true),
+                  ),
                   const SizedBox(width: 8),
-                  Text("${sensitivity.toStringAsFixed(1)} dBm", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
+                  Text("${sensitivity.toStringAsFixed(1)} dBm", style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
                 ],
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 5),
               LinearProgressIndicator(value: sensitivityProgress, color: Colors.cyanAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
             ],
           ),
@@ -833,13 +933,16 @@ class RtxLinkCalculatorCard extends StatelessWidget {
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Flexible(child: Text("Скорость по воздуху (Air Data Rate):", style: TextStyle(fontSize: 11, color: Colors.white70), overflow: TextOverflow.ellipsis)),
+                  const Expanded(
+                    child: Text("Скорость по воздуху\n(Air Data Rate):", style: TextStyle(fontSize: 13, color: Colors.white70, height: 1.25), softWrap: true),
+                  ),
                   const SizedBox(width: 8),
-                  Text(bitRateStr, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                  Text(bitRateStr, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
                 ],
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 5),
               LinearProgressIndicator(value: bitRateProgress, color: Colors.blueAccent, backgroundColor: Colors.white12, minHeight: 6, borderRadius: BorderRadius.circular(3)),
             ],
           ),
@@ -875,31 +978,32 @@ class DipoleAntennaBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return XFireExpansionCard(
-      title: "Дипольная антенна (Расчет и геометрия)",
-      subtitle: "Расчет плеч штыревого диполя и диэлектрической усадки",
+      title: "Дипольная антенна\n(Расчет и геометрия)",
+      subtitle: "Расчет плеч штыревого диполя\nи диэлектрической усадки",
       icon: Icons.wifi_tethering,
       children: [
         XFireCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("Графический расчет плеч диполя", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.cyanAccent)),
+              const Text("Графический расчет плеч диполя", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.cyanAccent), softWrap: true),
               const SizedBox(height: 12),
               Center(
                 child: SizedBox(
-                  width: 220,
+                  width: 240,
                   child: Column(
                     children: [
-                      const Text("Штыревой диполь", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
+                      const Text("Штыревой диполь", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.cyanAccent), softWrap: true),
                       const SizedBox(height: 6),
                       Container(
                         height: 120,
                         decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
                         child: CustomPaint(painter: DipoleSchematicPainter(hasSleeve: hasProtectiveSleeve), size: const Size(double.infinity, 120)),
                       ),
-                      const SizedBox(height: 6),
-                      Text("Верхнее плечо: ${(antResults['dipoleArmTopMm'] as double).toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 10, color: Colors.white70)),
-                      Text("Нижнее плечо: ${(antResults['dipoleArmBotMm'] as double).toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
+                      const SizedBox(height: 8),
+                      Text("Верхнее плечо: ${(antResults['dipoleArmTopMm'] as double).toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 13, color: Colors.white70), softWrap: true),
+                      const SizedBox(height: 2),
+                      Text("Нижнее плечо: ${(antResults['dipoleArmBotMm'] as double).toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white), softWrap: true),
                     ],
                   ),
                 ),
@@ -907,25 +1011,28 @@ class DipoleAntennaBlock extends StatelessWidget {
             ],
           ),
         ),
-        XFireSwitchCard(title: "Защитная трубка / термоусадка на диполе", commandName: "ant_sleeve_en", value: hasProtectiveSleeve, onChanged: onSleeveToggle),
+        XFireSwitchCard(title: "Защитная трубка / термоусадка\nна диполе", commandName: "ant_sleeve_en", value: hasProtectiveSleeve, onChanged: onSleeveToggle),
         if (hasProtectiveSleeve)
-          XFireSliderCard(title: "Толщина стенки трубки (чехла)", commandName: "ant_sleeve_thick", value: sleeveThicknessMm, min: 0.5, max: 3.0, divisions: 25, unit: "мм", onChanged: onSleeveThickChanged, onChangeEnd: (_) {}),
-        XFireSliderCard(title: "Диаметр трубки диполя (нижн.)", commandName: "ant_tube_diam", value: dipoleTubeDiameterMm, min: 2.0, max: 5.0, divisions: 6, unit: "мм", onChanged: onTubeDiamChanged, onChangeEnd: (_) {}),
-        XFireSliderCard(title: "Сечение провода диполя (верхн.)", commandName: "ant_top_wire", value: dipoleTopWireSqMm, min: 0.5, max: 2.5, divisions: 20, unit: "мм²", onChanged: onTopWireChanged, onChangeEnd: (_) {}),
-        XFireResetCard(hint: "Сброс геометрии диполя по умолчанию", onReset: () {
-          onSleeveToggle(true);
-          onSleeveThickChanged(1.0);
-          onTubeDiamChanged(3.0);
-          onTopWireChanged(1.0);
-          SerialService.sendCommand("default dipole");
-        }),
+          XFireSliderCard(title: "Толщина стенки трубки\n(чехла)", commandName: "ant_sleeve_thick", value: sleeveThicknessMm, min: 0.5, max: 3.0, divisions: 25, unit: "мм", onChanged: onSleeveThickChanged, onChangeEnd: (_) {}),
+        XFireSliderCard(title: "Диаметр трубки диполя\n(нижн.)", commandName: "ant_tube_diam", value: dipoleTubeDiameterMm, min: 2.0, max: 5.0, divisions: 6, unit: "мм", onChanged: onTubeDiamChanged, onChangeEnd: (_) {}),
+        XFireSliderCard(title: "Сечение провода диполя\n(верхн.)", commandName: "ant_top_wire", value: dipoleTopWireSqMm, min: 0.5, max: 2.5, divisions: 20, unit: "мм²", onChanged: onTopWireChanged, onChangeEnd: (_) {}),
+        XFireResetCard(
+          hint: "Сброс геометрии диполя\nпо умолчанию",
+          onReset: () {
+            onSleeveToggle(true);
+            onSleeveThickChanged(1.0);
+            onTubeDiamChanged(3.0);
+            onTopWireChanged(1.0);
+            SerialService.sendCommand("default dipole");
+          },
+        ),
         XFireBatchApplyCard(
-          hint: "Пакетная отправка геометрии штыревого диполя",
+          hint: "Пакетная отправка геометрии\nштыревого диполя",
           parameters: [
             "ant_sleeve_en ${hasProtectiveSleeve ? 1 : 0}",
             "ant_sleeve_thick $sleeveThicknessMm",
             "ant_tube_diam $dipoleTubeDiameterMm",
-            "ant_top_wire $dipoleTopWireSqMm"
+            "ant_top_wire $dipoleTopWireSqMm",
           ],
         ),
       ],
@@ -948,31 +1055,32 @@ class KharchenkoAntennaBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return XFireExpansionCard(
-      title: "Антенна Харченко (Расчет и геометрия)",
-      subtitle: "Расчет стороны ромба и геометрии биквадрата",
+      title: "Антенна Харченко\n(Расчет и геометрия)",
+      subtitle: "Расчет стороны ромба\nи геометрии биквадрата",
       icon: Icons.hub,
       children: [
         XFireCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("Графический расчет антенны Харченко", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amberAccent)),
+              const Text("Графический расчет антенны Харченко", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.amberAccent), softWrap: true),
               const SizedBox(height: 12),
               Center(
                 child: SizedBox(
-                  width: 220,
+                  width: 240,
                   child: Column(
                     children: [
-                      const Text("Антенна Харченко", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
+                      const Text("Антенна Харченко", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.amberAccent), softWrap: true),
                       const SizedBox(height: 6),
                       Container(
                         height: 120,
                         decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
                         child: CustomPaint(painter: KharchenkoSchematicPainter(), size: const Size(double.infinity, 120)),
                       ),
-                      const SizedBox(height: 6),
-                      const Text("Сторона ромба", style: TextStyle(fontSize: 10, color: Colors.white70)),
-                      Text("Сторона: ${(antResults['kharchenkoSideMm'] as double).toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
+                      const SizedBox(height: 8),
+                      const Text("Сторона ромба", style: TextStyle(fontSize: 12, color: Colors.white70), softWrap: true),
+                      const SizedBox(height: 2),
+                      Text("Сторона: ${(antResults['kharchenkoSideMm'] as double).toStringAsFixed(1)} мм", style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white), softWrap: true),
                     ],
                   ),
                 ),
@@ -981,12 +1089,15 @@ class KharchenkoAntennaBlock extends StatelessWidget {
           ),
         ),
         XFireSliderCard(title: "Сечение провода Харченко", commandName: "ant_kharc_wire", value: kharchenkoWireSqMm, min: 1.0, max: 4.0, divisions: 15, unit: "мм²", onChanged: onKharcChanged, onChangeEnd: (_) {}),
-        XFireResetCard(hint: "Сброс геометрии антенны Харченко по умолчанию", onReset: () {
-          onKharcChanged(2.0);
-          SerialService.sendCommand("default kharchenko");
-        }),
+        XFireResetCard(
+          hint: "Сброс геометрии антенны\nХарченко по умолчанию",
+          onReset: () {
+            onKharcChanged(2.0);
+            SerialService.sendCommand("default kharchenko");
+          },
+        ),
         XFireBatchApplyCard(
-          hint: "Пакетная отправка геометрии антенны Харченко",
+          hint: "Пакетная отправка геометрии\nантенны Харченко",
           parameters: ["ant_kharc_wire $kharchenkoWireSqMm"],
         ),
       ],
@@ -1006,7 +1117,7 @@ class DipoleSchematicPainter extends CustomPainter {
     final paint = Paint()..color = Colors.cyanAccent..strokeWidth = 3.0..strokeCap = StrokeCap.round;
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
     final cx = size.width / 2;
-    
+
     if (hasSleeve) {
       final sleevePaint = Paint()..color = Colors.blueAccent.withOpacity(0.3)..style = PaintingStyle.fill;
       canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, size.height / 2), width: 14, height: size.height - 10), const Radius.circular(6)), sleevePaint);
@@ -1016,13 +1127,13 @@ class DipoleSchematicPainter extends CustomPainter {
     canvas.drawLine(Offset(cx, size.height / 2 + 5), Offset(cx, size.height - 15), paint..color = Colors.blueAccent..strokeWidth = 5.0);
     canvas.drawCircle(Offset(cx, size.height / 2), 3, Paint()..color = Colors.redAccent);
 
-    textPainter.text = const TextSpan(text: "Верхнее плечо", style: TextStyle(color: Colors.white70, fontSize: 9));
+    textPainter.text = const TextSpan(text: "Верхнее\nплечо", style: TextStyle(color: Colors.white70, fontSize: 11, height: 1.15));
     textPainter.layout();
-    textPainter.paint(canvas, Offset(cx + 12, 25));
+    textPainter.paint(canvas, Offset(cx + 12, 20));
 
-    textPainter.text = const TextSpan(text: "Нижнее плечо", style: TextStyle(color: Colors.white70, fontSize: 9));
+    textPainter.text = const TextSpan(text: "Нижнее\nплечо", style: TextStyle(color: Colors.white70, fontSize: 11, height: 1.15));
     textPainter.layout();
-    textPainter.paint(canvas, Offset(cx + 12, size.height - 35));
+    textPainter.paint(canvas, Offset(cx + 12, size.height - 42));
   }
 
   @override
@@ -1052,9 +1163,9 @@ class KharchenkoSchematicPainter extends CustomPainter {
     canvas.drawCircle(Offset(cx, cy + sizeDiamond), 3, Paint()..color = Colors.redAccent);
 
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
-    textPainter.text = const TextSpan(text: "λ/4", style: TextStyle(color: Colors.cyanAccent, fontSize: 10));
+    textPainter.text = const TextSpan(text: "λ/4", style: TextStyle(color: Colors.cyanAccent, fontSize: 12, fontWeight: FontWeight.bold));
     textPainter.layout();
-    textPainter.paint(canvas, Offset(cx + 8, cy - 25));
+    textPainter.paint(canvas, Offset(cx + 8, cy - 26));
   }
 
   @override
@@ -1062,10 +1173,10 @@ class KharchenkoSchematicPainter extends CustomPainter {
 }
 
 class PitchHudScalePainter extends CustomPainter {
-  final double value; 
-  final double minVal; 
-  final double maxVal; 
-  final bool isLeftSide; 
+  final double value;
+  final double minVal;
+  final double maxVal;
+  final bool isLeftSide;
 
   PitchHudScalePainter({required this.value, required this.minVal, required this.maxVal, required this.isLeftSide});
 
@@ -1084,9 +1195,9 @@ class PitchHudScalePainter extends CustomPainter {
       double y = size.height - 14 - ((v - minVal) / range) * (size.height - 28);
       canvas.drawLine(Offset(x, y), Offset(isLeftSide ? x - 6 : x + 6, y), paintLine);
 
-      paintText.text = TextSpan(text: "${v.toInt()}°", style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold));
+      paintText.text = TextSpan(text: "${v.toInt()}°", style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold));
       paintText.layout();
-      paintText.paint(canvas, Offset(isLeftSide ? x - 28 : x + 10, y - 5));
+      paintText.paint(canvas, Offset(isLeftSide ? x - 34 : x + 10, y - 6));
     }
 
     double clampedVal = value.clamp(minVal, maxVal);
@@ -1137,13 +1248,13 @@ class YawHudScalePainter extends CustomPainter {
       double v = minVal + (range / 4) * i;
       double x = margin + ((v - minVal) / range) * (size.width - (margin * 2));
       canvas.drawLine(Offset(x, y), Offset(x, y + (isTop ? -5 : 5)), paintLine);
-      paintText.text = TextSpan(text: "${v.toInt()}°", style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold));
+      paintText.text = TextSpan(text: "${v.toInt()}°", style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold));
       paintText.layout();
-      paintText.paint(canvas, Offset(x - 10, y + (isTop ? -16 : 6)));
+      paintText.paint(canvas, Offset(x - 12, y + (isTop ? -18 : 6)));
     }
 
     double currentX = margin + ((value.clamp(minVal, maxVal) - minVal) / range) * (size.width - (margin * 2));
-    
+
     final path = Path();
     if (isTop) {
       double cursorY = y + 6;
@@ -1165,7 +1276,7 @@ class YawHudScalePainter extends CustomPainter {
 }
 
 class ArtificialHorizonPainter extends CustomPainter {
-  final double roll, pitch; 
+  final double roll, pitch;
   ArtificialHorizonPainter({required this.roll, required this.pitch});
 
   @override
@@ -1185,7 +1296,7 @@ class ArtificialHorizonPainter extends CustomPainter {
 
     for (int p = -3; p <= 3; p++) {
       if (p == 0) continue;
-      canvas.drawLine(Offset(- (p.abs() % 2 == 0 ? 20.0 : 10.0) / 2, pitchOffset - (p * 20.0)), Offset((p.abs() % 2 == 0 ? 20.0 : 10.0) / 2, pitchOffset - (p * 20.0)), Paint()..color = Colors.white70..strokeWidth = 1.5);
+      canvas.drawLine(Offset(-(p.abs() % 2 == 0 ? 20.0 : 10.0) / 2, pitchOffset - (p * 20.0)), Offset((p.abs() % 2 == 0 ? 20.0 : 10.0) / 2, pitchOffset - (p * 20.0)), Paint()..color = Colors.white70..strokeWidth = 1.5);
     }
     canvas.restore();
     canvas.drawCircle(center, radius, Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 3.0);
