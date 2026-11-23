@@ -914,7 +914,13 @@ class _SettingsTabState extends State<SettingsTab> {
   double _lidarFilterAlpha = 0.15;
   double _lidarOffsetM = 0.0;
 
-  // 6. Батарея и датчик тока
+  // 6. VTX (SmartAudio / IRC Tramp)
+  double _vtxEn = 1;
+  double _vtxProt = 0;
+  double _vtxMhz = 5658;
+  double _vtxMw = 25;
+
+  // 7. Батарея и датчик тока
   double _batVoltageScale = 4.85;
   double _batFilterAlpha = 0.05;
   double _currZeroOffsetA = 0.0;
@@ -1016,6 +1022,16 @@ class _SettingsTabState extends State<SettingsTab> {
     SerialService.sendCommand("default hw");
   }
 
+  void _resetVtxGroup() {
+    setState(() {
+      _vtxEn = 1;
+      _vtxProt = 0;
+      _vtxMhz = 5658;
+      _vtxMw = 25;
+    });
+    SerialService.sendCommand("default vtx");
+  }
+
   void _resetBatteryGroup() {
     setState(() {
       _batVoltageScale = 4.85;
@@ -1094,6 +1110,7 @@ class _SettingsTabState extends State<SettingsTab> {
     _resetCompassGroup();
     _resetBaroGroup();
     _resetLidarGroup();
+    _resetVtxGroup();
     _resetBatteryGroup();
     _resetFlightRcGroup();
     _resetFailsafeGroup();
@@ -1506,7 +1523,76 @@ class _SettingsTabState extends State<SettingsTab> {
           ],
         ),
 
-        // 6. БАТАРЕЯ
+        // 6. VTX (SmartAudio / IRC Tramp)
+        XFireExpansionCard(
+          title: "VTX (SmartAudio / IRC Tramp)",
+          subtitle: "Управление передатчиком,\nпротокол, частота МГц и мощность мВт",
+          icon: Icons.sensors_rounded,
+          children: [
+            XFireSwitchCard(
+              title: "Включение управления VTX",
+              commandName: "vtx_en",
+              value: _vtxEn == 1,
+              onChanged: (v) {
+                setState(() => _vtxEn = v ? 1.0 : 0.0);
+                SerialService.sendCommand("vtx_en ${_vtxEn.round()}");
+              },
+            ),
+            XFireDropdownCard(
+              title: "Протокол VTX",
+              commandName: "vtx_prot",
+              value: _vtxProt.round(),
+              options: const {
+                0: "0 — автоопределение (AUTO)",
+                1: "1 — IRC Tramp",
+                2: "2 — SmartAudio v2.1",
+              },
+              onChanged: (val) {
+                setState(() => _vtxProt = val.toDouble());
+                SerialService.sendCommand("vtx_prot $val");
+              },
+            ),
+            XFireSliderCard(
+              title: "Частота передатчика\n(5000..6000 МГц, по умолч. 5658)",
+              commandName: "vtx_mhz",
+              value: _vtxMhz,
+              min: 5000,
+              max: 6000,
+              divisions: 1000,
+              unit: "МГц",
+              onChanged: (v) => setState(() => _vtxMhz = v),
+              onChangeEnd: (v) => SerialService.sendCommand("vtx_mhz ${v.round()}"),
+            ),
+            XFireSliderCard(
+              title: "Мощность передатчика\n(1..10000 мВт, по умолч. 25)",
+              commandName: "vtx_mw",
+              value: _vtxMw,
+              min: 1,
+              max: 10000,
+              divisions: 9999,
+              unit: "мВт",
+              onChanged: (v) => setState(() => _vtxMw = v),
+              onChangeEnd: (v) => SerialService.sendCommand("vtx_mw ${v.round()}"),
+            ),
+            XFireActionCard(
+              title: "Ручной опрос VTX по UART",
+              commandName: "test_vtx",
+              onTap: () => _runCalOrTest("test_vtx", "Тест VTX", "Опрос VTX (test_vtx) по UART\nзапущен."),
+            ),
+            XFireResetCard(hint: "Сброс настроек VTX\n(default vtx)", onReset: _resetVtxGroup),
+            XFireBatchApplyCard(
+              hint: "Пакетная отправка настроек\nVTX",
+              parameters: [
+                "vtx_en ${_vtxEn.round()}",
+                "vtx_prot ${_vtxProt.round()}",
+                "vtx_mhz ${_vtxMhz.round()}",
+                "vtx_mw ${_vtxMw.round()}",
+              ],
+            ),
+          ],
+        ),
+
+        // 7. БАТАРЕЯ
         XFireExpansionCard(
           title: "Батарея",
           subtitle: "Делитель напряжения (PA4)\nи шунт тока 0.01 Ом (PA5)",
@@ -2606,13 +2692,14 @@ class _TerminalTabState extends State<TerminalTab> {
   List<String> _suggestions = [];
 
   final List<String> _cliCommands = [
-    "info", "mon", "stop", "config", "default",
-    "default hw", "default bat", "default fl", "default fs", "default fil", "default pid",
+    "info", "mon", "stop", "config", "save", "default", "get", "set",
+    "default hw", "default bat", "default fl", "default fs", "default fil", "default pid", "default vtx",
     "default rtx_common", "default rtx_primary", "default rtx_backup", "default dipole", "default kharchenko",
     "esc_protocol", "imu_align", "com_align",
     "imu_id", "bar_id", "com_id", "lid_id",
     "baro_en", "com_en", "lidar_en",
     "lidar_filter_alpha", "lidar_offset_m",
+    "vtx_en", "vtx_prot", "vtx_mhz", "vtx_mw",
     "mag_bias_x", "mag_bias_y", "mag_bias_z",
     "bat_voltage_scale", "bat_filter_alpha", "curr_zero_offset_a", "curr_scale",
     "fl_mode", "fl_roll_max", "fl_pitch_max", "fl_vz_speed_max",
@@ -2624,7 +2711,7 @@ class _TerminalTabState extends State<TerminalTab> {
     "fil_amb", "fil_amb_min",
     "roll_kp", "roll_ki", "roll_kd", "pitch_kp", "pitch_ki", "pitch_kd", "yaw_kp", "yaw_ki", "yaw_kd", "vz_kp", "vz_ki", "vz_kd",
     "cal_gyro", "cal_acc", "cal_baro", "cal_lid", "cal_mag",
-    "test_mpu", "test_sx", "test_lidar", "test_motor", "test_pid", "test_rc", "test_rc_can",
+    "test_mpu", "test_sx", "test_lidar", "test_vtx", "test_motor", "test_pid", "test_rc", "test_rc_can",
     "osd_en", "rx58_en", "rx58_ch",
     "vtx_ch0", "vtx_ch1", "vtx_ch2", "vtx_ch3",
     "vtx_rssi_th", "vtx_rssi_hyst", "vtx_auto_start", "vtx_btn_mode",
