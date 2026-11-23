@@ -28,7 +28,7 @@ class MyApp extends StatelessWidget {
           error: Colors.redAccent.shade700,
         ),
         scaffoldBackgroundColor: const Color(0xFF0A0A0A),
-        cardTheme: CardThemeData(
+        cardTheme: CardTheme(
           color: const Color(0xFF1C1C1E),
           elevation: 2,
           margin: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 8),
@@ -317,7 +317,7 @@ class _MainContainerState extends State<MainContainer> {
                           child: Switch(
                             value: SerialService.isConnected,
                             onChanged: (_) {},
-                            activeThumbColor: Colors.blueAccent,
+                            activeColor: Colors.blueAccent,
                           ),
                         ),
                       ],
