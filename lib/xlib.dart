@@ -847,7 +847,7 @@ class XFireSwitchCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          Switch(value: value, onChanged: onChanged, activeThumbColor: Colors.blueAccent),
+          Switch(value: value, onChanged: onChanged, activeColor: Colors.blueAccent),
         ],
       ),
     );
