@@ -124,9 +124,15 @@ class XFireSliderTrackShape extends RectangularSliderTrackShape {
       sliderTheme: sliderTheme,
     );
 
-    final Paint activePaint = Paint()..color = sliderTheme.activeTrackColor ?? Colors.blueAccent..style = PaintingStyle.fill;
-    final Paint inactivePaint = Paint()..color = sliderTheme.inactiveTrackColor ?? Colors.white12..style = PaintingStyle.fill;
-    final Paint dividerPaint = Paint()..color = Colors.black..style = PaintingStyle.fill;
+    final Paint activePaint = Paint()
+      ..color = sliderTheme.activeTrackColor ?? Colors.blueAccent
+      ..style = PaintingStyle.fill;
+    final Paint inactivePaint = Paint()
+      ..color = sliderTheme.inactiveTrackColor ?? Colors.white12
+      ..style = PaintingStyle.fill;
+    final Paint dividerPaint = Paint()
+      ..color = Colors.black
+      ..style = PaintingStyle.fill;
     final Radius radius = Radius.circular(trackRect.height / 2);
 
     final Rect inactiveRect = Rect.fromLTRB(thumbCenter.dx, trackRect.top, trackRect.right, trackRect.bottom);
@@ -553,7 +559,7 @@ class _XFireFlashCardState extends State<XFireFlashCard> {
   }
 }
 
-class XFireSliderCard extends StatelessWidget {
+class XFireSliderCard extends StatefulWidget {
   final String title;
   final String commandName;
   final double value;
@@ -578,7 +584,97 @@ class XFireSliderCard extends StatelessWidget {
   });
 
   @override
+  State<XFireSliderCard> createState() => _XFireSliderCardState();
+}
+
+class _XFireSliderCardState extends State<XFireSliderCard> {
+  bool _isEditing = false;
+  late final TextEditingController _textController;
+  late final FocusNode _focusNode;
+
+  bool get _isIntegerRange =>
+      widget.min % 1 == 0 &&
+      widget.max % 1 == 0 &&
+      widget.divisions > 0 &&
+      ((widget.max - widget.min) / widget.divisions) % 1 == 0;
+
+  String _formatValue(double v) {
+    if (_isIntegerRange) {
+      return v.round().toString();
+    }
+    return v.toStringAsFixed(v.truncate() == v ? 0 : 2);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _textController = TextEditingController(text: _formatValue(widget.value));
+    _focusNode = FocusNode();
+    _focusNode.addListener(() {
+      if (!_focusNode.hasFocus && _isEditing) {
+        _commitInput();
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant XFireSliderCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_isEditing && oldWidget.value != widget.value) {
+      _textController.text = _formatValue(widget.value);
+    }
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    _textController.dispose();
+    super.dispose();
+  }
+
+  void _startEditing() {
+    setState(() {
+      _isEditing = true;
+      _textController.text = _formatValue(widget.value);
+      _textController.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: _textController.text.length,
+      );
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focusNode.requestFocus();
+    });
+  }
+
+  void _commitInput() {
+    final normalized = _textController.text.trim().replaceAll(',', '.');
+    final parsed = double.tryParse(normalized);
+    setState(() => _isEditing = false);
+
+    if (parsed == null) {
+      _textController.text = _formatValue(widget.value);
+      return;
+    }
+
+    double clamped = parsed.clamp(widget.min, widget.max).toDouble();
+    if (_isIntegerRange) {
+      clamped = clamped.roundToDouble();
+    } else if (widget.divisions > 0) {
+      final step = (widget.max - widget.min) / widget.divisions;
+      clamped = (widget.min + ((clamped - widget.min) / step).round() * step)
+          .clamp(widget.min, widget.max)
+          .toDouble();
+    }
+
+    widget.onChanged(clamped);
+    widget.onChangeEnd(clamped);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final clampedValue = widget.value.clamp(widget.min, widget.max).toDouble();
+    final formatted = _formatValue(clampedValue);
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 6.0),
       child: Container(
@@ -599,10 +695,10 @@ class XFireSliderCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Colors.white, height: 1.25), softWrap: true),
+                      Text(widget.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Colors.white, height: 1.25), softWrap: true),
                       const SizedBox(height: 4),
                       Text(
-                        commandName,
+                        widget.commandName,
                         style: TextStyle(color: Colors.amberAccent.withOpacity(0.9), fontSize: 14, fontFamily: 'monospace', fontWeight: FontWeight.w600),
                         softWrap: true,
                       ),
@@ -610,15 +706,80 @@ class XFireSliderCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 10),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-                  decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.18), borderRadius: BorderRadius.circular(9)),
-                  child: Text(
-                    "${value.toStringAsFixed(value.truncate() == value ? 0 : 2)} $unit".trim(),
-                    style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 15),
-                    softWrap: true,
-                  ),
-                ),
+                _isEditing
+                    ? SizedBox(
+                        width: 118,
+                        child: TextField(
+                          controller: _textController,
+                          focusNode: _focusNode,
+                          autofocus: true,
+                          textAlign: TextAlign.right,
+                          style: const TextStyle(
+                            color: Colors.blueAccent,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                            fontFamily: 'monospace',
+                          ),
+                          keyboardType: TextInputType.numberWithOptions(
+                            decimal: !_isIntegerRange,
+                            signed: widget.min < 0,
+                          ),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(
+                              RegExp(_isIntegerRange ? r'^-?\d*' : r'^-?\d*[.,]?\d*'),
+                            ),
+                          ],
+                          decoration: InputDecoration(
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                            filled: true,
+                            fillColor: const Color(0xFF242428),
+                            suffixText: widget.unit.isEmpty ? null : widget.unit,
+                            suffixStyle: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.blueAccent,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(9),
+                              borderSide: const BorderSide(color: Colors.blueAccent),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(9),
+                              borderSide: const BorderSide(color: Colors.blueAccent),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(9),
+                              borderSide: const BorderSide(color: Colors.blueAccent, width: 1.5),
+                            ),
+                          ),
+                          onSubmitted: (_) => _commitInput(),
+                        ),
+                      )
+                    : InkWell(
+                        onTap: _startEditing,
+                        borderRadius: BorderRadius.circular(9),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.blueAccent.withOpacity(0.18),
+                            borderRadius: BorderRadius.circular(9),
+                            border: Border.all(color: Colors.blueAccent.withOpacity(0.35)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                "$formatted ${widget.unit}".trim(),
+                                style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 15),
+                                softWrap: true,
+                              ),
+                              const SizedBox(width: 5),
+                              const Icon(Icons.edit, size: 13, color: Colors.blueAccent),
+                            ],
+                          ),
+                        ),
+                      ),
               ],
             ),
             const SizedBox(height: 8),
@@ -634,12 +795,12 @@ class XFireSliderCard extends StatelessWidget {
                     thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 11.0),
                   ),
                   child: Slider(
-                    value: value.clamp(min, max),
-                    min: min,
-                    max: max,
-                    divisions: divisions > 0 ? divisions : 1,
-                    onChanged: onChanged,
-                    onChangeEnd: onChangeEnd,
+                    value: clampedValue,
+                    min: widget.min,
+                    max: widget.max,
+                    divisions: widget.divisions > 0 ? widget.divisions : 1,
+                    onChanged: widget.onChanged,
+                    onChangeEnd: widget.onChangeEnd,
                   ),
                 ),
               ),
@@ -686,7 +847,7 @@ class XFireSwitchCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          Switch(value: value, onChanged: onChanged, activeColor: Colors.blueAccent),
+          Switch(value: value, onChanged: onChanged, activeThumbColor: Colors.blueAccent),
         ],
       ),
     );
@@ -755,6 +916,10 @@ class PidAxisCardWidget extends StatefulWidget {
   final String axisName;
   final String kpCmd, kiCmd, kdCmd;
   final double kp, ki, kd;
+  final double kpMin, kpMax;
+  final double kiMin, kiMax;
+  final double kdMin, kdMax;
+  final int kpDecimals, kiDecimals, kdDecimals;
   final Function(double, double, double) onUpdate;
 
   const PidAxisCardWidget({
@@ -766,6 +931,15 @@ class PidAxisCardWidget extends StatefulWidget {
     required this.kp,
     required this.ki,
     required this.kd,
+    this.kpMin = 0.0,
+    this.kpMax = 10.0,
+    this.kiMin = 0.0,
+    this.kiMax = 5.0,
+    this.kdMin = 0.0,
+    this.kdMax = 2.0,
+    this.kpDecimals = 3,
+    this.kiDecimals = 3,
+    this.kdDecimals = 3,
     required this.onUpdate,
   });
 
@@ -777,29 +951,121 @@ class _PidAxisCardWidgetState extends State<PidAxisCardWidget> {
   late TextEditingController _kpController;
   late TextEditingController _kiController;
   late TextEditingController _kdController;
+  late FocusNode _kpFocus;
+  late FocusNode _kiFocus;
+  late FocusNode _kdFocus;
+
+  double _normalize(double val, double minVal, double maxVal, int decimals) {
+    final clamped = val.clamp(minVal, maxVal).toDouble();
+    final factor = math.pow(10, decimals).toDouble();
+    return (clamped * factor).round() / factor;
+  }
+
+  String _format(double val, double minVal, double maxVal, int decimals) {
+    return _normalize(val, minVal, maxVal, decimals).toStringAsFixed(decimals);
+  }
 
   @override
   void initState() {
     super.initState();
-    _kpController = TextEditingController(text: widget.kp.toString());
-    _kiController = TextEditingController(text: widget.ki.toString());
-    _kdController = TextEditingController(text: widget.kd.toString());
+    _kpController = TextEditingController(text: _format(widget.kp, widget.kpMin, widget.kpMax, widget.kpDecimals));
+    _kiController = TextEditingController(text: _format(widget.ki, widget.kiMin, widget.kiMax, widget.kiDecimals));
+    _kdController = TextEditingController(text: _format(widget.kd, widget.kdMin, widget.kdMax, widget.kdDecimals));
+    _kpFocus = FocusNode();
+    _kiFocus = FocusNode();
+    _kdFocus = FocusNode();
+
+    _kpFocus.addListener(() {
+      if (!_kpFocus.hasFocus) _applyValues(kpText: _kpController.text);
+    });
+    _kiFocus.addListener(() {
+      if (!_kiFocus.hasFocus) _applyValues(kiText: _kiController.text);
+    });
+    _kdFocus.addListener(() {
+      if (!_kdFocus.hasFocus) _applyValues(kdText: _kdController.text);
+    });
   }
 
   @override
   void didUpdateWidget(covariant PidAxisCardWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.kp != widget.kp) _kpController.text = widget.kp.toString();
-    if (oldWidget.ki != widget.ki) _kiController.text = widget.ki.toString();
-    if (oldWidget.kd != widget.kd) _kdController.text = widget.kd.toString();
+    if (!_kpFocus.hasFocus && oldWidget.kp != widget.kp) {
+      _kpController.text = _format(widget.kp, widget.kpMin, widget.kpMax, widget.kpDecimals);
+    }
+    if (!_kiFocus.hasFocus && oldWidget.ki != widget.ki) {
+      _kiController.text = _format(widget.ki, widget.kiMin, widget.kiMax, widget.kiDecimals);
+    }
+    if (!_kdFocus.hasFocus && oldWidget.kd != widget.kd) {
+      _kdController.text = _format(widget.kd, widget.kdMin, widget.kdMax, widget.kdDecimals);
+    }
   }
 
   @override
   void dispose() {
+    _kpFocus.dispose();
+    _kiFocus.dispose();
+    _kdFocus.dispose();
     _kpController.dispose();
     _kiController.dispose();
     _kdController.dispose();
     super.dispose();
+  }
+
+  void _applyValues({String? kpText, String? kiText, String? kdText}) {
+    final parsedKp = double.tryParse((kpText ?? _kpController.text).trim().replaceAll(',', '.')) ?? widget.kp;
+    final parsedKi = double.tryParse((kiText ?? _kiController.text).trim().replaceAll(',', '.')) ?? widget.ki;
+    final parsedKd = double.tryParse((kdText ?? _kdController.text).trim().replaceAll(',', '.')) ?? widget.kd;
+
+    final nextKp = _normalize(parsedKp, widget.kpMin, widget.kpMax, widget.kpDecimals);
+    final nextKi = _normalize(parsedKi, widget.kiMin, widget.kiMax, widget.kiDecimals);
+    final nextKd = _normalize(parsedKd, widget.kdMin, widget.kdMax, widget.kdDecimals);
+
+    _kpController.text = nextKp.toStringAsFixed(widget.kpDecimals);
+    _kiController.text = nextKi.toStringAsFixed(widget.kiDecimals);
+    _kdController.text = nextKd.toStringAsFixed(widget.kdDecimals);
+
+    if (nextKp != widget.kp || nextKi != widget.ki || nextKd != widget.kd) {
+      widget.onUpdate(nextKp, nextKi, nextKd);
+    }
+  }
+
+  Widget _buildCoeffField({
+    required String label,
+    required TextEditingController controller,
+    required FocusNode focusNode,
+    required double minVal,
+    required double maxVal,
+    required int decimals,
+    required VoidCallback onCommit,
+  }) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: controller,
+            focusNode: focusNode,
+            style: const TextStyle(fontSize: 16, fontFamily: 'monospace'),
+            decoration: InputDecoration(
+              labelText: '$label (.$decimals)',
+              labelStyle: const TextStyle(fontSize: 13),
+              isDense: true,
+            ),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: false),
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+            ],
+            onSubmitted: (_) => onCommit(),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            "${minVal.toStringAsFixed(decimals)}..${maxVal.toStringAsFixed(decimals)}",
+            style: const TextStyle(fontSize: 11, color: Colors.white54, fontFamily: 'monospace'),
+            softWrap: true,
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -817,44 +1083,36 @@ class _PidAxisCardWidgetState extends State<PidAxisCardWidget> {
           ),
           const SizedBox(height: 10),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: TextField(
-                  style: const TextStyle(fontSize: 16),
-                  decoration: const InputDecoration(labelText: 'Kp', labelStyle: TextStyle(fontSize: 14), isDense: true),
-                  keyboardType: TextInputType.number,
-                  controller: _kpController,
-                  onSubmitted: (val) {
-                    double? np = double.tryParse(val);
-                    if (np != null) widget.onUpdate(np, widget.ki, widget.kd);
-                  },
-                ),
+              _buildCoeffField(
+                label: 'Kp',
+                controller: _kpController,
+                focusNode: _kpFocus,
+                minVal: widget.kpMin,
+                maxVal: widget.kpMax,
+                decimals: widget.kpDecimals,
+                onCommit: () => _applyValues(kpText: _kpController.text),
               ),
               const SizedBox(width: 8),
-              Expanded(
-                child: TextField(
-                  style: const TextStyle(fontSize: 16),
-                  decoration: const InputDecoration(labelText: 'Ki', labelStyle: TextStyle(fontSize: 14), isDense: true),
-                  keyboardType: TextInputType.number,
-                  controller: _kiController,
-                  onSubmitted: (val) {
-                    double? ni = double.tryParse(val);
-                    if (ni != null) widget.onUpdate(widget.kp, ni, widget.kd);
-                  },
-                ),
+              _buildCoeffField(
+                label: 'Ki',
+                controller: _kiController,
+                focusNode: _kiFocus,
+                minVal: widget.kiMin,
+                maxVal: widget.kiMax,
+                decimals: widget.kiDecimals,
+                onCommit: () => _applyValues(kiText: _kiController.text),
               ),
               const SizedBox(width: 8),
-              Expanded(
-                child: TextField(
-                  style: const TextStyle(fontSize: 16),
-                  decoration: const InputDecoration(labelText: 'Kd', labelStyle: TextStyle(fontSize: 14), isDense: true),
-                  keyboardType: TextInputType.number,
-                  controller: _kdController,
-                  onSubmitted: (val) {
-                    double? nd = double.tryParse(val);
-                    if (nd != null) widget.onUpdate(widget.kp, widget.ki, nd);
-                  },
-                ),
+              _buildCoeffField(
+                label: 'Kd',
+                controller: _kdController,
+                focusNode: _kdFocus,
+                minVal: widget.kdMin,
+                maxVal: widget.kdMax,
+                decimals: widget.kdDecimals,
+                onCommit: () => _applyValues(kdText: _kdController.text),
               ),
             ],
           ),
@@ -1114,17 +1372,28 @@ class DipoleSchematicPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = Colors.cyanAccent..strokeWidth = 3.0..strokeCap = StrokeCap.round;
+    final paint = Paint()
+      ..color = Colors.cyanAccent
+      ..strokeWidth = 3.0
+      ..strokeCap = StrokeCap.round;
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
     final cx = size.width / 2;
 
     if (hasSleeve) {
-      final sleevePaint = Paint()..color = Colors.blueAccent.withOpacity(0.3)..style = PaintingStyle.fill;
+      final sleevePaint = Paint()
+        ..color = Colors.blueAccent.withOpacity(0.3)
+        ..style = PaintingStyle.fill;
       canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, size.height / 2), width: 14, height: size.height - 10), const Radius.circular(6)), sleevePaint);
     }
 
     canvas.drawLine(Offset(cx, 15), Offset(cx, size.height / 2 - 5), paint);
-    canvas.drawLine(Offset(cx, size.height / 2 + 5), Offset(cx, size.height - 15), paint..color = Colors.blueAccent..strokeWidth = 5.0);
+    canvas.drawLine(
+      Offset(cx, size.height / 2 + 5),
+      Offset(cx, size.height - 15),
+      paint
+        ..color = Colors.blueAccent
+        ..strokeWidth = 5.0,
+    );
     canvas.drawCircle(Offset(cx, size.height / 2), 3, Paint()..color = Colors.redAccent);
 
     textPainter.text = const TextSpan(text: "Верхнее\nплечо", style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.15));
@@ -1143,7 +1412,11 @@ class DipoleSchematicPainter extends CustomPainter {
 class KharchenkoSchematicPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = Colors.amberAccent..strokeWidth = 3.0..style = PaintingStyle.stroke..strokeJoin = StrokeJoin.round;
+    final paint = Paint()
+      ..color = Colors.amberAccent
+      ..strokeWidth = 3.0
+      ..style = PaintingStyle.stroke
+      ..strokeJoin = StrokeJoin.round;
     final cx = size.width / 2;
     final cy = size.height / 2;
     const sizeDiamond = 35.0;
@@ -1182,9 +1455,13 @@ class PitchHudScalePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paintLine = Paint()..color = Colors.white70..strokeWidth = 2.5;
+    final paintLine = Paint()
+      ..color = Colors.white70
+      ..strokeWidth = 2.5;
     final paintText = TextPainter(textDirection: TextDirection.ltr);
-    final indicatorPaint = Paint()..color = Colors.white..style = PaintingStyle.fill;
+    final indicatorPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
 
     final double x = isLeftSide ? size.width - 10.0 : 10.0;
     canvas.drawLine(Offset(x, 14), Offset(x, size.height - 14), paintLine);
@@ -1235,9 +1512,13 @@ class YawHudScalePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paintLine = Paint()..color = Colors.white70..strokeWidth = 2.5;
+    final paintLine = Paint()
+      ..color = Colors.white70
+      ..strokeWidth = 2.5;
     final paintText = TextPainter(textDirection: TextDirection.ltr);
-    final indicatorPaint = Paint()..color = Colors.white..style = PaintingStyle.fill;
+    final indicatorPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
     const double margin = 36.0;
     final y = isTop ? 14.0 : size.height - 14.0;
 
@@ -1292,14 +1573,33 @@ class ArtificialHorizonPainter extends CustomPainter {
     double pitchOffset = pitch * 40.0;
     canvas.drawRect(Rect.fromLTWH(-radius * 2, -radius * 3 + pitchOffset, radius * 4, radius * 3), Paint()..color = const Color(0xFF1E6091));
     canvas.drawRect(Rect.fromLTWH(-radius * 2, pitchOffset, radius * 4, radius * 3), Paint()..color = const Color(0xFF6A4A3A));
-    canvas.drawLine(Offset(-radius * 2, pitchOffset), Offset(radius * 2, pitchOffset), Paint()..color = Colors.white..strokeWidth = 2.0);
+    canvas.drawLine(
+      Offset(-radius * 2, pitchOffset),
+      Offset(radius * 2, pitchOffset),
+      Paint()
+        ..color = Colors.white
+        ..strokeWidth = 2.0,
+    );
 
     for (int p = -3; p <= 3; p++) {
       if (p == 0) continue;
-      canvas.drawLine(Offset(-(p.abs() % 2 == 0 ? 20.0 : 10.0) / 2, pitchOffset - (p * 20.0)), Offset((p.abs() % 2 == 0 ? 20.0 : 10.0) / 2, pitchOffset - (p * 20.0)), Paint()..color = Colors.white70..strokeWidth = 1.5);
+      canvas.drawLine(
+        Offset(-(p.abs() % 2 == 0 ? 20.0 : 10.0) / 2, pitchOffset - (p * 20.0)),
+        Offset((p.abs() % 2 == 0 ? 20.0 : 10.0) / 2, pitchOffset - (p * 20.0)),
+        Paint()
+          ..color = Colors.white70
+          ..strokeWidth = 1.5,
+      );
     }
     canvas.restore();
-    canvas.drawCircle(center, radius, Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 3.0);
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3.0,
+    );
   }
 
   @override
