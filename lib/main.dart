@@ -652,7 +652,7 @@ class _ProfilesTabState extends State<ProfilesTab> {
 
     double maxRps = (_motorKv * loadVoltage) / 60.0;
     double bladePassFreq = maxRps * _bladesCount;
-    double notchFreq = (bladePassFreq * 0.75).clamp(70.0, 220.0);
+    double notchFreq = (bladePassFreq * 0.75).clamp(20.0, 120.0);
 
     return {
       'roll_kp': rollPitchKp,
@@ -745,8 +745,8 @@ class _ProfilesTabState extends State<ProfilesTab> {
               onChanged: (v) => setState(() => _totalRintMohm = v),
               onChangeEnd: (_) {},
             ),
-            XFireSliderCard(title: "Максимальный угол наклона\n(fl_roll_max)", commandName: "fl_roll_max", value: _calcMaxTilt, min: 10.0, max: 75.0, divisions: 13, unit: "°", onChanged: (v) => setState(() => _calcMaxTilt = v), onChangeEnd: (_) {}),
-            XFireSliderCard(title: "Максимальная вертикальная скорость\n(fl_vz_speed_max)", commandName: "fl_vz_speed_max", value: _calcMaxVz, min: 0.5, max: 3.0, divisions: 25, unit: "м/с", onChanged: (v) => setState(() => _calcMaxVz = v), onChangeEnd: (_) {}),
+            XFireSliderCard(title: "Максимальный угол наклона\n(fm_roll_max)", commandName: "fm_roll_max", value: _calcMaxTilt, min: 1.0, max: 85.0, divisions: 84, unit: "°", onChanged: (v) => setState(() => _calcMaxTilt = v), onChangeEnd: (_) {}),
+            XFireSliderCard(title: "Максимальная вертикальная скорость\n(fm_vz_speed_max)", commandName: "fm_vz_speed_max", value: _calcMaxVz, min: 0.1, max: 10.0, divisions: 99, unit: "м/с", onChanged: (v) => setState(() => _calcMaxVz = v), onChangeEnd: (_) {}),
             XFireSliderCard(title: "Взлетный вес дрона\n(AUW)", commandName: "auw_grams", value: _auwGrams, min: 400.0, max: 3500.0, divisions: 62, unit: "г", onChanged: (v) => setState(() => _auwGrams = v), onChangeEnd: (_) {}),
             XFireSliderCard(title: "Емкость аккумулятора", commandName: "battery_mah", value: _batteryMah, min: 1300.0, max: 16000.0, divisions: 58, unit: "mAh", onChanged: (v) => setState(() => _batteryMah = v), onChangeEnd: (_) {}),
             XFireSliderCard(title: "Диагональ рамы\n(от мотора до мотора)", commandName: "frame_size_mm", value: _frameSizeMm, min: 220.0, max: 650.0, divisions: 43, unit: "мм", onChanged: (v) => setState(() => _frameSizeMm = v), onChangeEnd: (_) {}),
@@ -825,9 +825,9 @@ class _ProfilesTabState extends State<ProfilesTab> {
         XFireBatchApplyCard(
           hint: "Применение рассчитанных PID\nи лимитов к контроллеру",
           parameters: [
-            "fl_roll_max $_calcMaxTilt",
-            "fl_pitch_max $_calcMaxTilt",
-            "fl_vz_speed_max $_calcMaxVz",
+            "fm_roll_max $_calcMaxTilt",
+            "fm_pitch_max $_calcMaxTilt",
+            "fm_vz_speed_max $_calcMaxVz",
             "roll_kp ${optimal['roll_kp']}",
             "roll_ki ${optimal['roll_ki']}",
             "roll_kd ${optimal['roll_kd']}",
@@ -885,14 +885,15 @@ class SettingsTab extends StatefulWidget {
 }
 
 class _SettingsTabState extends State<SettingsTab> {
-  // 1. Радиомодуль
+  // 1. Радиомодуль (оставлено для совместимости интерфейса, кроме rtx_* не входит в список FC)
   double _rtxEn = 1;
   double _rtxProtId = 0;
   double _rtxId = 1;
   double _rtxBand = 2;
 
   // 2. IMU (гироскоп и акселерометр) + ESC
-  double _escProtocol = 0;
+  double _escProt = 0;
+  double _fltEscLimit = 45.0;
   double _imuId = 0;
   double _imuAlign = 0;
 
@@ -914,23 +915,25 @@ class _SettingsTabState extends State<SettingsTab> {
   double _lidarFilterAlpha = 0.15;
   double _lidarOffsetM = 0.0;
 
-  // 6. VTX (SmartAudio / IRC Tramp)
+  // 6. VTX (USART6)
   double _vtxEn = 1;
   double _vtxProt = 0;
   double _vtxMhz = 5658;
   double _vtxMw = 25;
 
   // 7. Батарея и датчик тока
-  double _batVoltageScale = 4.85;
+  double _batScaleV = 4.85;
+  double _batVMax = 16.8;
+  bool _batCompEn = true;
   double _batFilterAlpha = 0.05;
-  double _currZeroOffsetA = 0.0;
-  double _currScale = 1.0;
+  double _batOffsetA = 0.0;
+  double _batScaleA = 1.0;
 
-  // Полётные режимы, RC, Failsafe (включая аварийную посадку по батарее и RC), фильтры и PID
-  double _flMode = 1;
-  double _flRollMax = 25.0;
-  double _flPitchMax = 25.0;
-  double _flVzSpeedMax = 1.2;
+  // Режимы полёта и стики (RC)
+  double _fmMode = 1;
+  double _fmRollMax = 25.0;
+  double _fmPitchMax = 25.0;
+  double _fmVzSpeedMax = 1.2;
   double _rcRate = 0.35;
   double _rcSuperExpo = 0.03;
   double _rcStickExpo = 0.45;
@@ -941,25 +944,32 @@ class _SettingsTabState extends State<SettingsTab> {
   double _rcHorizonTransition = 0.75;
   double _rcFilterSmoothing = 0.35;
 
+  // Failsafe
   double _fsBatEn = 1;
   double _fsRtxEn = 1;
   double _fsVzSpeed = 0.5;
   double _batFsV = 13.8;
 
-  double _filAmbEn = 1;
-  double _filLpfEn = 1;
-  double _filNotEn = 1;
+  // Фильтры IMU и адаптивный Маджвик
+  double _fltAmbEn = 1;
+  double _fltLpfEn = 1;
+  double _fltNotEn = 1;
   double _gyroFilterAlpha = 0.10;
   double _accFilterAlpha = 0.10;
   double _filterNotchFreq = 120.0;
   double _filterNotchBw = 20.0;
-  double _filAmb = 0.05;
-  double _filAmbMin = 0.003;
+  double _fltAmb = 0.05;
+  double _fltAmbMin = 0.003;
 
+  // PID-регуляторы
   double _rollKp = 0.45, _rollKi = 0.010, _rollKd = 0.018;
   double _pitchKp = 0.45, _pitchKi = 0.010, _pitchKd = 0.018;
   double _yawKp = 0.60, _yawKi = 0.010, _yawKd = 0.0;
   double _vzKp = 7.0, _vzKi = 1.2, _vzKd = 0.30;
+
+  // Аргумент для cal_bat <V> и опционального cal_curr [A]
+  double _calBatVoltageArg = 14.8;
+  double _calCurrAmpsArg = 0.0;
 
   @override
   void initState() {
@@ -980,16 +990,17 @@ class _SettingsTabState extends State<SettingsTab> {
       _rtxId = 1;
       _rtxBand = 2;
     });
-    SerialService.sendCommand("default rtx_common");
+    SerialService.sendCommand("test_rtx");
   }
 
   void _resetImuGroup() {
     setState(() {
-      _escProtocol = 0;
+      _escProt = 0;
+      _fltEscLimit = 45.0;
       _imuId = 0;
       _imuAlign = 0;
     });
-    SerialService.sendCommand("default hw");
+    SerialService.sendCommand("default");
   }
 
   void _resetCompassGroup() {
@@ -1001,7 +1012,7 @@ class _SettingsTabState extends State<SettingsTab> {
       _magBiasY = 0.0;
       _magBiasZ = 0.0;
     });
-    SerialService.sendCommand("default hw");
+    SerialService.sendCommand("default");
   }
 
   void _resetBaroGroup() {
@@ -1009,7 +1020,7 @@ class _SettingsTabState extends State<SettingsTab> {
       _baroEn = 1;
       _barId = 0;
     });
-    SerialService.sendCommand("default hw");
+    SerialService.sendCommand("default");
   }
 
   void _resetLidarGroup() {
@@ -1019,7 +1030,7 @@ class _SettingsTabState extends State<SettingsTab> {
       _lidarFilterAlpha = 0.15;
       _lidarOffsetM = 0.0;
     });
-    SerialService.sendCommand("default hw");
+    SerialService.sendCommand("default");
   }
 
   void _resetVtxGroup() {
@@ -1029,25 +1040,27 @@ class _SettingsTabState extends State<SettingsTab> {
       _vtxMhz = 5658;
       _vtxMw = 25;
     });
-    SerialService.sendCommand("default vtx");
+    SerialService.sendCommand("default");
   }
 
   void _resetBatteryGroup() {
     setState(() {
-      _batVoltageScale = 4.85;
+      _batScaleV = 4.85;
+      _batVMax = 16.8;
+      _batCompEn = true;
       _batFilterAlpha = 0.05;
-      _currZeroOffsetA = 0.0;
-      _currScale = 1.0;
+      _batOffsetA = 0.0;
+      _batScaleA = 1.0;
     });
-    SerialService.sendCommand("default bat");
+    SerialService.sendCommand("default");
   }
 
   void _resetFlightRcGroup() {
     setState(() {
-      _flMode = 1;
-      _flRollMax = 25.0;
-      _flPitchMax = 25.0;
-      _flVzSpeedMax = 1.2;
+      _fmMode = 1;
+      _fmRollMax = 25.0;
+      _fmPitchMax = 25.0;
+      _fmVzSpeedMax = 1.2;
       _rcRate = 0.35;
       _rcSuperExpo = 0.03;
       _rcStickExpo = 0.45;
@@ -1058,7 +1071,7 @@ class _SettingsTabState extends State<SettingsTab> {
       _rcHorizonTransition = 0.75;
       _rcFilterSmoothing = 0.35;
     });
-    SerialService.sendCommand("default fl");
+    SerialService.sendCommand("default");
   }
 
   void _resetFailsafeGroup() {
@@ -1068,22 +1081,22 @@ class _SettingsTabState extends State<SettingsTab> {
       _fsVzSpeed = 0.5;
       _batFsV = 13.8;
     });
-    SerialService.sendCommand("default fs");
+    SerialService.sendCommand("default");
   }
 
   void _resetFiltersGroup() {
     setState(() {
-      _filAmbEn = 1;
-      _filLpfEn = 1;
-      _filNotEn = 1;
+      _fltAmbEn = 1;
+      _fltLpfEn = 1;
+      _fltNotEn = 1;
       _gyroFilterAlpha = 0.10;
       _accFilterAlpha = 0.10;
       _filterNotchFreq = 120.0;
       _filterNotchBw = 20.0;
-      _filAmb = 0.05;
-      _filAmbMin = 0.003;
+      _fltAmb = 0.05;
+      _fltAmbMin = 0.003;
     });
-    SerialService.sendCommand("default fil");
+    SerialService.sendCommand("default");
   }
 
   void _resetPidGroup() {
@@ -1101,7 +1114,7 @@ class _SettingsTabState extends State<SettingsTab> {
       _vzKi = 1.2;
       _vzKd = 0.30;
     });
-    SerialService.sendCommand("default pid");
+    SerialService.sendCommand("default");
   }
 
   void _resetAllFcSettings() {
@@ -1117,7 +1130,7 @@ class _SettingsTabState extends State<SettingsTab> {
     _resetFiltersGroup();
     _resetPidGroup();
     SerialService.sendCommand("default");
-    showAppDialog(context, "Общий сброс FC", "Все настройки полётного\nконтроллера сброшены\nпо умолчанию.");
+    showAppDialog(context, "Общий сброс FC", "Все параметры сброшены к заводским\nзначениям и сохранены во Flash.");
   }
 
   void _runCalOrTest(String cmd, String title, String message, {bool isWarning = false}) {
@@ -1152,23 +1165,23 @@ class _SettingsTabState extends State<SettingsTab> {
 
   @override
   Widget build(BuildContext context) {
+    final safeFltAmbMinMax = _fltAmb.clamp(0.001, 1.0);
+    final safeFltAmbMinVal = _fltAmbMin.clamp(0.0005, safeFltAmbMinMax);
+
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
-        // 1. РАДИОМОДУЛЬ
+        // 1. РАДИОМОДУЛЬ (ДИАГНОСТИКА RTX)
         XFireExpansionCard(
           title: "Радиомодуль",
-          subtitle: "Питание линка, ID, диапазон\nи проверка SX126x / RC",
+          subtitle: "Диагностика LoRa RTX (test_rtx)\nи параметры линка",
           icon: Icons.cell_tower_rounded,
           children: [
             XFireSwitchCard(
               title: "Включение радиомодуля",
               commandName: "rtx_en",
               value: _rtxEn == 1,
-              onChanged: (v) {
-                setState(() => _rtxEn = v ? 1.0 : 0.0);
-                SerialService.sendCommand("rtx_en ${_rtxEn.round()}");
-              },
+              onChanged: (v) => setState(() => _rtxEn = v ? 1.0 : 0.0),
             ),
             XFireSliderCard(
               title: "ID протокола радиоканала",
@@ -1179,7 +1192,7 @@ class _SettingsTabState extends State<SettingsTab> {
               divisions: 255,
               unit: "",
               onChanged: (v) => setState(() => _rtxProtId = v),
-              onChangeEnd: (v) => SerialService.sendCommand("rtx_prot_id ${v.round()}"),
+              onChangeEnd: (_) {},
             ),
             XFireSliderCard(
               title: "Уникальный ID пары / сети",
@@ -1190,50 +1203,28 @@ class _SettingsTabState extends State<SettingsTab> {
               divisions: 255,
               unit: "",
               onChanged: (v) => setState(() => _rtxId = v),
-              onChangeEnd: (v) => SerialService.sendCommand("rtx_id ${v.round()}"),
+              onChangeEnd: (_) {},
             ),
             XFireSegmentedCard(
               title: "Частотный диапазон",
               commandName: "rtx_band",
               options: const ["0: 433 МГц", "1: 868 МГц", "2: 915 МГц"],
               selectedIndex: _rtxBand.round().clamp(0, 2),
-              onSelected: (val) {
-                setState(() => _rtxBand = val.toDouble());
-                SerialService.sendCommand("rtx_band $val");
-              },
+              onSelected: (val) => setState(() => _rtxBand = val.toDouble()),
             ),
             XFireActionCard(
-              title: "Тест радиомодуля SX126x",
-              commandName: "test_sx",
-              onTap: () => _runCalOrTest("test_sx", "Тест SX126x", "Проверка SPI радиомодуля\nзапущена."),
+              title: "Статус LoRa RTX (AFC, LQ, IRQ)",
+              commandName: "test_rtx",
+              onTap: () => _runCalOrTest("test_rtx", "Статус LoRa RTX", "Запрошен статус LoRa RTX\n(активность, чип, канал, AFC, LQ, IRQ)."),
             ),
-            XFireActionCard(
-              title: "Тест связи с пультом",
-              commandName: "test_rc",
-              onTap: () => _runCalOrTest("test_rc", "Тест RC", "Диагностика связи с пультом\nзапущена."),
-            ),
-            XFireActionCard(
-              title: "Тест смены канала связи",
-              commandName: "test_rc_can",
-              onTap: () => _runCalOrTest("test_rc_can", "Смена канала", "Команда test_rc_can\nотправлена."),
-            ),
-            XFireResetCard(hint: "Сброс группы радиомодуля\n(default rtx_common)", onReset: _resetRadioGroup),
-            XFireBatchApplyCard(
-              hint: "Пакетная отправка настроек\nрадиомодуля",
-              parameters: [
-                "rtx_en ${_rtxEn.round()}",
-                "rtx_prot_id ${_rtxProtId.round()}",
-                "rtx_id ${_rtxId.round()}",
-                "rtx_band ${_rtxBand.round()}",
-              ],
-            ),
+            XFireResetCard(hint: "Сброс локальных значений\nблока радиомодуля", onReset: _resetRadioGroup),
           ],
         ),
 
-        // 2. IMU (ГИРОСКОП И АКСЕЛЕРОМЕТР)
+        // 2. IMU (ГИРОСКОП И АКСЕЛЕРОМЕТР) + ESC
         XFireExpansionCard(
           title: "IMU (гироскоп и акселерометр)",
-          subtitle: "Тип IMU, ориентация осей,\nкалибровка гиро/аксель и тест",
+          subtitle: "Тип IMU, поворот осей, ESC,\nкалибровка и тест (test_imu)",
           icon: Icons.screen_rotation_alt_rounded,
           children: [
             XFireDropdownCard(
@@ -1242,12 +1233,12 @@ class _SettingsTabState extends State<SettingsTab> {
               value: _imuId.round(),
               options: const {
                 0: "0 — автоопределение",
-                1: "1 — MPU6050",
-                2: "2 — MPU6500",
-                3: "3 — MPU9250",
-                4: "4 — ICM20602",
-                5: "5 — BMI160",
-                6: "6 — QMI8658",
+                1: "1 — датчик 1",
+                2: "2 — датчик 2",
+                3: "3 — датчик 3",
+                4: "4 — датчик 4",
+                5: "5 — датчик 5",
+                6: "6 — датчик 6",
               },
               onChanged: (val) {
                 setState(() => _imuId = val.toDouble());
@@ -1257,7 +1248,7 @@ class _SettingsTabState extends State<SettingsTab> {
             XFireSegmentedCard(
               title: "Поворот XY осей IMU",
               commandName: "imu_align",
-              options: const ["0°", "90°", "180°", "270°"],
+              options: const ["0 (0°)", "1 (90°)", "2 (180°)", "3 (270°)"],
               selectedIndex: _imuAlign.round().clamp(0, 3),
               onSelected: (val) {
                 setState(() => _imuAlign = val.toDouble());
@@ -1265,37 +1256,54 @@ class _SettingsTabState extends State<SettingsTab> {
               },
             ),
             XFireSegmentedCard(
-              title: "Протокол ESC",
-              commandName: "esc_protocol",
-              options: const ["PWM", "Oneshot125"],
-              selectedIndex: _escProtocol.round().clamp(0, 1),
+              title: "Протокол ШИМ/ESC",
+              commandName: "esc_prot",
+              options: const ["0: PWM", "1: Oneshot125"],
+              selectedIndex: _escProt.round().clamp(0, 1),
               onSelected: (val) {
-                setState(() => _escProtocol = val.toDouble());
-                SerialService.sendCommand("esc_protocol $val");
+                setState(() => _escProt = val.toDouble());
+                SerialService.sendCommand("esc_prot $val");
               },
             ),
+            XFireSliderCard(
+              title: "Макс. шаг выхода мотора\n(slew rate за цикл)",
+              commandName: "flt_esc_limit",
+              value: _fltEscLimit,
+              min: 1.0,
+              max: 250.0,
+              divisions: 249,
+              unit: "",
+              onChanged: (v) => setState(() => _fltEscLimit = v),
+              onChangeEnd: (v) => SerialService.sendCommand("flt_esc_limit ${v.toStringAsFixed(1)}"),
+            ),
             XFireActionCard(
-              title: "Калибровка гироскопа",
+              title: "Полная калибровка IMU (гиро + акс)",
+              commandName: "cal_imu",
+              onTap: () => _runCalOrTest("cal_imu", "Калибровка IMU", "Аппарат должен лежать неподвижно\nи горизонтально. Запись во Flash."),
+            ),
+            XFireActionCard(
+              title: "Калибровка гироскопа и темп.",
               commandName: "cal_gyro",
-              onTap: () => _runCalOrTest("cal_gyro", "Калибровка гироскопа", "Калибровка гироскопа\nзапущена."),
+              onTap: () => _runCalOrTest("cal_gyro", "Калибровка гироскопа", "Калибровка смещения гироскопа\nи базовой температуры с записью во Flash."),
             ),
             XFireActionCard(
               title: "Калибровка акселерометра",
               commandName: "cal_acc",
-              onTap: () => _runCalOrTest("cal_acc", "Калибровка акселерометра", "Калибровка акселерометра\nзапущена."),
+              onTap: () => _runCalOrTest("cal_acc", "Калибровка акселерометра", "Калибровка на горизонтальной\nповерхности с записью во Flash."),
             ),
             XFireActionCard(
-              title: "Тест IMU (MPU / датчики)",
-              commandName: "test_mpu",
-              onTap: () => _runCalOrTest("test_mpu", "Тест IMU", "Команда test_mpu\nотправлена."),
+              title: "Разовый тест IMU (acc / gyr)",
+              commandName: "test_imu",
+              onTap: () => _runCalOrTest("test_imu", "Тест IMU", "Запрошен вывод состояния IMU\nи текущих значений acc / gyr."),
             ),
-            XFireResetCard(hint: "Сброс группы IMU\n(default hw)", onReset: _resetImuGroup),
+            XFireResetCard(hint: "Сброс всех параметров\nк заводским (default)", onReset: _resetImuGroup),
             XFireBatchApplyCard(
               hint: "Пакетная отправка настроек\nIMU и ESC",
               parameters: [
                 "imu_id ${_imuId.round()}",
                 "imu_align ${_imuAlign.round()}",
-                "esc_protocol ${_escProtocol.round()}",
+                "esc_prot ${_escProt.round()}",
+                "flt_esc_limit ${_fltEscLimit.toStringAsFixed(1)}",
               ],
             ),
           ],
@@ -1304,11 +1312,11 @@ class _SettingsTabState extends State<SettingsTab> {
         // 3. КОМПАС
         XFireExpansionCard(
           title: "Компас",
-          subtitle: "Опрос, тип, ориентация,\nсмещения X/Y/Z и калибровка",
+          subtitle: "Опрос, тип, поворот XY,\nсмещения ±2000 и тест (test_mag)",
           icon: Icons.explore_rounded,
           children: [
             XFireSwitchCard(
-              title: "Включение опроса компаса",
+              title: "Включение компаса/магнитометра",
               commandName: "com_en",
               value: _comEn == 1,
               onChanged: (v) {
@@ -1317,17 +1325,17 @@ class _SettingsTabState extends State<SettingsTab> {
               },
             ),
             XFireDropdownCard(
-              title: "Тип компаса / магнетометра",
+              title: "Тип магнитометра",
               commandName: "com_id",
               value: _comId.round(),
               options: const {
                 0: "0 — автоопределение",
-                1: "1 — HMC5883L",
-                2: "2 — QMC5883L",
-                3: "3 — AK8963",
-                4: "4 — IST8310",
-                5: "5 — HSCDTD008A",
-                6: "6 — AK09911",
+                1: "1 — датчик 1",
+                2: "2 — датчик 2",
+                3: "3 — датчик 3",
+                4: "4 — датчик 4",
+                5: "5 — датчик 5",
+                6: "6 — датчик 6",
               },
               onChanged: (val) {
                 setState(() => _comId = val.toDouble());
@@ -1337,7 +1345,7 @@ class _SettingsTabState extends State<SettingsTab> {
             XFireSegmentedCard(
               title: "Поворот XY осей компаса",
               commandName: "com_align",
-              options: const ["0°", "90°", "180°", "270°"],
+              options: const ["0 (0°)", "1 (90°)", "2 (180°)", "3 (270°)"],
               selectedIndex: _comAlign.round().clamp(0, 3),
               onSelected: (val) {
                 setState(() => _comAlign = val.toDouble());
@@ -1345,53 +1353,58 @@ class _SettingsTabState extends State<SettingsTab> {
               },
             ),
             XFireSliderCard(
-              title: "Смещение компаса X",
+              title: "Смещение магнитометра по X",
               commandName: "mag_bias_x",
               value: _magBiasX,
-              min: -200.0,
-              max: 200.0,
-              divisions: 400,
-              unit: "мкТл",
+              min: -2000.0,
+              max: 2000.0,
+              divisions: 4000,
+              unit: "",
               onChanged: (v) => setState(() => _magBiasX = v),
-              onChangeEnd: (v) => SerialService.sendCommand("mag_bias_x $v"),
+              onChangeEnd: (v) => SerialService.sendCommand("mag_bias_x ${v.toStringAsFixed(1)}"),
             ),
             XFireSliderCard(
-              title: "Смещение компаса Y",
+              title: "Смещение магнитометра по Y",
               commandName: "mag_bias_y",
               value: _magBiasY,
-              min: -200.0,
-              max: 200.0,
-              divisions: 400,
-              unit: "мкТл",
+              min: -2000.0,
+              max: 2000.0,
+              divisions: 4000,
+              unit: "",
               onChanged: (v) => setState(() => _magBiasY = v),
-              onChangeEnd: (v) => SerialService.sendCommand("mag_bias_y $v"),
+              onChangeEnd: (v) => SerialService.sendCommand("mag_bias_y ${v.toStringAsFixed(1)}"),
             ),
             XFireSliderCard(
-              title: "Смещение компаса Z",
+              title: "Смещение магнитометра по Z",
               commandName: "mag_bias_z",
               value: _magBiasZ,
-              min: -200.0,
-              max: 200.0,
-              divisions: 400,
-              unit: "мкТл",
+              min: -2000.0,
+              max: 2000.0,
+              divisions: 4000,
+              unit: "",
               onChanged: (v) => setState(() => _magBiasZ = v),
-              onChangeEnd: (v) => SerialService.sendCommand("mag_bias_z $v"),
+              onChangeEnd: (v) => SerialService.sendCommand("mag_bias_z ${v.toStringAsFixed(1)}"),
             ),
             XFireActionCard(
-              title: "Калибровка компаса",
+              title: "Калибровка магнитометра (8 сек)",
               commandName: "cal_mag",
-              onTap: () => _runCalOrTest("cal_mag", "Калибровка компаса", "Калибровка компаса (cal_mag)\nзапущена."),
+              onTap: () => _runCalOrTest("cal_mag", "Калибровка компаса (8 сек)", "Вращайте аппарат во всех осях\nв течение 8 сек; смещения сохранятся во Flash."),
             ),
-            XFireResetCard(hint: "Сброс группы компаса\n(default hw)", onReset: _resetCompassGroup),
+            XFireActionCard(
+              title: "Разовый тест компаса (xyz / hdg)",
+              commandName: "test_mag",
+              onTap: () => _runCalOrTest("test_mag", "Тест компаса", "Запрошен статус магнитометра,\nоси xyz и курс hdg."),
+            ),
+            XFireResetCard(hint: "Сброс всех параметров\nк заводским (default)", onReset: _resetCompassGroup),
             XFireBatchApplyCard(
               hint: "Пакетная отправка настроек\nкомпаса",
               parameters: [
                 "com_en ${_comEn.round()}",
                 "com_id ${_comId.round()}",
                 "com_align ${_comAlign.round()}",
-                "mag_bias_x $_magBiasX",
-                "mag_bias_y $_magBiasY",
-                "mag_bias_z $_magBiasZ",
+                "mag_bias_x ${_magBiasX.toStringAsFixed(1)}",
+                "mag_bias_y ${_magBiasY.toStringAsFixed(1)}",
+                "mag_bias_z ${_magBiasZ.toStringAsFixed(1)}",
               ],
             ),
           ],
@@ -1400,11 +1413,11 @@ class _SettingsTabState extends State<SettingsTab> {
         // 4. БАРОМЕТР
         XFireExpansionCard(
           title: "Барометр",
-          subtitle: "Опрос, выбор чипа\nи калибровка барометра",
+          subtitle: "Опрос, выбор чипа (0..7),\nобнуление (cal_bar) и тест (test_bar)",
           icon: Icons.compress_rounded,
           children: [
             XFireSwitchCard(
-              title: "Включение опроса барометра",
+              title: "Включение барометра",
               commandName: "baro_en",
               value: _baroEn == 1,
               onChanged: (v) {
@@ -1418,13 +1431,13 @@ class _SettingsTabState extends State<SettingsTab> {
               value: _barId.round(),
               options: const {
                 0: "0 — автоопределение",
-                1: "1 — BMP280",
-                2: "2 — BME280",
-                3: "3 — MS5611",
-                4: "4 — BMP180",
-                5: "5 — BMP388",
-                6: "6 — BMP390",
-                7: "7 — DPS310",
+                1: "1 — датчик 1",
+                2: "2 — датчик 2",
+                3: "3 — датчик 3",
+                4: "4 — датчик 4",
+                5: "5 — датчик 5",
+                6: "6 — датчик 6",
+                7: "7 — датчик 7",
               },
               onChanged: (val) {
                 setState(() => _barId = val.toDouble());
@@ -1432,11 +1445,16 @@ class _SettingsTabState extends State<SettingsTab> {
               },
             ),
             XFireActionCard(
-              title: "Калибровка барометра",
-              commandName: "cal_baro",
-              onTap: () => _runCalOrTest("cal_baro", "Калибровка барометра", "Калибровка барометра (cal_baro)\nзапущена."),
+              title: "Обнуление высоты барометра",
+              commandName: "cal_bar",
+              onTap: () => _runCalOrTest("cal_bar", "Обнуление барометра", "Обнулена baro_ground_alt_m\nи сброшены фильтры высоты/Vz."),
             ),
-            XFireResetCard(hint: "Сброс группы барометра\n(default hw)", onReset: _resetBaroGroup),
+            XFireActionCard(
+              title: "Замер высоты барометра",
+              commandName: "test_bar",
+              onTap: () => _runCalOrTest("test_bar", "Тест барометра", "Запрошен замер барометрической\nвысоты (alt) и статуса датчика."),
+            ),
+            XFireResetCard(hint: "Сброс всех параметров\nк заводским (default)", onReset: _resetBaroGroup),
             XFireBatchApplyCard(
               hint: "Пакетная отправка настроек\nбарометра",
               parameters: [
@@ -1450,11 +1468,11 @@ class _SettingsTabState extends State<SettingsTab> {
         // 5. ЛИДАР
         XFireExpansionCard(
           title: "Лидар",
-          subtitle: "Опрос, тип VL53Lxx,\nфильтр, смещение и калибровка",
+          subtitle: "Опрос, тип (0..4), фильтр,\nсмещение ±5.0 м, cal_lid и test_lid",
           icon: Icons.radar_rounded,
           children: [
             XFireSwitchCard(
-              title: "Включение опроса лидара",
+              title: "Включение лидара",
               commandName: "lidar_en",
               value: _lidarEn == 1,
               onChanged: (v) {
@@ -1463,15 +1481,15 @@ class _SettingsTabState extends State<SettingsTab> {
               },
             ),
             XFireDropdownCard(
-              title: "Тип лидара / датчика расстояния",
+              title: "Тип лидара",
               commandName: "lid_id",
               value: _lidId.round(),
               options: const {
-                0: "0 — автоопределение / нет",
-                1: "1 — VL53L0X",
-                2: "2 — VL53L1X",
-                3: "3 — VL53L3CX",
-                4: "4 — VL53L4CX",
+                0: "0 — автоопределение",
+                1: "1 — датчик 1",
+                2: "2 — датчик 2",
+                3: "3 — датчик 3",
+                4: "4 — датчик 4",
               },
               onChanged: (val) {
                 setState(() => _lidId = val.toDouble());
@@ -1479,54 +1497,54 @@ class _SettingsTabState extends State<SettingsTab> {
               },
             ),
             XFireSliderCard(
-              title: "Сглаживание лидара\n(медиана + EMA)",
+              title: "Alpha фильтра лидара\n(0.001..1.0)",
               commandName: "lidar_filter_alpha",
               value: _lidarFilterAlpha,
-              min: 0.01,
+              min: 0.001,
               max: 1.0,
-              divisions: 99,
+              divisions: 999,
               unit: "",
               onChanged: (v) => setState(() => _lidarFilterAlpha = v),
-              onChangeEnd: (v) => SerialService.sendCommand("lidar_filter_alpha $v"),
+              onChangeEnd: (v) => SerialService.sendCommand("lidar_filter_alpha ${v.toStringAsFixed(3)}"),
             ),
             XFireSliderCard(
-              title: "Смещение высоты лидара",
+              title: "Смещение высоты лидара\n(-5.0..5.0 м)",
               commandName: "lidar_offset_m",
               value: _lidarOffsetM,
-              min: -1.0,
-              max: 1.0,
-              divisions: 200,
+              min: -5.0,
+              max: 5.0,
+              divisions: 1000,
               unit: "м",
               onChanged: (v) => setState(() => _lidarOffsetM = v),
-              onChangeEnd: (v) => SerialService.sendCommand("lidar_offset_m $v"),
+              onChangeEnd: (v) => SerialService.sendCommand("lidar_offset_m ${v.toStringAsFixed(3)}"),
             ),
             XFireActionCard(
               title: "Калибровка смещения лидара",
               commandName: "cal_lid",
-              onTap: () => _runCalOrTest("cal_lid", "Калибровка лидара", "Калибровка лидара (cal_lid)\nзапущена."),
+              onTap: () => _runCalOrTest("cal_lid", "Калибровка лидара", "Калибровка lidar_offset_m по текущему\nзамеру до земли с записью во Flash."),
             ),
             XFireActionCard(
-              title: "Тест лидара",
-              commandName: "test_lidar",
-              onTap: () => _runCalOrTest("test_lidar", "Тест лидара", "Команда test_lidar\nотправлена."),
+              title: "Разовый замер лидара",
+              commandName: "test_lid",
+              onTap: () => _runCalOrTest("test_lid", "Тест лидара", "Запрошен замер дистанции лидара (m)\nс учётом наклона и смещения."),
             ),
-            XFireResetCard(hint: "Сброс группы лидара\n(default hw)", onReset: _resetLidarGroup),
+            XFireResetCard(hint: "Сброс всех параметров\nк заводским (default)", onReset: _resetLidarGroup),
             XFireBatchApplyCard(
               hint: "Пакетная отправка настроек\nлидара",
               parameters: [
                 "lidar_en ${_lidarEn.round()}",
                 "lid_id ${_lidId.round()}",
-                "lidar_filter_alpha $_lidarFilterAlpha",
-                "lidar_offset_m $_lidarOffsetM",
+                "lidar_filter_alpha ${_lidarFilterAlpha.toStringAsFixed(3)}",
+                "lidar_offset_m ${_lidarOffsetM.toStringAsFixed(3)}",
               ],
             ),
           ],
         ),
 
-        // 6. VTX (SmartAudio / IRC Tramp)
+        // 6. VTX (USART6)
         XFireExpansionCard(
-          title: "VTX (SmartAudio / IRC Tramp)",
-          subtitle: "Управление передатчиком,\nпротокол, частота МГц и мощность мВт",
+          title: "VTX (USART6)",
+          subtitle: "Управление передатчиком,\n0 Auto / 1 Tramp / 2 SmartAudio",
           icon: Icons.sensors_rounded,
           children: [
             XFireSwitchCard(
@@ -1543,9 +1561,9 @@ class _SettingsTabState extends State<SettingsTab> {
               commandName: "vtx_prot",
               value: _vtxProt.round(),
               options: const {
-                0: "0 — автоопределение (AUTO)",
-                1: "1 — IRC Tramp",
-                2: "2 — SmartAudio v2.1",
+                0: "0 — Auto",
+                1: "1 — Tramp",
+                2: "2 — SmartAudio",
               },
               onChanged: (val) {
                 setState(() => _vtxProt = val.toDouble());
@@ -1553,7 +1571,7 @@ class _SettingsTabState extends State<SettingsTab> {
               },
             ),
             XFireSliderCard(
-              title: "Частота передатчика\n(5000..6000 МГц, по умолч. 5658)",
+              title: "Частота VTX\n(5000..6000 МГц, по умолч. 5658)",
               commandName: "vtx_mhz",
               value: _vtxMhz,
               min: 5000,
@@ -1564,7 +1582,7 @@ class _SettingsTabState extends State<SettingsTab> {
               onChangeEnd: (v) => SerialService.sendCommand("vtx_mhz ${v.round()}"),
             ),
             XFireSliderCard(
-              title: "Мощность передатчика\n(1..10000 мВт, по умолч. 25)",
+              title: "Мощность VTX\n(1..10000 мВт, по умолч. 25)",
               commandName: "vtx_mw",
               value: _vtxMw,
               min: 1,
@@ -1575,11 +1593,11 @@ class _SettingsTabState extends State<SettingsTab> {
               onChangeEnd: (v) => SerialService.sendCommand("vtx_mw ${v.round()}"),
             ),
             XFireActionCard(
-              title: "Ручной опрос VTX по UART",
+              title: "Опрос VTX и вывод статуса",
               commandName: "test_vtx",
-              onTap: () => _runCalOrTest("test_vtx", "Тест VTX", "Опрос VTX (test_vtx) по UART\nзапущен."),
+              onTap: () => _runCalOrTest("test_vtx", "Тест VTX", "Запущен опрос VTX: протокол,\nстатус связи (link), mhz и mw."),
             ),
-            XFireResetCard(hint: "Сброс настроек VTX\n(default vtx)", onReset: _resetVtxGroup),
+            XFireResetCard(hint: "Сброс всех параметров\nк заводским (default)", onReset: _resetVtxGroup),
             XFireBatchApplyCard(
               hint: "Пакетная отправка настроек\nVTX",
               parameters: [
@@ -1592,125 +1610,319 @@ class _SettingsTabState extends State<SettingsTab> {
           ],
         ),
 
-        // 7. БАТАРЕЯ
+        // 7. ПИТАНИЕ И БАТАРЕЯ
         XFireExpansionCard(
-          title: "Батарея",
-          subtitle: "Делитель напряжения (PA4)\nи шунт тока 0.01 Ом (PA5)",
+          title: "Питание и батарея",
+          subtitle: "Напряжение, компенсация просадки,\nток, калибровка и тест (test_bat)",
           icon: Icons.battery_charging_full,
           children: [
             XFireSliderCard(
-              title: "Масштаб делителя напряжения\n(PA4)",
-              commandName: "bat_voltage_scale",
-              value: _batVoltageScale,
-              min: 1.0,
-              max: 15.0,
-              divisions: 280,
-              unit: "",
-              onChanged: (v) => setState(() => _batVoltageScale = v),
-              onChangeEnd: (v) => SerialService.sendCommand("bat_voltage_scale $v"),
-            ),
-            XFireSliderCard(
-              title: "LPF фильтрация напряжения\nбатареи",
-              commandName: "bat_filter_alpha",
-              value: _batFilterAlpha,
-              min: 0.01,
-              max: 1.0,
-              divisions: 99,
-              unit: "",
-              onChanged: (v) => setState(() => _batFilterAlpha = v),
-              onChangeEnd: (v) => SerialService.sendCommand("bat_filter_alpha $v"),
-            ),
-            XFireSliderCard(
-              title: "Ток покоя / смещение нуля\n(PA5)",
-              commandName: "curr_zero_offset_a",
-              value: _currZeroOffsetA,
-              min: -10.0,
-              max: 10.0,
-              divisions: 400,
-              unit: "А",
-              onChanged: (v) => setState(() => _currZeroOffsetA = v),
-              onChangeEnd: (v) => SerialService.sendCommand("curr_zero_offset_a $v"),
-            ),
-            XFireSliderCard(
-              title: "Калибровочный множитель тока\n(>=0.01)",
-              commandName: "curr_scale",
-              value: _currScale,
-              min: 0.01,
-              max: 5.0,
+              title: "Масштаб измерения напряжения\n(0.1..50.0, по умолч. 4.85)",
+              commandName: "bat_scale_v",
+              value: _batScaleV,
+              min: 0.1,
+              max: 50.0,
               divisions: 499,
               unit: "",
-              onChanged: (v) => setState(() => _currScale = v),
-              onChangeEnd: (v) => SerialService.sendCommand("curr_scale $v"),
+              onChanged: (v) => setState(() => _batScaleV = v),
+              onChangeEnd: (v) => SerialService.sendCommand("bat_scale_v ${v.toStringAsFixed(3)}"),
             ),
-            XFireResetCard(hint: "Сброс группы батареи\n(default bat)", onReset: _resetBatteryGroup),
+            XFireSliderCard(
+              title: "Макс. напряжение батареи\n(7.0..25.2 В, по умолч. 16.8)",
+              commandName: "bat_v_max",
+              value: _batVMax,
+              min: 7.0,
+              max: 25.2,
+              divisions: 182,
+              unit: "В",
+              onChanged: (v) => setState(() => _batVMax = v),
+              onChangeEnd: (v) => SerialService.sendCommand("bat_v_max ${v.toStringAsFixed(2)}"),
+            ),
+            XFireSwitchCard(
+              title: "Компенсация просадки батареи\nна тяге",
+              commandName: "bat_comp_en",
+              value: _batCompEn,
+              onChanged: (v) {
+                setState(() => _batCompEn = v);
+                SerialService.sendCommand("bat_comp_en ${v ? 1 : 0}");
+              },
+            ),
+            XFireSliderCard(
+              title: "Alpha ФНЧ напряжения батареи\n(0.001..1.0, по умолч. 0.05)",
+              commandName: "bat_filter_alpha",
+              value: _batFilterAlpha,
+              min: 0.001,
+              max: 1.0,
+              divisions: 999,
+              unit: "",
+              onChanged: (v) => setState(() => _batFilterAlpha = v),
+              onChangeEnd: (v) => SerialService.sendCommand("bat_filter_alpha ${v.toStringAsFixed(3)}"),
+            ),
+            XFireSliderCard(
+              title: "Смещение нуля датчика тока\n(-200.0..200.0 А)",
+              commandName: "bat_offset_a",
+              value: _batOffsetA,
+              min: -200.0,
+              max: 200.0,
+              divisions: 4000,
+              unit: "А",
+              onChanged: (v) => setState(() => _batOffsetA = v),
+              onChangeEnd: (v) => SerialService.sendCommand("bat_offset_a ${v.toStringAsFixed(3)}"),
+            ),
+            XFireSliderCard(
+              title: "Масштабный коэффициент тока\n(0.05..20.0, по умолч. 1.0)",
+              commandName: "bat_scale_a",
+              value: _batScaleA,
+              min: 0.05,
+              max: 20.0,
+              divisions: 399,
+              unit: "",
+              onChanged: (v) => setState(() => _batScaleA = v),
+              onChangeEnd: (v) => SerialService.sendCommand("bat_scale_a ${v.toStringAsFixed(3)}"),
+            ),
+            XFireSliderCard(
+              title: "Эталонное напряжение для\nкалибровки делителя (cal_bat)",
+              commandName: "cal_bat <V>",
+              value: _calBatVoltageArg,
+              min: 5.0,
+              max: 25.2,
+              divisions: 202,
+              unit: "В",
+              onChanged: (v) => setState(() => _calBatVoltageArg = v),
+              onChangeEnd: (_) {},
+            ),
+            XFireActionCard(
+              title: "Калибровка напряжения батареи",
+              commandName: "cal_bat ${_calBatVoltageArg.toStringAsFixed(2)}",
+              onTap: () => _runCalOrTest(
+                "cal_bat ${_calBatVoltageArg.toStringAsFixed(2)}",
+                "Калибровка напряжения",
+                "Отправлено: cal_bat ${_calBatVoltageArg.toStringAsFixed(2)}\nс записью во Flash.",
+              ),
+            ),
+            XFireActionCard(
+              title: "Калибровка нуля датчика тока",
+              commandName: "cal_curr",
+              onTap: () => _runCalOrTest("cal_curr", "Калибровка нуля тока", "Калибровка нуля тока (bat_offset_a)\nс записью во Flash."),
+            ),
+            XFireSliderCard(
+              title: "Эталонный ток для калибровки\nмасштаба (cal_curr [A])",
+              commandName: "cal_curr [A]",
+              value: _calCurrAmpsArg,
+              min: 0.1,
+              max: 150.0,
+              divisions: 1499,
+              unit: "А",
+              onChanged: (v) => setState(() => _calCurrAmpsArg = v),
+              onChangeEnd: (_) {},
+            ),
+            XFireActionCard(
+              title: "Калибровка масштаба тока по А",
+              commandName: "cal_curr ${_calCurrAmpsArg.toStringAsFixed(2)}",
+              onTap: () => _runCalOrTest(
+                "cal_curr ${_calCurrAmpsArg.toStringAsFixed(2)}",
+                "Калибровка масштаба тока",
+                "Отправлено: cal_curr ${_calCurrAmpsArg.toStringAsFixed(2)}\nс записью во Flash.",
+              ),
+            ),
+            XFireActionCard(
+              title: "Тест батареи (v, i, w)",
+              commandName: "test_bat",
+              onTap: () => _runCalOrTest("test_bat", "Тест батареи", "Запрошен вывод текущих v, i, w\nи состояния датчика батареи."),
+            ),
+            XFireResetCard(hint: "Сброс всех параметров\nк заводским (default)", onReset: _resetBatteryGroup),
             XFireBatchApplyCard(
-              hint: "Пакетная отправка настроек\nбатареи и тока",
+              hint: "Пакетная отправка настроек\nпитания и тока",
               parameters: [
-                "bat_voltage_scale $_batVoltageScale",
-                "bat_filter_alpha $_batFilterAlpha",
-                "curr_zero_offset_a $_currZeroOffsetA",
-                "curr_scale $_currScale",
+                "bat_scale_v ${_batScaleV.toStringAsFixed(3)}",
+                "bat_v_max ${_batVMax.toStringAsFixed(2)}",
+                "bat_comp_en ${_batCompEn ? 1 : 0}",
+                "bat_filter_alpha ${_batFilterAlpha.toStringAsFixed(3)}",
+                "bat_offset_a ${_batOffsetA.toStringAsFixed(3)}",
+                "bat_scale_a ${_batScaleA.toStringAsFixed(3)}",
               ],
             ),
           ],
         ),
 
-        // ОСТАЛЬНЫЕ БЛОКИ FC
+        // 8. РЕЖИМЫ ПОЛЁТА И СТИКИ (RC)
         XFireExpansionCard(
-          title: "Режимы полёта и кривые стиков\n(RC)",
-          subtitle: "Acro/Angle/Horizon, углы,\nVz и кривые RC",
+          title: "Режимы полёта и стики\n(RC)",
+          subtitle: "Acro/Angle/Horizon/AltHold,\nуглы, Vz и кривые RC",
           icon: Icons.flight,
           children: [
             XFireSegmentedCard(
-              title: "Режим полёта\n(1-Angle, 2-Horizon, иначе Rate)",
-              commandName: "fl_mode",
-              options: const ["0 (Rate)", "1 (Angle)", "2 (Horizon)", "3 (Rate)"],
-              selectedIndex: _flMode.round().clamp(0, 3),
+              title: "Режим полёта\n(0 Acro, 1 Angle, 2 Horizon, 3 Alt/Vz)",
+              commandName: "fm_mode",
+              options: const ["0: Acro", "1: Angle", "2: Horizon", "3: Alt/Vz"],
+              selectedIndex: _fmMode.round().clamp(0, 3),
               onSelected: (val) {
-                setState(() => _flMode = val.toDouble());
-                SerialService.sendCommand("fl_mode $val");
+                setState(() => _fmMode = val.toDouble());
+                SerialService.sendCommand("fm_mode $val");
               },
             ),
-            XFireSliderCard(title: "Макс. угол крена\n(Roll)", commandName: "fl_roll_max", value: _flRollMax, min: 5.0, max: 80.0, divisions: 150, unit: "°", onChanged: (v) => setState(() => _flRollMax = v), onChangeEnd: (v) => SerialService.sendCommand("fl_roll_max $v")),
-            XFireSliderCard(title: "Макс. угол тангажа\n(Pitch)", commandName: "fl_pitch_max", value: _flPitchMax, min: 5.0, max: 80.0, divisions: 150, unit: "°", onChanged: (v) => setState(() => _flPitchMax = v), onChangeEnd: (v) => SerialService.sendCommand("fl_pitch_max $v")),
-            XFireSliderCard(title: "Макс. вертикальная скорость", commandName: "fl_vz_speed_max", value: _flVzSpeedMax, min: 0.2, max: 5.0, divisions: 48, unit: "м/с", onChanged: (v) => setState(() => _flVzSpeedMax = v), onChangeEnd: (v) => SerialService.sendCommand("fl_vz_speed_max $v")),
-            XFireSliderCard(title: "RC Rate\n(Roll/Pitch)", commandName: "rc_rate", value: _rcRate, min: 0.05, max: 2.0, divisions: 195, unit: "", onChanged: (v) => setState(() => _rcRate = v), onChangeEnd: (v) => SerialService.sendCommand("rc_rate $v")),
-            XFireSliderCard(title: "RC Super Expo\n(Roll/Pitch)", commandName: "rc_super_expo", value: _rcSuperExpo, min: 0.0, max: 0.9, divisions: 90, unit: "", onChanged: (v) => setState(() => _rcSuperExpo = v), onChangeEnd: (v) => SerialService.sendCommand("rc_super_expo $v")),
-            XFireSliderCard(title: "RC Stick Expo\n(Roll/Pitch)", commandName: "rc_stick_expo", value: _rcStickExpo, min: 0.0, max: 1.0, divisions: 100, unit: "", onChanged: (v) => setState(() => _rcStickExpo = v), onChangeEnd: (v) => SerialService.sendCommand("rc_stick_expo $v")),
-            XFireSliderCard(title: "Yaw Rate", commandName: "rc_yaw_rate", value: _rcYawRate, min: 0.05, max: 2.0, divisions: 195, unit: "", onChanged: (v) => setState(() => _rcYawRate = v), onChangeEnd: (v) => SerialService.sendCommand("rc_yaw_rate $v")),
-            XFireSliderCard(title: "Yaw Super Expo", commandName: "rc_yaw_super_expo", value: _rcYawSuperExpo, min: 0.0, max: 0.9, divisions: 90, unit: "", onChanged: (v) => setState(() => _rcYawSuperExpo = v), onChangeEnd: (v) => SerialService.sendCommand("rc_yaw_super_expo $v")),
-            XFireSliderCard(title: "Yaw Expo", commandName: "rc_yaw_expo", value: _rcYawExpo, min: 0.0, max: 1.0, divisions: 100, unit: "", onChanged: (v) => setState(() => _rcYawExpo = v), onChangeEnd: (v) => SerialService.sendCommand("rc_yaw_expo $v")),
-            XFireSliderCard(title: "Мёртвая зона вокруг центра\n(500.0)", commandName: "rc_deadband", value: _rcDeadband, min: 0.0, max: 100.0, divisions: 100, unit: "", onChanged: (v) => setState(() => _rcDeadband = v), onChangeEnd: (v) => SerialService.sendCommand("rc_deadband $v")),
-            XFireSliderCard(title: "Порог перехода Horizon", commandName: "rc_horizon_transition", value: _rcHorizonTransition, min: 0.0, max: 1.0, divisions: 100, unit: "", onChanged: (v) => setState(() => _rcHorizonTransition = v), onChangeEnd: (v) => SerialService.sendCommand("rc_horizon_transition $v")),
-            XFireSliderCard(title: "Сглаживание стиков\n(0.01..1.0)", commandName: "rc_filter_smoothing", value: _rcFilterSmoothing, min: 0.01, max: 1.0, divisions: 99, unit: "", onChanged: (v) => setState(() => _rcFilterSmoothing = v), onChangeEnd: (v) => SerialService.sendCommand("rc_filter_smoothing $v")),
-            XFireResetCard(hint: "Сброс режимов полёта и RC\n(default fl)", onReset: _resetFlightRcGroup),
+            XFireSliderCard(
+              title: "Макс. угол Roll, град\n(1.0..85.0)",
+              commandName: "fm_roll_max",
+              value: _fmRollMax,
+              min: 1.0,
+              max: 85.0,
+              divisions: 840,
+              unit: "°",
+              onChanged: (v) => setState(() => _fmRollMax = v),
+              onChangeEnd: (v) => SerialService.sendCommand("fm_roll_max ${v.toStringAsFixed(1)}"),
+            ),
+            XFireSliderCard(
+              title: "Макс. угол Pitch, град\n(1.0..85.0)",
+              commandName: "fm_pitch_max",
+              value: _fmPitchMax,
+              min: 1.0,
+              max: 85.0,
+              divisions: 840,
+              unit: "°",
+              onChanged: (v) => setState(() => _fmPitchMax = v),
+              onChangeEnd: (v) => SerialService.sendCommand("fm_pitch_max ${v.toStringAsFixed(1)}"),
+            ),
+            XFireSliderCard(
+              title: "Макс. вертикальная скорость\nв удержании высоты (0.1..10.0)",
+              commandName: "fm_vz_speed_max",
+              value: _fmVzSpeedMax,
+              min: 0.1,
+              max: 10.0,
+              divisions: 99,
+              unit: "м/с",
+              onChanged: (v) => setState(() => _fmVzSpeedMax = v),
+              onChangeEnd: (v) => SerialService.sendCommand("fm_vz_speed_max ${v.toStringAsFixed(2)}"),
+            ),
+            XFireSliderCard(
+              title: "Базовая скорость Roll / Pitch\n(0.01..2.5)",
+              commandName: "rc_rate",
+              value: _rcRate,
+              min: 0.01,
+              max: 2.5,
+              divisions: 249,
+              unit: "",
+              onChanged: (v) => setState(() => _rcRate = v),
+              onChangeEnd: (v) => SerialService.sendCommand("rc_rate ${v.toStringAsFixed(3)}"),
+            ),
+            XFireSliderCard(
+              title: "Супер-экспонента Roll / Pitch\n(0.0..1.0)",
+              commandName: "rc_super_expo",
+              value: _rcSuperExpo,
+              min: 0.0,
+              max: 1.0,
+              divisions: 100,
+              unit: "",
+              onChanged: (v) => setState(() => _rcSuperExpo = v),
+              onChangeEnd: (v) => SerialService.sendCommand("rc_super_expo ${v.toStringAsFixed(3)}"),
+            ),
+            XFireSliderCard(
+              title: "Экспонента стиков Roll / Pitch\n(0.0..1.0)",
+              commandName: "rc_stick_expo",
+              value: _rcStickExpo,
+              min: 0.0,
+              max: 1.0,
+              divisions: 100,
+              unit: "",
+              onChanged: (v) => setState(() => _rcStickExpo = v),
+              onChangeEnd: (v) => SerialService.sendCommand("rc_stick_expo ${v.toStringAsFixed(3)}"),
+            ),
+            XFireSliderCard(
+              title: "Базовая скорость Yaw\n(0.01..2.5)",
+              commandName: "rc_yaw_rate",
+              value: _rcYawRate,
+              min: 0.01,
+              max: 2.5,
+              divisions: 249,
+              unit: "",
+              onChanged: (v) => setState(() => _rcYawRate = v),
+              onChangeEnd: (v) => SerialService.sendCommand("rc_yaw_rate ${v.toStringAsFixed(3)}"),
+            ),
+            XFireSliderCard(
+              title: "Супер-экспонента Yaw\n(0.0..1.0)",
+              commandName: "rc_yaw_super_expo",
+              value: _rcYawSuperExpo,
+              min: 0.0,
+              max: 1.0,
+              divisions: 100,
+              unit: "",
+              onChanged: (v) => setState(() => _rcYawSuperExpo = v),
+              onChangeEnd: (v) => SerialService.sendCommand("rc_yaw_super_expo ${v.toStringAsFixed(3)}"),
+            ),
+            XFireSliderCard(
+              title: "Экспонента стика Yaw\n(0.0..1.0)",
+              commandName: "rc_yaw_expo",
+              value: _rcYawExpo,
+              min: 0.0,
+              max: 1.0,
+              divisions: 100,
+              unit: "",
+              onChanged: (v) => setState(() => _rcYawExpo = v),
+              onChangeEnd: (v) => SerialService.sendCommand("rc_yaw_expo ${v.toStringAsFixed(3)}"),
+            ),
+            XFireSliderCard(
+              title: "Мёртвая зона вокруг центра\n(500.0, диапазон 0.0..200.0)",
+              commandName: "rc_deadband",
+              value: _rcDeadband,
+              min: 0.0,
+              max: 200.0,
+              divisions: 200,
+              unit: "",
+              onChanged: (v) => setState(() => _rcDeadband = v),
+              onChangeEnd: (v) => SerialService.sendCommand("rc_deadband ${v.toStringAsFixed(1)}"),
+            ),
+            XFireSliderCard(
+              title: "Порог перехода Angle -> Acro\nв Horizon (0.05..1.0)",
+              commandName: "rc_horizon_transition",
+              value: _rcHorizonTransition,
+              min: 0.05,
+              max: 1.0,
+              divisions: 95,
+              unit: "",
+              onChanged: (v) => setState(() => _rcHorizonTransition = v),
+              onChangeEnd: (v) => SerialService.sendCommand("rc_horizon_transition ${v.toStringAsFixed(3)}"),
+            ),
+            XFireSliderCard(
+              title: "Сглаживание входящих стиков\n(0.001..1.0)",
+              commandName: "rc_filter_smoothing",
+              value: _rcFilterSmoothing,
+              min: 0.001,
+              max: 1.0,
+              divisions: 999,
+              unit: "",
+              onChanged: (v) => setState(() => _rcFilterSmoothing = v),
+              onChangeEnd: (v) => SerialService.sendCommand("rc_filter_smoothing ${v.toStringAsFixed(3)}"),
+            ),
+            XFireResetCard(hint: "Сброс всех параметров\nк заводским (default)", onReset: _resetFlightRcGroup),
             XFireBatchApplyCard(
               hint: "Пакетная отправка режимов\nполёта и кривых RC",
               parameters: [
-                "fl_mode ${_flMode.round()}",
-                "fl_roll_max $_flRollMax",
-                "fl_pitch_max $_flPitchMax",
-                "fl_vz_speed_max $_flVzSpeedMax",
-                "rc_rate $_rcRate",
-                "rc_super_expo $_rcSuperExpo",
-                "rc_stick_expo $_rcStickExpo",
-                "rc_yaw_rate $_rcYawRate",
-                "rc_yaw_super_expo $_rcYawSuperExpo",
-                "rc_yaw_expo $_rcYawExpo",
-                "rc_deadband $_rcDeadband",
-                "rc_horizon_transition $_rcHorizonTransition",
-                "rc_filter_smoothing $_rcFilterSmoothing",
+                "fm_mode ${_fmMode.round()}",
+                "fm_roll_max ${_fmRollMax.toStringAsFixed(1)}",
+                "fm_pitch_max ${_fmPitchMax.toStringAsFixed(1)}",
+                "fm_vz_speed_max ${_fmVzSpeedMax.toStringAsFixed(2)}",
+                "rc_rate ${_rcRate.toStringAsFixed(3)}",
+                "rc_super_expo ${_rcSuperExpo.toStringAsFixed(3)}",
+                "rc_stick_expo ${_rcStickExpo.toStringAsFixed(3)}",
+                "rc_yaw_rate ${_rcYawRate.toStringAsFixed(3)}",
+                "rc_yaw_super_expo ${_rcYawSuperExpo.toStringAsFixed(3)}",
+                "rc_yaw_expo ${_rcYawExpo.toStringAsFixed(3)}",
+                "rc_deadband ${_rcDeadband.toStringAsFixed(1)}",
+                "rc_horizon_transition ${_rcHorizonTransition.toStringAsFixed(3)}",
+                "rc_filter_smoothing ${_rcFilterSmoothing.toStringAsFixed(3)}",
               ],
             ),
           ],
         ),
+
+        // 9. FAILSAFE И АВАРИЙНАЯ ПОСАДКА
         XFireExpansionCard(
           title: "Failsafe и аварийная посадка",
-          subtitle: "Порог батареи, потеря RC\nи скорость аварийного снижения",
+          subtitle: "Порог батареи, потеря RC\nи скорость снижения в удержании",
           icon: Icons.warning_amber_rounded,
           children: [
             XFireSwitchCard(
-              title: "Failsafe по низкому напряжению\nбатареи (аварийная посадка)",
+              title: "Failsafe при просадке\nнапряжения батареи",
               commandName: "fs_bat_en",
               value: _fsBatEn == 1,
               onChanged: (v) {
@@ -1719,7 +1931,7 @@ class _SettingsTabState extends State<SettingsTab> {
               },
             ),
             XFireSwitchCard(
-              title: "Failsafe при потере\nпакетов RC (аварийная посадка)",
+              title: "Failsafe при потере\nRC-пакетов",
               commandName: "fs_rtx_en",
               value: _fsRtxEn == 1,
               onChanged: (v) {
@@ -1728,101 +1940,170 @@ class _SettingsTabState extends State<SettingsTab> {
               },
             ),
             XFireSliderCard(
-              title: "Порог напряжения батареи\nдля аварийной посадки",
+              title: "Порог напряжения failsafe\nпо батарее (5.0..25.0 В)",
               commandName: "bat_fs_v",
               value: _batFsV,
-              min: 6.0,
+              min: 5.0,
               max: 25.0,
-              divisions: 190,
+              divisions: 200,
               unit: "В",
               onChanged: (v) => setState(() => _batFsV = v),
-              onChangeEnd: (v) => SerialService.sendCommand("bat_fs_v $v"),
+              onChangeEnd: (v) => SerialService.sendCommand("bat_fs_v ${v.toStringAsFixed(2)}"),
             ),
             XFireSliderCard(
-              title: "Скорость снижения\nпри аварийной посадке",
+              title: "Скорость снижения при failsafe\nв удержании высоты (0.05..10.0)",
               commandName: "fs_vz_speed",
               value: _fsVzSpeed,
-              min: 0.1,
-              max: 3.0,
-              divisions: 29,
+              min: 0.05,
+              max: 10.0,
+              divisions: 199,
               unit: "м/с",
               onChanged: (v) => setState(() => _fsVzSpeed = v),
-              onChangeEnd: (v) => SerialService.sendCommand("fs_vz_speed $v"),
+              onChangeEnd: (v) => SerialService.sendCommand("fs_vz_speed ${v.toStringAsFixed(2)}"),
             ),
-            XFireResetCard(hint: "Сброс настроек failsafe\n(default fs)", onReset: _resetFailsafeGroup),
+            XFireResetCard(hint: "Сброс всех параметров\nк заводским (default)", onReset: _resetFailsafeGroup),
             XFireBatchApplyCard(
               hint: "Пакетная отправка настроек\nfailsafe и аварийной посадки",
               parameters: [
                 "fs_bat_en ${_fsBatEn.round()}",
                 "fs_rtx_en ${_fsRtxEn.round()}",
-                "bat_fs_v $_batFsV",
-                "fs_vz_speed $_fsVzSpeed",
+                "bat_fs_v ${_batFsV.toStringAsFixed(2)}",
+                "fs_vz_speed ${_fsVzSpeed.toStringAsFixed(2)}",
               ],
             ),
           ],
         ),
+
+        // 10. ФИЛЬТРЫ IMU И АДАПТИВНЫЙ МАДЖВИК
         XFireExpansionCard(
-          title: "Фильтры (LPF, Notch, Madgwick)",
-          subtitle: "LPF, Biquad Notch и адаптивный\nbeta Madgwick",
+          title: "Фильтры IMU и адаптивный Маджвик",
+          subtitle: "ФНЧ, Notch-фильтр гироскопа\nи адаптивный beta Маджвика",
           icon: Icons.waves,
           children: [
             XFireSwitchCard(
-              title: "Адаптивный beta Madgwick\nпо вибрациям",
-              commandName: "fil_amb_en",
-              value: _filAmbEn == 1,
+              title: "Включение ФНЧ гироскопа\nи акселерометра",
+              commandName: "flt_lpf_en",
+              value: _fltLpfEn == 1,
               onChanged: (v) {
-                setState(() => _filAmbEn = v ? 1.0 : 0.0);
-                SerialService.sendCommand("fil_amb_en ${_filAmbEn.round()}");
+                setState(() => _fltLpfEn = v ? 1.0 : 0.0);
+                SerialService.sendCommand("flt_lpf_en ${_fltLpfEn.round()}");
               },
             ),
             XFireSwitchCard(
-              title: "Включение LPF\n(гироскоп и акселерометр)",
-              commandName: "fil_lpf_en",
-              value: _filLpfEn == 1,
+              title: "Включение Notch-фильтра\nгироскопа",
+              commandName: "flt_not_en",
+              value: _fltNotEn == 1,
               onChanged: (v) {
-                setState(() => _filLpfEn = v ? 1.0 : 0.0);
-                SerialService.sendCommand("fil_lpf_en ${_filLpfEn.round()}");
+                setState(() => _fltNotEn = v ? 1.0 : 0.0);
+                SerialService.sendCommand("flt_not_en ${_fltNotEn.round()}");
               },
             ),
             XFireSwitchCard(
-              title: "Включение Biquad Notch\nпо осям гироскопа",
-              commandName: "fil_not_en",
-              value: _filNotEn == 1,
+              title: "Адаптивный вес акселерометра\nв Маджвике",
+              commandName: "flt_amb_en",
+              value: _fltAmbEn == 1,
               onChanged: (v) {
-                setState(() => _filNotEn = v ? 1.0 : 0.0);
-                SerialService.sendCommand("fil_not_en ${_filNotEn.round()}");
+                setState(() => _fltAmbEn = v ? 1.0 : 0.0);
+                SerialService.sendCommand("flt_amb_en ${_fltAmbEn.round()}");
               },
             ),
-            XFireSliderCard(title: "Альфа LPF гироскопа\n(0.03..0.35 авто)", commandName: "gyro_filter_alpha", value: _gyroFilterAlpha, min: 0.01, max: 1.0, divisions: 99, unit: "", onChanged: (v) => setState(() => _gyroFilterAlpha = v), onChangeEnd: (v) => SerialService.sendCommand("gyro_filter_alpha $v")),
-            XFireSliderCard(title: "Альфа LPF акселерометра\n(0.03..0.35 авто)", commandName: "acc_filter_alpha", value: _accFilterAlpha, min: 0.01, max: 1.0, divisions: 99, unit: "", onChanged: (v) => setState(() => _accFilterAlpha = v), onChangeEnd: (v) => SerialService.sendCommand("acc_filter_alpha $v")),
-            XFireSliderCard(title: "Центральная частота Notch\n(70..220 Гц авто)", commandName: "filter_notch_freq", value: _filterNotchFreq, min: 20.0, max: 400.0, divisions: 380, unit: "Гц", onChanged: (v) => setState(() => _filterNotchFreq = v), onChangeEnd: (v) => SerialService.sendCommand("filter_notch_freq $v")),
-            XFireSliderCard(title: "Полоса Notch фильтра", commandName: "filter_notch_bw", value: _filterNotchBw, min: 2.0, max: 100.0, divisions: 98, unit: "Гц", onChanged: (v) => setState(() => _filterNotchBw = v), onChangeEnd: (v) => SerialService.sendCommand("filter_notch_bw $v")),
-            XFireSliderCard(title: "Базовый beta Madgwick\n(0.001..1.0)", commandName: "fil_amb", value: _filAmb, min: 0.001, max: 1.0, divisions: 999, unit: "", onChanged: (v) => setState(() => _filAmb = v), onChangeEnd: (v) => SerialService.sendCommand("fil_amb $v")),
-            XFireSliderCard(title: "Мин. beta Madgwick\n(0.0005..fil_amb)", commandName: "fil_amb_min", value: _filAmbMin, min: 0.0005, max: 0.2, divisions: 399, unit: "", onChanged: (v) => setState(() => _filAmbMin = v), onChangeEnd: (v) => SerialService.sendCommand("fil_amb_min $v")),
-            XFireResetCard(hint: "Сброс фильтров\n(default fil)", onReset: _resetFiltersGroup),
+            XFireSliderCard(
+              title: "Alpha ФНЧ гироскопа\n(0.001..1.0, по умолч. 0.10)",
+              commandName: "gyro_filter_alpha",
+              value: _gyroFilterAlpha,
+              min: 0.001,
+              max: 1.0,
+              divisions: 999,
+              unit: "",
+              onChanged: (v) => setState(() => _gyroFilterAlpha = v),
+              onChangeEnd: (v) => SerialService.sendCommand("gyro_filter_alpha ${v.toStringAsFixed(3)}"),
+            ),
+            XFireSliderCard(
+              title: "Alpha ФНЧ акселерометра\n(0.001..1.0, по умолч. 0.10)",
+              commandName: "acc_filter_alpha",
+              value: _accFilterAlpha,
+              min: 0.001,
+              max: 1.0,
+              divisions: 999,
+              unit: "",
+              onChanged: (v) => setState(() => _accFilterAlpha = v),
+              onChangeEnd: (v) => SerialService.sendCommand("acc_filter_alpha ${v.toStringAsFixed(3)}"),
+            ),
+            XFireSliderCard(
+              title: "Частота Notch-фильтра\n(20.0..120.0 Гц, по умолч. 120.0)",
+              commandName: "filter_notch_freq",
+              value: _filterNotchFreq,
+              min: 20.0,
+              max: 120.0,
+              divisions: 1000,
+              unit: "Гц",
+              onChanged: (v) => setState(() => _filterNotchFreq = v),
+              onChangeEnd: (v) => SerialService.sendCommand("filter_notch_freq ${v.toStringAsFixed(1)}"),
+            ),
+            XFireSliderCard(
+              title: "Ширина полосы Notch-фильтра\n(1.0..100.0 Гц, по умолч. 20.0)",
+              commandName: "filter_notch_bw",
+              value: _filterNotchBw,
+              min: 1.0,
+              max: 100.0,
+              divisions: 990,
+              unit: "Гц",
+              onChanged: (v) => setState(() => _filterNotchBw = v),
+              onChangeEnd: (v) => SerialService.sendCommand("filter_notch_bw ${v.toStringAsFixed(1)}"),
+            ),
+            XFireSliderCard(
+              title: "Верхняя граница beta Маджвика\n(0.001..1.0, по умолч. 0.05)",
+              commandName: "flt_amb",
+              value: _fltAmb,
+              min: 0.001,
+              max: 1.0,
+              divisions: 999,
+              unit: "",
+              onChanged: (v) {
+                setState(() {
+                  _fltAmb = v;
+                  if (_fltAmbMin > _fltAmb) _fltAmbMin = _fltAmb;
+                });
+              },
+              onChangeEnd: (v) => SerialService.sendCommand("flt_amb ${v.toStringAsFixed(4)}"),
+            ),
+            XFireSliderCard(
+              title: "Нижняя граница beta Маджвика\n(0.0005..flt_amb, по умолч. 0.003)",
+              commandName: "flt_amb_min",
+              value: safeFltAmbMinVal,
+              min: 0.0005,
+              max: safeFltAmbMinMax,
+              divisions: 995,
+              unit: "",
+              onChanged: (v) => setState(() => _fltAmbMin = v),
+              onChangeEnd: (v) => SerialService.sendCommand("flt_amb_min ${v.toStringAsFixed(4)}"),
+            ),
+            XFireResetCard(hint: "Сброс всех параметров\nк заводским (default)", onReset: _resetFiltersGroup),
             XFireBatchApplyCard(
-              hint: "Пакетная отправка настроек\nфильтров",
+              hint: "Пакетная отправка настроек\nфильтров и Маджвика",
               parameters: [
-                "fil_amb_en ${_filAmbEn.round()}",
-                "fil_lpf_en ${_filLpfEn.round()}",
-                "fil_not_en ${_filNotEn.round()}",
-                "gyro_filter_alpha $_gyroFilterAlpha",
-                "acc_filter_alpha $_accFilterAlpha",
-                "filter_notch_freq $_filterNotchFreq",
-                "filter_notch_bw $_filterNotchBw",
-                "fil_amb $_filAmb",
-                "fil_amb_min $_filAmbMin",
+                "flt_lpf_en ${_fltLpfEn.round()}",
+                "flt_not_en ${_fltNotEn.round()}",
+                "flt_amb_en ${_fltAmbEn.round()}",
+                "gyro_filter_alpha ${_gyroFilterAlpha.toStringAsFixed(3)}",
+                "acc_filter_alpha ${_accFilterAlpha.toStringAsFixed(3)}",
+                "filter_notch_freq ${_filterNotchFreq.toStringAsFixed(1)}",
+                "filter_notch_bw ${_filterNotchBw.toStringAsFixed(1)}",
+                "flt_amb ${_fltAmb.toStringAsFixed(4)}",
+                "flt_amb_min ${safeFltAmbMinVal.toStringAsFixed(4)}",
               ],
             ),
           ],
         ),
+
+        // 11. PID-РЕГУЛЯТОРЫ
         XFireExpansionCard(
-          title: "ПИД-коэффициенты\n(Roll, Pitch, Yaw, Vz)",
+          title: "PID-регуляторы\n(Roll, Pitch, Yaw, Vz)",
           subtitle: "Настройки Kp, Ki, Kd для осей\nRoll, Pitch, Yaw и Vz",
           icon: Icons.tune,
           children: [
             PidAxisCardWidget(
-              axisName: "Roll Axis (Rate)",
+              axisName: "Roll Axis",
               kpCmd: "roll_kp",
               kiCmd: "roll_ki",
               kdCmd: "roll_kd",
@@ -1830,11 +2111,11 @@ class _SettingsTabState extends State<SettingsTab> {
               ki: _rollKi,
               kd: _rollKd,
               kpMin: 0.0,
-              kpMax: 5.0,
+              kpMax: 10.0,
               kiMin: 0.0,
-              kiMax: 1.0,
+              kiMax: 5.0,
               kdMin: 0.0,
-              kdMax: 0.5,
+              kdMax: 1.0,
               kpDecimals: 3,
               kiDecimals: 3,
               kdDecimals: 3,
@@ -1850,7 +2131,7 @@ class _SettingsTabState extends State<SettingsTab> {
               },
             ),
             PidAxisCardWidget(
-              axisName: "Pitch Axis (Rate)",
+              axisName: "Pitch Axis",
               kpCmd: "pitch_kp",
               kiCmd: "pitch_ki",
               kdCmd: "pitch_kd",
@@ -1858,11 +2139,11 @@ class _SettingsTabState extends State<SettingsTab> {
               ki: _pitchKi,
               kd: _pitchKd,
               kpMin: 0.0,
-              kpMax: 5.0,
+              kpMax: 10.0,
               kiMin: 0.0,
-              kiMax: 1.0,
+              kiMax: 5.0,
               kdMin: 0.0,
-              kdMax: 0.5,
+              kdMax: 1.0,
               kpDecimals: 3,
               kiDecimals: 3,
               kdDecimals: 3,
@@ -1878,7 +2159,7 @@ class _SettingsTabState extends State<SettingsTab> {
               },
             ),
             PidAxisCardWidget(
-              axisName: "Yaw Axis (Rate)",
+              axisName: "Yaw Axis",
               kpCmd: "yaw_kp",
               kiCmd: "yaw_ki",
               kdCmd: "yaw_kd",
@@ -1886,11 +2167,11 @@ class _SettingsTabState extends State<SettingsTab> {
               ki: _yawKi,
               kd: _yawKd,
               kpMin: 0.0,
-              kpMax: 5.0,
+              kpMax: 10.0,
               kiMin: 0.0,
-              kiMax: 1.0,
+              kiMax: 5.0,
               kdMin: 0.0,
-              kdMax: 0.5,
+              kdMax: 1.0,
               kpDecimals: 3,
               kiDecimals: 3,
               kdDecimals: 3,
@@ -1914,11 +2195,11 @@ class _SettingsTabState extends State<SettingsTab> {
               ki: _vzKi,
               kd: _vzKd,
               kpMin: 0.0,
-              kpMax: 30.0,
+              kpMax: 50.0,
               kiMin: 0.0,
-              kiMax: 10.0,
+              kiMax: 20.0,
               kdMin: 0.0,
-              kdMax: 5.0,
+              kdMax: 10.0,
               kpDecimals: 2,
               kiDecimals: 2,
               kdDecimals: 2,
@@ -1933,7 +2214,7 @@ class _SettingsTabState extends State<SettingsTab> {
                 SerialService.sendCommand("vz_kd $d");
               },
             ),
-            XFireResetCard(hint: "Сброс ПИД-коэффициентов\n(default pid)", onReset: _resetPidGroup),
+            XFireResetCard(hint: "Сброс всех параметров\nк заводским (default)", onReset: _resetPidGroup),
             XFireBatchApplyCard(
               hint: "Пакетная отправка ПИД-коэффициентов\nосей",
               parameters: [
@@ -1953,23 +2234,37 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
           ],
         ),
+
+        // 12. СТЕНДОВЫЕ ТЕСТЫ И АВТОКАЛИБРОВКА
         XFireExpansionCard(
-          title: "Тесты моторов и PID",
-          subtitle: "Проверка моторов (25%)\nи стабилизации PID (25%)",
+          title: "Тесты моторов, PID и автокалибровка",
+          subtitle: "test_mot (макс. 250), test_pid (макс. 120)\nи auto_cal / auto_stop",
           icon: Icons.rule,
           children: [
             XFireActionCard(
-              title: "Тест моторов (25%)",
-              commandName: "test_motor",
-              onTap: () => _runCalOrTest("test_motor", "Внимание", "Тест моторов (25%)\nактивирован!", isWarning: true),
+              title: "Стендовый тест моторов (10 сек, <=250)",
+              commandName: "test_mot",
+              onTap: () => _runCalOrTest("test_mot", "Внимание: test_mot", "10-секундный тест плавного вращения\nмоторов (тяга <=250, только в disarmed).", isWarning: true),
             ),
             XFireActionCard(
-              title: "Тест PID (25%)",
+              title: "Стендовый тест PID по гироскопу (<=120)",
               commandName: "test_pid",
-              onTap: () => _runCalOrTest("test_pid", "Тест PID", "Тест PID активирован."),
+              onTap: () => _runCalOrTest("test_pid", "Тест PID (test_pid)", "10-секундный тест угловых PID\nс ограничением выхода до 120 (disarmed)."),
+            ),
+            XFireActionCard(
+              title: "Автоматический взлёт, калибровка и посадка",
+              commandName: "auto_cal",
+              onTap: () => _runCalOrTest("auto_cal", "Автокалибровка (auto_cal)", "Запуск авто-взлёта, калибровки висения/PID\nи посадки по лидару (нужны IMU и лидар, disarmed).", isWarning: true),
+            ),
+            XFireActionCard(
+              title: "Аварийная остановка автокалибровки",
+              commandName: "auto_stop",
+              onTap: () => _runCalOrTest("auto_stop", "Остановка (auto_stop)", "Принудительная остановка автокалибровки\nи отключение моторов.", isWarning: true),
             ),
           ],
         ),
+
+        // 13. ТЕЛЕМЕТРИЯ
         XFireExpansionCard(
           title: "Телеметрия",
           subtitle: "Авиогоризонт, HUD и показания\nгироскопа / акселерометра",
@@ -2085,11 +2380,23 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
           ],
         ),
+
+        // 14. ПРОШИВКА И СОХРАНЕНИЕ ВО FLASH
         XFireExpansionCard(
-          title: "Прошивка полетного контроллера",
-          subtitle: "Обновление прошивки STM32\n(нажмите для прошивки)",
+          title: "Прошивка и память Flash",
+          subtitle: "Сохранение в ОЗУ->Flash (save),\nсводка (info) и прошивка STM32",
           icon: Icons.memory,
           children: [
+            XFireActionCard(
+              title: "Сохранить конфигурацию во Flash",
+              commandName: "save",
+              onTap: () => _runCalOrTest("save", "Сохранение во Flash", "Запись текущей конфигурации из ОЗУ\nво Flash (работает в disarmed и вне auto_cal)."),
+            ),
+            XFireActionCard(
+              title: "Сводка состояния и конфига",
+              commandName: "info",
+              onTap: () => _runCalOrTest("info", "Сводка системы (info)", "Запрошен вывод INFO, CFG_FM, CFG_RC,\nCFG_FLT, CFG_PID, CFG_BAT и CFG_HW."),
+            ),
             XFireFlashCard(
               title: "Прошить полетный контроллер\n(v3.27)",
               targetName: "Полетный контроллер FC",
@@ -2109,7 +2416,7 @@ class _SettingsTabState extends State<SettingsTab> {
           ],
         ),
         XFireResetCard(
-          hint: "Общий сброс всех настроек\nполётного контроллера (default)",
+          hint: "Сброс всех параметров к заводским\nи сохранение во Flash (default)",
           onReset: _resetAllFcSettings,
         ),
         const SizedBox(height: 24),
@@ -2728,26 +3035,32 @@ class _TerminalTabState extends State<TerminalTab> {
   List<String> _suggestions = [];
 
   final List<String> _cliCommands = [
-    "info", "mon", "stop", "config", "save", "default", "get", "set",
-    "default hw", "default bat", "default fl", "default fs", "default fil", "default pid", "default vtx",
-    "default rtx_common", "default rtx_primary", "default rtx_backup", "default dipole", "default kharchenko",
-    "esc_protocol", "imu_align", "com_align",
-    "imu_id", "bar_id", "com_id", "lid_id",
-    "baro_en", "com_en", "lidar_en",
-    "lidar_filter_alpha", "lidar_offset_m",
-    "vtx_en", "vtx_prot", "vtx_mhz", "vtx_mw",
-    "mag_bias_x", "mag_bias_y", "mag_bias_z",
-    "bat_voltage_scale", "bat_filter_alpha", "curr_zero_offset_a", "curr_scale",
-    "fl_mode", "fl_roll_max", "fl_pitch_max", "fl_vz_speed_max",
-    "rc_rate", "rc_super_expo", "rc_stick_expo", "rc_yaw_rate", "rc_yaw_super_expo", "rc_yaw_expo",
+    "info", "mon", "stop", "config", "save", "default", "help",
+    "auto_cal", "auto_stop",
+    "fm_mode", "fm_roll_max", "fm_pitch_max", "fm_vz_speed_max",
+    "esc_prot", "flt_esc_limit",
+    "rc_rate", "rc_super_expo", "rc_stick_expo",
+    "rc_yaw_rate", "rc_yaw_super_expo", "rc_yaw_expo",
     "rc_deadband", "rc_horizon_transition", "rc_filter_smoothing",
-    "fs_bat_en", "fs_rtx_en", "fs_vz_speed", "bat_fs_v",
-    "fil_amb_en", "fil_lpf_en", "fil_not_en",
-    "gyro_filter_alpha", "acc_filter_alpha", "filter_notch_freq", "filter_notch_bw",
-    "fil_amb", "fil_amb_min",
-    "roll_kp", "roll_ki", "roll_kd", "pitch_kp", "pitch_ki", "pitch_kd", "yaw_kp", "yaw_ki", "yaw_kd", "vz_kp", "vz_ki", "vz_kd",
-    "cal_gyro", "cal_acc", "cal_baro", "cal_lid", "cal_mag",
-    "test_mpu", "test_sx", "test_lidar", "test_vtx", "test_motor", "test_pid", "test_rc", "test_rc_can",
+    "flt_lpf_en", "flt_not_en", "flt_amb_en",
+    "gyro_filter_alpha", "acc_filter_alpha",
+    "filter_notch_freq", "filter_notch_bw",
+    "flt_amb", "flt_amb_min",
+    "imu_id", "imu_align",
+    "baro_en", "bar_id",
+    "com_en", "com_id", "com_align",
+    "mag_bias_x", "mag_bias_y", "mag_bias_z",
+    "lidar_en", "lid_id", "lidar_filter_alpha", "lidar_offset_m",
+    "bat_scale_v", "bat_v_max", "bat_comp_en", "bat_filter_alpha",
+    "bat_offset_a", "bat_scale_a", "bat_fs_v",
+    "fs_bat_en", "fs_rtx_en", "fs_vz_speed",
+    "roll_kp", "roll_ki", "roll_kd",
+    "pitch_kp", "pitch_ki", "pitch_kd",
+    "yaw_kp", "yaw_ki", "yaw_kd",
+    "vz_kp", "vz_ki", "vz_kd",
+    "vtx_en", "vtx_prot", "vtx_mhz", "vtx_mw",
+    "cal_imu", "cal_gyro", "cal_acc", "cal_mag", "cal_bar", "cal_lid", "cal_bat", "cal_curr",
+    "test_imu", "test_mag", "test_bar", "test_lid", "test_bat", "test_rtx", "test_vtx", "test_mot", "test_pid",
     "osd_en", "rx58_en", "rx58_ch",
     "vtx_ch0", "vtx_ch1", "vtx_ch2", "vtx_ch3",
     "vtx_rssi_th", "vtx_rssi_hyst", "vtx_auto_start", "vtx_btn_mode",
