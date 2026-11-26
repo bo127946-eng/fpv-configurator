@@ -291,7 +291,7 @@ class DfuService {
 
   static Future<void> flashF401({
     Uint8List? bytes,
-    String assetPath = 'assets/firmware_f401.bin',
+    String assetPath = 'assets/f401.bin',
     int startAddress = 0x08000000,
     void Function(String status, double progress)? onProgress,
   }) async {
