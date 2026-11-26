@@ -27,7 +27,7 @@ class MyApp extends StatelessWidget {
           error: Colors.redAccent.shade700,
         ),
         scaffoldBackgroundColor: const Color(0xFF0A0A0A),
-        cardTheme: CardTheme(
+        cardTheme: CardThemeData(
           color: const Color(0xFF1C1C1E),
           elevation: 2,
           margin: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 8),
@@ -2800,7 +2800,6 @@ class _SettingsTabState extends State<SettingsTab> {
             StreamBuilder<void>(
               stream: SerialService.telemetryController.stream,
               builder: (context, snapshot) {
-                final double rollDeg = SerialService.gyroRoll * 57.2958;
                 final double pitchDeg = SerialService.gyroPitch * 57.2958;
                 double yawDeg = SerialService.gyroYaw * 57.2958;
                 while (yawDeg > 180) yawDeg -= 360;
@@ -3030,7 +3029,7 @@ class _SettingsTabState extends State<SettingsTab> {
                   await SerialService.disconnect();
                 }
                 await DfuService.flashF401(
-                  assetPath: 'assets/f401.bin',
+                  assetPath: 'assets/fc401.bin',
                   startAddress: 0x08000000,
                   onProgress: onProgress,
                 );
