@@ -303,9 +303,10 @@ class _MainContainerState extends State<MainContainer> {
             separatorBuilder: (_, __) => const Divider(color: Colors.white12),
             itemBuilder: (_, index) {
               final d = devices[index];
-              final label = (d.productName != null && d.productName!.trim().isNotEmpty)
-                  ? "${d.productName} (${d.deviceName})"
-                  : d.deviceName;
+              final label =
+                  (d.productName != null && d.productName!.trim().isNotEmpty)
+                      ? "${d.productName} (${d.deviceName})"
+                      : d.deviceName;
               return ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.usb, color: Colors.blueAccent),
@@ -468,7 +469,7 @@ class _MainContainerState extends State<MainContainer> {
                   if (val < _tabs.length) {
                     setState(() => _currentIndex = val);
                   } else {
-                    _toggleUsbConnectionFromDropdown();
+                    unawaited(_toggleUsbConnectionFromDropdown());
                   }
                 },
               ),
@@ -820,8 +821,11 @@ class _ProfilesTabState extends State<ProfilesTab> {
     final double specificPowerWPerKg = 130.0 *
         (math.pow(9.0 / _propSize, 0.85).toDouble()) *
         (math.pow(_motorKv / 900.0, 0.1).toDouble());
-    final double hoverPowerMech =
-        totalWeightKg * specificPowerWPerKg * math.sqrt(hoverThrustRatio) * pitchFactor * bladeFactor;
+    final double hoverPowerMech = totalWeightKg *
+        specificPowerWPerKg *
+        math.sqrt(hoverThrustRatio) *
+        pitchFactor *
+        bladeFactor;
     final double pEscIn = hoverPowerMech / (etaMotor * etaEsc);
 
     final double a = rInt;
@@ -1125,7 +1129,11 @@ class _ProfilesTabState extends State<ProfilesTab> {
                   Colors.white,
                 ),
                 const Divider(color: Colors.white12, height: 16),
-                _calcResultRow("Ток висения\n(суммарный):", "${optimal['hover_amps']} А", optimal['color_hover_amps']),
+                _calcResultRow(
+                  "Ток висения\n(суммарный):",
+                  "${optimal['hover_amps']} А",
+                  optimal['color_hover_amps'],
+                ),
                 _calcResultRow(
                   "Напряжение свежего аккума\n(4.2В) под нагрузкой:",
                   "${optimal['fresh_load_voltage']} В\n(${optimal['fresh_load_v_cell']} В/б)",
@@ -1397,7 +1405,6 @@ class _SettingsTabState extends State<SettingsTab> {
       _imuId = 0;
       _imuAlign = 0;
     });
-    _sendIfConnected("default");
   }
 
   void _resetCompassGroup() {
@@ -1409,7 +1416,6 @@ class _SettingsTabState extends State<SettingsTab> {
       _magBiasY = 0.0;
       _magBiasZ = 0.0;
     });
-    _sendIfConnected("default");
   }
 
   void _resetBaroGroup() {
@@ -1417,7 +1423,6 @@ class _SettingsTabState extends State<SettingsTab> {
       _baroEn = 1;
       _barId = 0;
     });
-    _sendIfConnected("default");
   }
 
   void _resetLidarGroup() {
@@ -1427,7 +1432,6 @@ class _SettingsTabState extends State<SettingsTab> {
       _lidarFilterAlpha = 0.15;
       _lidarOffsetM = 0.0;
     });
-    _sendIfConnected("default");
   }
 
   void _resetVtxGroup() {
@@ -1437,7 +1441,6 @@ class _SettingsTabState extends State<SettingsTab> {
       _vtxMhz = 5658;
       _vtxMw = 25;
     });
-    _sendIfConnected("default");
   }
 
   void _resetBatteryGroup() {
@@ -1449,7 +1452,6 @@ class _SettingsTabState extends State<SettingsTab> {
       _batOffsetA = 0.0;
       _batScaleA = 1.0;
     });
-    _sendIfConnected("default");
   }
 
   void _resetFlightRcGroup() {
@@ -1468,7 +1470,6 @@ class _SettingsTabState extends State<SettingsTab> {
       _rcHorizonTransition = 0.75;
       _rcFilterSmoothing = 0.35;
     });
-    _sendIfConnected("default");
   }
 
   void _resetFailsafeGroup() {
@@ -1478,7 +1479,6 @@ class _SettingsTabState extends State<SettingsTab> {
       _fsVzSpeed = 0.5;
       _batFsV = 13.8;
     });
-    _sendIfConnected("default");
   }
 
   void _resetFiltersGroup() {
@@ -1493,7 +1493,6 @@ class _SettingsTabState extends State<SettingsTab> {
       _fltAmb = 0.05;
       _fltAmbMin = 0.003;
     });
-    _sendIfConnected("default");
   }
 
   void _resetPidGroup() {
@@ -1511,7 +1510,6 @@ class _SettingsTabState extends State<SettingsTab> {
       _vzKi = 1.2;
       _vzKd = 0.30;
     });
-    _sendIfConnected("default");
   }
 
   void _resetAllFcSettings() {
@@ -1734,7 +1732,7 @@ class _SettingsTabState extends State<SettingsTab> {
               ),
             ),
             XFireResetCard(
-              hint: "Сброс всех параметров\nк заводским (default)",
+              hint: "Сброс локальных значений\nблока IMU",
               onReset: _resetImuGroup,
             ),
             XFireBatchApplyCard(
@@ -1842,7 +1840,7 @@ class _SettingsTabState extends State<SettingsTab> {
               ),
             ),
             XFireResetCard(
-              hint: "Сброс всех параметров\nк заводским (default)",
+              hint: "Сброс локальных значений\nблока компаса",
               onReset: _resetCompassGroup,
             ),
             XFireBatchApplyCard(
@@ -1910,7 +1908,7 @@ class _SettingsTabState extends State<SettingsTab> {
               ),
             ),
             XFireResetCard(
-              hint: "Сброс всех параметров\nк заводским (default)",
+              hint: "Сброс локальных значений\nблока барометра",
               onReset: _resetBaroGroup,
             ),
             XFireBatchApplyCard(
@@ -1995,7 +1993,7 @@ class _SettingsTabState extends State<SettingsTab> {
               ),
             ),
             XFireResetCard(
-              hint: "Сброс всех параметров\nк заводским (default)",
+              hint: "Сброс локальных значений\nблока лидара",
               onReset: _resetLidarGroup,
             ),
             XFireBatchApplyCard(
@@ -2069,7 +2067,7 @@ class _SettingsTabState extends State<SettingsTab> {
               ),
             ),
             XFireResetCard(
-              hint: "Сброс всех параметров\nк заводским (default)",
+              hint: "Сброс локальных значений\nблока VTX",
               onReset: _resetVtxGroup,
             ),
             XFireBatchApplyCard(
@@ -2216,7 +2214,7 @@ class _SettingsTabState extends State<SettingsTab> {
               ),
             ),
             XFireResetCard(
-              hint: "Сброс всех параметров\nк заводским (default)",
+              hint: "Сброс локальных значений\nблока питания",
               onReset: _resetBatteryGroup,
             ),
             XFireBatchApplyCard(
@@ -2394,7 +2392,7 @@ class _SettingsTabState extends State<SettingsTab> {
               ),
             ),
             XFireResetCard(
-              hint: "Сброс всех параметров\nк заводским (default)",
+              hint: "Сброс локальных значений\nрежимов полёта и RC",
               onReset: _resetFlightRcGroup,
             ),
             XFireBatchApplyCard(
@@ -2465,7 +2463,7 @@ class _SettingsTabState extends State<SettingsTab> {
                   _sendIfConnected("fs_vz_speed ${v.toStringAsFixed(2)}"),
             ),
             XFireResetCard(
-              hint: "Сброс всех параметров\nк заводским (default)",
+              hint: "Сброс локальных значений\nблока Failsafe",
               onReset: _resetFailsafeGroup,
             ),
             XFireBatchApplyCard(
@@ -2589,7 +2587,7 @@ class _SettingsTabState extends State<SettingsTab> {
                   _sendIfConnected("flt_amb_min ${v.toStringAsFixed(4)}"),
             ),
             XFireResetCard(
-              hint: "Сброс всех параметров\nк заводским (default)",
+              hint: "Сброс локальных значений\nблока фильтров",
               onReset: _resetFiltersGroup,
             ),
             XFireBatchApplyCard(
@@ -2726,7 +2724,7 @@ class _SettingsTabState extends State<SettingsTab> {
               },
             ),
             XFireResetCard(
-              hint: "Сброс всех параметров\nк заводским (default)",
+              hint: "Сброс локальных значений\nблока PID",
               onReset: _resetPidGroup,
             ),
             XFireBatchApplyCard(
@@ -3027,8 +3025,12 @@ class _SettingsTabState extends State<SettingsTab> {
               title: "Прошить STM32F401 по DFU\n(v3.27)",
               targetName: "Полетный контроллер STM32F401 (DFU)",
               onFlash: (onProgress) async {
+                if (SerialService.isConnected) {
+                  onProgress("Закрытие USB Serial перед DFU...", 0.01);
+                  await SerialService.disconnect();
+                }
                 await DfuService.flashF401(
-                  assetPath: 'assets/firmware_f401.bin',
+                  assetPath: 'assets/f401.bin',
                   startAddress: 0x08000000,
                   onProgress: onProgress,
                 );
@@ -3437,7 +3439,6 @@ class _RadioTabState extends State<RadioTab> {
       _rtxSyncWordHex = "0x12";
       _rtxIqInv = false;
     });
-    _sendIfConnected("default rtx_common");
   }
 
   void _resetPrimary() {
@@ -3448,7 +3449,6 @@ class _RadioTabState extends State<RadioTab> {
       _priCr = 1;
       _priPower = 14;
     });
-    _sendIfConnected("default rtx_primary");
   }
 
   void _resetBackup() {
@@ -3459,7 +3459,6 @@ class _RadioTabState extends State<RadioTab> {
       _bakCr = 2;
       _bakPower = 17;
     });
-    _sendIfConnected("default rtx_backup");
   }
 
   void _resetAllRadio() {
@@ -3473,8 +3472,6 @@ class _RadioTabState extends State<RadioTab> {
       _dipoleTopWireSqMm = 1.0;
       _kharchenkoWireSqMm = 2.0;
     });
-    _sendIfConnected("default dipole");
-    _sendIfConnected("default kharchenko");
     _sendIfConnected("default");
   }
 
@@ -3585,7 +3582,7 @@ class _RadioTabState extends State<RadioTab> {
               },
             ),
             XFireResetCard(
-              hint: "Сброс общих настроек\n(default rtx_common)",
+              hint: "Сброс локальных общих\nнастроек RTX",
               onReset: _resetCommon,
             ),
             XFireBatchApplyCard(
@@ -3679,7 +3676,7 @@ class _RadioTabState extends State<RadioTab> {
               ),
             ),
             XFireResetCard(
-              hint: "Сброс основного канала\n(default rtx_primary)",
+              hint: "Сброс локальных настроек\nосновного канала",
               onReset: _resetPrimary,
             ),
             XFireBatchApplyCard(
@@ -3689,365 +3686,4 @@ class _RadioTabState extends State<RadioTab> {
                 "rtx_pri_sf ${_priSf.round()}",
                 "rtx_pri_bw ${_priBw.round()}",
                 "rtx_pri_cr ${_priCr.round()}",
-                "rtx_pri_power ${_priPower.round()}",
-              ],
-            ),
-          ],
-        ),
-        XFireExpansionCard(
-          title: "Резервный канал связи\n(Backup)",
-          subtitle: "Канал, SF6..12, BW 0..9,\nCR 1..4 и мощность -9..22 дБм",
-          icon: Icons.shield_rounded,
-          children: [
-            XFireSliderCard(
-              title: "Номер резервного канала",
-              commandName: "rtx_bak_chan",
-              value: _bakChan,
-              min: 0,
-              max: 255,
-              divisions: 255,
-              unit: "",
-              onChanged: (v) => setState(() => _bakChan = v),
-              onChangeEnd: (v) => _sendIfConnected("rtx_bak_chan ${v.round()}"),
-            ),
-            XFireSliderCard(
-              title: "Spreading Factor\n(SF6..SF12)",
-              commandName: "rtx_bak_sf",
-              value: _bakSf,
-              min: 6,
-              max: 12,
-              divisions: 6,
-              unit: "",
-              onChanged: (v) => setState(() => _bakSf = v),
-              onChangeEnd: (v) => _sendIfConnected("rtx_bak_sf ${v.round()}"),
-            ),
-            XFireSliderCard(
-              title: "Индекс полосы BW\n(0..9)",
-              commandName: "rtx_bak_bw",
-              value: _bakBw,
-              min: 0,
-              max: 9,
-              divisions: 9,
-              unit: "",
-              onChanged: (v) => setState(() => _bakBw = v),
-              onChangeEnd: (v) => _sendIfConnected("rtx_bak_bw ${v.round()}"),
-            ),
-            XFireSliderCard(
-              title: "Coding Rate\n(1: 4/5 .. 4: 4/8)",
-              commandName: "rtx_bak_cr",
-              value: _bakCr,
-              min: 1,
-              max: 4,
-              divisions: 3,
-              unit: "",
-              onChanged: (v) => setState(() => _bakCr = v),
-              onChangeEnd: (v) => _sendIfConnected("rtx_bak_cr ${v.round()}"),
-            ),
-            XFireSliderCard(
-              title: "Мощность передатчика\n(-9..22 дБм)",
-              commandName: "rtx_bak_power",
-              value: _bakPower,
-              min: -9,
-              max: 22,
-              divisions: 31,
-              unit: "дБм",
-              onChanged: (v) => setState(() => _bakPower = v),
-              onChangeEnd: (v) => _sendIfConnected("rtx_bak_power ${v.round()}"),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 6.0),
-              child: RtxLinkCalculatorCard(
-                title: "Оценка резервного канала",
-                themeColor: Colors.greenAccent,
-                currentFreqMhz: _bakFreqMhz,
-                sensitivity: bakResults['sensitivity'],
-                distKm: bakResults['distanceKm'],
-                bitRate: bakResults['bitRate'],
-                sensitivityProgress:
-                    ((bakResults['sensitivity'] - (-140.0)) / 40.0).clamp(0.0, 1.0),
-                bitRateProgress: (bakResults['bitRate'] / 30000.0).clamp(0.0, 1.0),
-              ),
-            ),
-            XFireResetCard(
-              hint: "Сброс резервного канала\n(default rtx_backup)",
-              onReset: _resetBackup,
-            ),
-            XFireBatchApplyCard(
-              hint: "Пакетная отправка резервного\nканала",
-              parameters: [
-                "rtx_bak_chan ${_bakChan.round()}",
-                "rtx_bak_sf ${_bakSf.round()}",
-                "rtx_bak_bw ${_bakBw.round()}",
-                "rtx_bak_cr ${_bakCr.round()}",
-                "rtx_bak_power ${_bakPower.round()}",
-              ],
-            ),
-          ],
-        ),
-        DipoleAntennaBlock(
-          hasProtectiveSleeve: _hasProtectiveSleeve,
-          sleeveThicknessMm: _sleeveThicknessMm,
-          dipoleTubeDiameterMm: _dipoleTubeDiameterMm,
-          dipoleTopWireSqMm: _dipoleTopWireSqMm,
-          antResults: antResults,
-          onSleeveToggle: (v) => setState(() => _hasProtectiveSleeve = v),
-          onSleeveThickChanged: (v) => setState(() => _sleeveThicknessMm = v),
-          onTubeDiamChanged: (v) => setState(() => _dipoleTubeDiameterMm = v),
-          onTopWireChanged: (v) => setState(() => _dipoleTopWireSqMm = v),
-        ),
-        KharchenkoAntennaBlock(
-          kharchenkoWireSqMm: _kharchenkoWireSqMm,
-          antResults: antResults,
-          onKharcChanged: (v) => setState(() => _kharchenkoWireSqMm = v),
-        ),
-        XFireResetCard(
-          hint: "Общий сброс всех настроек\nрадиомодуля и антенн (default)",
-          onReset: _resetAllRadio,
-        ),
-        const SizedBox(height: 24),
-      ],
-    );
-  }
-}
-
-// ==========================================
-// ВКЛАДКА 4: ТЕРМИНАЛ CLI
-// ==========================================
-class TerminalTab extends StatefulWidget {
-  const TerminalTab({super.key});
-
-  @override
-  State<TerminalTab> createState() => _TerminalTabState();
-}
-
-class _TerminalTabState extends State<TerminalTab> {
-  late StreamSubscription<String> _sub;
-  String _displayLog = "";
-  final TextEditingController _controller = TextEditingController();
-  final FocusNode _focusNode = FocusNode();
-  List<String> _suggestions = [];
-
-  final List<String> _cliCommands = [
-    "info", "mon", "stop", "config", "save", "default", "help",
-    "auto_cal", "auto_stop",
-    "fm_mode", "fm_roll_max", "fm_pitch_max", "fm_vz_speed_max",
-    "esc_prot", "flt_esc_limit",
-    "rc_rate", "rc_super_expo", "rc_stick_expo",
-    "rc_yaw_rate", "rc_yaw_super_expo", "rc_yaw_expo",
-    "rc_deadband", "rc_horizon_transition", "rc_filter_smoothing",
-    "flt_lpf_en", "flt_not_en", "flt_amb_en",
-    "gyro_filter_alpha", "acc_filter_alpha",
-    "filter_notch_freq", "filter_notch_bw",
-    "flt_amb", "flt_amb_min",
-    "imu_id", "imu_align",
-    "baro_en", "bar_id",
-    "com_en", "com_id", "com_align",
-    "mag_bias_x", "mag_bias_y", "mag_bias_z",
-    "lidar_en", "lid_id", "lidar_filter_alpha", "lidar_offset_m",
-    "bat_scale_v", "bat_v_max", "bat_comp_en", "bat_filter_alpha",
-    "bat_offset_a", "bat_scale_a", "bat_fs_v",
-    "fs_bat_en", "fs_rtx_en", "fs_vz_speed",
-    "roll_kp", "roll_ki", "roll_kd",
-    "pitch_kp", "pitch_ki", "pitch_kd",
-    "yaw_kp", "yaw_ki", "yaw_kd",
-    "vz_kp", "vz_ki", "vz_kd",
-    "vtx_en", "vtx_prot", "vtx_mhz", "vtx_mw",
-    "cal_imu", "cal_gyro", "cal_acc", "cal_mag", "cal_bar", "cal_lid", "cal_bat", "cal_curr",
-    "test_imu", "test_mag", "test_bar", "test_lid", "test_bat", "test_rtx", "test_vtx", "test_mot", "test_pid",
-    "osd_en", "rx58_en", "rx58_ch",
-    "vtx_ch0", "vtx_ch1", "vtx_ch2", "vtx_ch3",
-    "vtx_rssi_th", "vtx_rssi_hyst", "vtx_auto_start", "vtx_btn_mode",
-    "rtx_prot_id", "rtx_id", "rtx_en", "rtx_band", "rtx_hw_crc_en", "rtx_addr_en", "rtx_addr", "rtx_sync_word", "rtx_iq_inv",
-    "rtx_pri_chan", "rtx_pri_sf", "rtx_pri_bw", "rtx_pri_cr", "rtx_pri_power",
-    "rtx_bak_chan", "rtx_bak_sf", "rtx_bak_bw", "rtx_bak_cr", "rtx_bak_power",
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    _displayLog = SerialService.terminalLog;
-    _sub = SerialService.logController.stream.listen((log) {
-      if (mounted) setState(() => _displayLog = log);
-    });
-    _controller.addListener(_onTextChanged);
-  }
-
-  void _onTextChanged() {
-    final text = _controller.text.trim();
-    setState(() {
-      if (text.isEmpty) {
-        _suggestions = [];
-      } else {
-        _suggestions = _cliCommands
-            .where((cmd) => cmd.toLowerCase().contains(text.toLowerCase()))
-            .toList();
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _sub.cancel();
-    _controller.dispose();
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  void _submitCommand(String val) {
-    final cmd = val.trim();
-    if (cmd.isNotEmpty) {
-      unawaited(SerialService.sendCommand(cmd));
-      _controller.clear();
-      setState(() => _suggestions = []);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Column(
-        children: [
-          Expanded(
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 13, vertical: 4),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.black,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withOpacity(0.06)),
-              ),
-              child: SingleChildScrollView(
-                reverse: true,
-                child: Text(
-                  _displayLog,
-                  style: const TextStyle(
-                    fontFamily: 'monospace',
-                    color: Colors.greenAccent,
-                    fontSize: 17,
-                    height: 1.4,
-                  ),
-                  softWrap: true,
-                ),
-              ),
-            ),
-          ),
-          if (_suggestions.isNotEmpty)
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 13),
-              constraints: const BoxConstraints(maxHeight: 170),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1C1C1E),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white12),
-              ),
-              child: ListView.builder(
-                padding: EdgeInsets.zero,
-                shrinkWrap: true,
-                itemCount: _suggestions.length,
-                itemBuilder: (context, index) {
-                  final item = _suggestions[index];
-                  return InkWell(
-                    onTap: () {
-                      _controller.text = item;
-                      _controller.selection =
-                          TextSelection.fromPosition(TextPosition(offset: item.length));
-                      setState(() => _suggestions = []);
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14.0,
-                        vertical: 11.0,
-                      ),
-                      child: Text(
-                        item,
-                        style: const TextStyle(
-                          fontFamily: 'monospace',
-                          fontSize: 17,
-                          color: Colors.amberAccent,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        softWrap: true,
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          const SizedBox(height: 4),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 8.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    focusNode: _focusNode,
-                    maxLines: null,
-                    style: const TextStyle(fontSize: 18, fontFamily: 'monospace'),
-                    decoration: const InputDecoration(
-                      hintText: "Enter CLI command...",
-                      hintStyle: TextStyle(fontSize: 15),
-                    ),
-                    onSubmitted: _submitCommand,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  height: 48,
-                  width: 48,
-                  child: IconButton.filled(
-                    onPressed: () => unawaited(SerialService.sendCommand("info")),
-                    icon: const Icon(Icons.info_outline, size: 22, color: Colors.white),
-                    tooltip: "Read Config Info",
-                    style: IconButton.styleFrom(
-                      backgroundColor: Colors.blueAccent,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                SizedBox(
-                  height: 48,
-                  width: 48,
-                  child: IconButton.filled(
-                    onPressed: () {
-                      SerialService.terminalLog = "";
-                      SerialService.appendLog("");
-                    },
-                    icon: const Icon(
-                      Icons.cleaning_services,
-                      size: 22,
-                      color: Colors.white,
-                    ),
-                    tooltip: "Clear Log",
-                    style: IconButton.styleFrom(
-                      backgroundColor: Colors.blueAccent,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                IconButton.filled(
-                  icon: const Icon(Icons.send_rounded, size: 22, color: Colors.white),
-                  onPressed: () => _submitCommand(_controller.text),
-                  style: IconButton.styleFrom(
-                    backgroundColor: Colors.blueAccent,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.all(13),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+                "
