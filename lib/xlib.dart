@@ -58,8 +58,6 @@ class SerialService {
     }
   }
 
-  /// Гарантированно открывает только одно подключение к выбранному устройству.
-  /// Если уже было открыто соединение — предварительно закрывает его.
   static Future<bool> connectDevice(
     UsbDevice device, {
     int baudRate = 115200,
@@ -77,7 +75,6 @@ class SerialService {
         return false;
       }
 
-      // Всегда закрываем любое предыдущее соединение перед новым open()
       await _closeInternal(statusMessage: "Reconnecting USB...");
 
       UsbPort? port;
@@ -214,7 +211,7 @@ class SerialService {
       lastResponse = lines.last;
     }
 
-    appendLog(""); // обновляет подписчиков logController без дублирования текста
+    appendLog("");
     _notifyTelemetry();
   }
 
@@ -478,7 +475,7 @@ class XFireActionCard extends StatelessWidget {
                   Text(
                     commandName,
                     style: TextStyle(
-                      color: Colors.amberAccent.withValues(alpha: 0.9),
+                      color: Colors.amberAccent.withOpacity(0.9),
                       fontSize: 14,
                       fontFamily: 'monospace',
                       fontWeight: FontWeight.w600,
@@ -702,7 +699,7 @@ class _XFireTextHexCardState extends State<XFireTextHexCard> {
           Text(
             widget.commandName,
             style: TextStyle(
-              color: Colors.amberAccent.withValues(alpha: 0.9),
+              color: Colors.amberAccent.withOpacity(0.9),
               fontSize: 14,
               fontFamily: 'monospace',
               fontWeight: FontWeight.w600,
@@ -828,7 +825,7 @@ class _XFireFlashCardState extends State<XFireFlashCard> {
           color: const Color(0xFF141416),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: _isFlashing ? Colors.amberAccent.withValues(alpha: 0.5) : Colors.white12,
+            color: _isFlashing ? Colors.amberAccent.withOpacity(0.5) : Colors.white12,
           ),
         ),
         child: Material(
@@ -1048,7 +1045,7 @@ class _XFireSliderCardState extends State<XFireSliderCard> {
                       Text(
                         widget.commandName,
                         style: TextStyle(
-                          color: Colors.amberAccent.withValues(alpha: 0.9),
+                          color: Colors.amberAccent.withOpacity(0.9),
                           fontSize: 14,
                           fontFamily: 'monospace',
                           fontWeight: FontWeight.w600,
@@ -1115,9 +1112,9 @@ class _XFireSliderCardState extends State<XFireSliderCard> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
                           decoration: BoxDecoration(
-                            color: Colors.blueAccent.withValues(alpha: 0.18),
+                            color: Colors.blueAccent.withOpacity(0.18),
                             borderRadius: BorderRadius.circular(9),
-                            border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.35)),
+                            border: Border.all(color: Colors.blueAccent.withOpacity(0.35)),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -1207,7 +1204,7 @@ class XFireSwitchCard extends StatelessWidget {
                 Text(
                   commandName,
                   style: TextStyle(
-                    color: Colors.amberAccent.withValues(alpha: 0.9),
+                    color: Colors.amberAccent.withOpacity(0.9),
                     fontSize: 14,
                     fontFamily: 'monospace',
                     fontWeight: FontWeight.w600,
@@ -1261,7 +1258,7 @@ class XFireSegmentedCard extends StatelessWidget {
           Text(
             commandName,
             style: TextStyle(
-              color: Colors.amberAccent.withValues(alpha: 0.9),
+              color: Colors.amberAccent.withOpacity(0.9),
               fontSize: 14,
               fontFamily: 'monospace',
               fontWeight: FontWeight.w600,
@@ -1487,7 +1484,7 @@ class _PidAxisCardWidgetState extends State<PidAxisCardWidget> {
           Text(
             "${widget.kpCmd} / ${widget.kiCmd} / ${widget.kdCmd}",
             style: TextStyle(
-              color: Colors.amberAccent.withValues(alpha: 0.9),
+              color: Colors.amberAccent.withOpacity(0.9),
               fontSize: 13,
               fontFamily: 'monospace',
               fontWeight: FontWeight.w600,
@@ -1572,7 +1569,7 @@ class RtxLinkCalculatorCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF141416),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: themeColor.withValues(alpha: 0.4)),
+        border: Border.all(color: themeColor.withOpacity(0.4)),
       ),
       child: Column(
         children: [
@@ -1927,7 +1924,7 @@ class DipoleSchematicPainter extends CustomPainter {
 
     if (hasSleeve) {
       final sleevePaint = Paint()
-        ..color = Colors.blueAccent.withValues(alpha: 0.3)
+        ..color = Colors.blueAccent.withOpacity(0.3)
         ..style = PaintingStyle.fill;
       canvas.drawRRect(
         RRect.fromRectAndRadius(
