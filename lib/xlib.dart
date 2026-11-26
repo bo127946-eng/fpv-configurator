@@ -2,7 +2,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:usb_serial/usb_serial.dart';
@@ -21,9 +20,9 @@ class SerialService {
 
   static String lastResponse = "Ready. Connect via USB OTG.";
   static String terminalLog = "";
-  static final StreamController<String> logController =
+  static StreamController<String> logController =
       StreamController<String>.broadcast();
-  static final StreamController<void> telemetryController =
+  static StreamController<void> telemetryController =
       StreamController<void>.broadcast();
 
   static double gyroRoll = 0.0, gyroPitch = 0.0, gyroYaw = 0.0;
@@ -46,7 +45,9 @@ class SerialService {
   }
 
   static void appendLog(String text) {
-    terminalLog += text;
+    if (text.isNotEmpty) {
+      terminalLog += text;
+    }
     if (!logController.isClosed) {
       logController.add(terminalLog);
     }
@@ -180,7 +181,9 @@ class SerialService {
         return false;
       }
       try {
-        final StringBuffer sb = StringBuffer()..writeln('config')..write('"');
+        final StringBuffer sb = StringBuffer()
+          ..writeln('config')
+          ..write('"');
         for (final p in params) {
           sb.write('\n$p');
         }
@@ -252,6 +255,12 @@ class SerialService {
       await _closeInternal(statusMessage: "USB Disconnected");
     });
   }
+
+  static Future<void> dispose() async {
+    await disconnect();
+    if (!logController.isClosed) await logController.close();
+    if (!telemetryController.isClosed) await telemetryController.close();
+  }
 }
 
 // ==========================================
@@ -281,7 +290,7 @@ class DfuService {
     });
   }
 
-  static Future findDfuDevice() async {
+  static Future?> findDfuDevice() async {
     _ensureInitialized();
     final dynamic res = await _channel.invokeMethod('findDfuDevice');
     if (res is Map) {
@@ -298,46 +307,48 @@ class DfuService {
 
   static Future<void> flashF401({
     Uint8List? bytes,
-    String assetPath = 'assets/firmware_f401.bin',
+    String assetPath = 'assets/fc401.bin',
     int startAddress = 0x08000000,
     void Function(String status, double progress)? onProgress,
   }) async {
     _ensureInitialized();
 
-    onProgress?.call("Поиск STM32F401 в режиме DFU...", 0.02);
-    final Map? dev = await findDfuDevice();
-    if (dev == null) {
-      throw Exception(
-        "DFU-устройство не найдено.\nПереведите F401 в DFU (BOOT0=1 + RESET).",
-      );
-    }
-
-    onProgress?.call("Запрос USB-разрешения для DFU...", 0.04);
-    final bool granted = await requestPermission();
-    if (!granted) {
-      throw Exception("Доступ к USB DFU не предоставлен.");
-    }
-
-    Uint8List firmware = bytes ?? Uint8List(0);
-    if (firmware.isEmpty) {
-      final ByteData data = await rootBundle.load(assetPath);
-      firmware = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
-    }
-    if (firmware.isEmpty) {
-      throw Exception("Файл прошивки ($assetPath) пуст.");
-    }
-
-    final StreamSubscription<DfuProgressEvent> sub = progressStream.listen((ev) {
-      onProgress?.call(ev.status, ev.progress);
-    });
+    final StreamSubscription<DfuProgressEvent>? sub = onProgress == null
+        ? null
+        : progressStream.listen((ev) => onProgress(ev.status, ev.progress));
 
     try {
+      onProgress?.call("Поиск STM32F401 в режиме DFU...", 0.02);
+      final Map? dev = await findDfuDevice();
+      if (dev == null) {
+        throw Exception(
+          "DFU-устройство не найдено.\nПереведите F401 в DFU (BOOT0=1 + RESET).",
+        );
+      }
+
+      onProgress?.call("Запрос USB-разрешения для DFU...", 0.04);
+      final bool granted = await requestPermission();
+      if (!granted) {
+        throw Exception("Доступ к USB DFU не предоставлен.");
+      }
+
+      Uint8List firmware = bytes ?? Uint8List(0);
+      if (firmware.isEmpty) {
+        final ByteData data = await rootBundle.load(assetPath);
+        firmware = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+      }
+      if (firmware.isEmpty) {
+        throw Exception("Файл прошивки ($assetPath) пуст.");
+      }
+
       await _channel.invokeMethod('flashF401', {
         'firmware': firmware,
         'startAddress': startAddress,
       });
     } finally {
-      await sub.cancel();
+      if (sub != null) {
+        await sub.cancel();
+      }
     }
   }
 }
@@ -569,7 +580,7 @@ class XFireActionCard extends StatelessWidget {
                   Text(
                     commandName,
                     style: TextStyle(
-                      color: Colors.amberAccent.withOpacity(0.9),
+                      color: Colors.amberAccent.withValues(alpha: 0.9),
                       fontSize: 14,
                       fontFamily: 'monospace',
                       fontWeight: FontWeight.w600,
@@ -793,7 +804,7 @@ class _XFireTextHexCardState extends State<XFireTextHexCard> {
           Text(
             widget.commandName,
             style: TextStyle(
-              color: Colors.amberAccent.withOpacity(0.9),
+              color: Colors.amberAccent.withValues(alpha: 0.9),
               fontSize: 14,
               fontFamily: 'monospace',
               fontWeight: FontWeight.w600,
@@ -888,6 +899,7 @@ class _XFireFlashCardState extends State<XFireFlashCard> {
       }
     } finally {
       if (mounted) {
+        _resetTimer?.cancel();
         _resetTimer = Timer(const Duration(seconds: 3), () {
           if (mounted) {
             setState(() {
@@ -910,7 +922,7 @@ class _XFireFlashCardState extends State<XFireFlashCard> {
           color: const Color(0xFF141416),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: _isFlashing ? Colors.amberAccent.withOpacity(0.5) : Colors.white12,
+            color: _isFlashing ? Colors.amberAccent.withValues(alpha: 0.5) : Colors.white12,
           ),
         ),
         child: Material(
@@ -1063,16 +1075,17 @@ class _XFireSliderCardState extends State<XFireSliderCard> {
       );
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _focusNode.requestFocus();
+      if (mounted && !_focusNode.hasFocus) _focusNode.requestFocus();
     });
   }
 
   void _commitInput() {
+    if (!_isEditing) return;
     final normalized = _textController.text.trim().replaceAll(',', '.');
     final parsed = double.tryParse(normalized);
     setState(() => _isEditing = false);
 
-    if (parsed == null) {
+    if (parsed == null || !parsed.isFinite) {
       _textController.text = _formatValue(widget.value);
       return;
     }
@@ -1087,6 +1100,7 @@ class _XFireSliderCardState extends State<XFireSliderCard> {
           .toDouble();
     }
 
+    _textController.text = _formatValue(clamped);
     widget.onChanged(clamped);
     widget.onChangeEnd(clamped);
   }
@@ -1130,7 +1144,7 @@ class _XFireSliderCardState extends State<XFireSliderCard> {
                       Text(
                         widget.commandName,
                         style: TextStyle(
-                          color: Colors.amberAccent.withOpacity(0.9),
+                          color: Colors.amberAccent.withValues(alpha: 0.9),
                           fontSize: 14,
                           fontFamily: 'monospace',
                           fontWeight: FontWeight.w600,
@@ -1197,9 +1211,9 @@ class _XFireSliderCardState extends State<XFireSliderCard> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
                           decoration: BoxDecoration(
-                            color: Colors.blueAccent.withOpacity(0.18),
+                            color: Colors.blueAccent.withValues(alpha: 0.18),
                             borderRadius: BorderRadius.circular(9),
-                            border: Border.all(color: Colors.blueAccent.withOpacity(0.35)),
+                            border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.35)),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -1289,7 +1303,7 @@ class XFireSwitchCard extends StatelessWidget {
                 Text(
                   commandName,
                   style: TextStyle(
-                    color: Colors.amberAccent.withOpacity(0.9),
+                    color: Colors.amberAccent.withValues(alpha: 0.9),
                     fontSize: 14,
                     fontFamily: 'monospace',
                     fontWeight: FontWeight.w600,
@@ -1325,6 +1339,7 @@ class XFireSegmentedCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final int count = options.isEmpty ? 1 : options.length;
     return XFireCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1343,7 +1358,7 @@ class XFireSegmentedCard extends StatelessWidget {
           Text(
             commandName,
             style: TextStyle(
-              color: Colors.amberAccent.withOpacity(0.9),
+              color: Colors.amberAccent.withValues(alpha: 0.9),
               fontSize: 14,
               fontFamily: 'monospace',
               fontWeight: FontWeight.w600,
@@ -1362,7 +1377,7 @@ class XFireSegmentedCard extends StatelessWidget {
                 color: Colors.white70,
                 constraints: BoxConstraints(
                   minHeight: 44,
-                  minWidth: (constraints.maxWidth - (options.length - 1)) / options.length,
+                  minWidth: math.max(0.0, (constraints.maxWidth - (count - 1)) / count),
                 ),
                 children: options
                     .map(
@@ -1569,7 +1584,7 @@ class _PidAxisCardWidgetState extends State<PidAxisCardWidget> {
           Text(
             "${widget.kpCmd} / ${widget.kiCmd} / ${widget.kdCmd}",
             style: TextStyle(
-              color: Colors.amberAccent.withOpacity(0.9),
+              color: Colors.amberAccent.withValues(alpha: 0.9),
               fontSize: 13,
               fontFamily: 'monospace',
               fontWeight: FontWeight.w600,
@@ -1654,7 +1669,7 @@ class RtxLinkCalculatorCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF141416),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: themeColor.withOpacity(0.4)),
+        border: Border.all(color: themeColor.withValues(alpha: 0.4)),
       ),
       child: Column(
         children: [
@@ -1756,6 +1771,7 @@ class DipoleAntennaBlock extends StatelessWidget {
   final Map<String, dynamic> antResults;
   final ValueChanged<bool> onSleeveToggle;
   final ValueChanged<double> onSleeveThickChanged, onTubeDiamChanged, onTopWireChanged;
+  final ValueChanged<double>? onSleeveThickEnd, onTubeDiamEnd, onTopWireEnd;
 
   const DipoleAntennaBlock({
     super.key,
@@ -1768,6 +1784,9 @@ class DipoleAntennaBlock extends StatelessWidget {
     required this.onSleeveThickChanged,
     required this.onTubeDiamChanged,
     required this.onTopWireChanged,
+    this.onSleeveThickEnd,
+    this.onTubeDiamEnd,
+    this.onTopWireEnd,
   });
 
   @override
@@ -1845,7 +1864,7 @@ class DipoleAntennaBlock extends StatelessWidget {
             divisions: 25,
             unit: "мм",
             onChanged: onSleeveThickChanged,
-            onChangeEnd: (_) {},
+            onChangeEnd: onSleeveThickEnd ?? (_) {},
           ),
         XFireSliderCard(
           title: "Диаметр трубки диполя\n(нижн.)",
@@ -1856,7 +1875,7 @@ class DipoleAntennaBlock extends StatelessWidget {
           divisions: 6,
           unit: "мм",
           onChanged: onTubeDiamChanged,
-          onChangeEnd: (_) {},
+          onChangeEnd: onTubeDiamEnd ?? (_) {},
         ),
         XFireSliderCard(
           title: "Сечение провода диполя\n(верхн.)",
@@ -1867,7 +1886,7 @@ class DipoleAntennaBlock extends StatelessWidget {
           divisions: 20,
           unit: "мм²",
           onChanged: onTopWireChanged,
-          onChangeEnd: (_) {},
+          onChangeEnd: onTopWireEnd ?? (_) {},
         ),
         XFireResetCard(
           hint: "Сброс геометрии диполя\nпо умолчанию",
@@ -1897,12 +1916,14 @@ class KharchenkoAntennaBlock extends StatelessWidget {
   final double kharchenkoWireSqMm;
   final Map<String, dynamic> antResults;
   final ValueChanged<double> onKharcChanged;
+  final ValueChanged<double>? onKharcChangeEnd;
 
   const KharchenkoAntennaBlock({
     super.key,
     required this.kharchenkoWireSqMm,
     required this.antResults,
     required this.onKharcChanged,
+    this.onKharcChangeEnd,
   });
 
   @override
@@ -1973,7 +1994,7 @@ class KharchenkoAntennaBlock extends StatelessWidget {
           divisions: 15,
           unit: "мм²",
           onChanged: onKharcChanged,
-          onChangeEnd: (_) {},
+          onChangeEnd: onKharcChangeEnd ?? (_) {},
         ),
         XFireResetCard(
           hint: "Сброс геометрии антенны\nХарченко по умолчанию",
@@ -2009,7 +2030,7 @@ class DipoleSchematicPainter extends CustomPainter {
 
     if (hasSleeve) {
       final sleevePaint = Paint()
-        ..color = Colors.blueAccent.withOpacity(0.3)
+        ..color = Colors.blueAccent.withValues(alpha: 0.3)
         ..style = PaintingStyle.fill;
       canvas.drawRRect(
         RRect.fromRectAndRadius(
@@ -2113,7 +2134,8 @@ class PitchHudScalePainter extends CustomPainter {
 
     final double x = isLeftSide ? size.width - 10.0 : 10.0;
     canvas.drawLine(Offset(x, 14), Offset(x, size.height - 14), paintLine);
-    final double range = maxVal - minVal;
+    final double rawRange = maxVal - minVal;
+    final double range = rawRange.abs() < 1e-6 ? 1.0 : rawRange;
 
     for (int i = 0; i <= 6; i++) {
       final double v = minVal + (range / 6) * i;
@@ -2183,7 +2205,8 @@ class YawHudScalePainter extends CustomPainter {
     final double y = isTop ? 14.0 : size.height - 14.0;
 
     canvas.drawLine(Offset(margin, y), Offset(size.width - margin, y), paintLine);
-    final double range = maxVal - minVal;
+    final double rawRange = maxVal - minVal;
+    final double range = rawRange.abs() < 1e-6 ? 1.0 : rawRange;
 
     for (int i = 0; i <= 4; i++) {
       final double v = minVal + (range / 4) * i;
@@ -2231,7 +2254,7 @@ class ArtificialHorizonPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final radius = math.min(size.width, size.height) / 2 - 1;
+    final radius = math.max(1.0, math.min(size.width, size.height) / 2 - 1);
 
     canvas.save();
     canvas.translate(center.dx, center.dy);
