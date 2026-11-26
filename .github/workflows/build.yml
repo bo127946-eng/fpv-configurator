@@ -25,25 +25,24 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Initialize Flutter Android project if missing
+      - name: Create Android project
+        run: flutter create --platforms=android --org com.example.xfire --project-name xfire .
+
+      - name: Copy MainActivity.kt if in repo root
         run: |
-          if [ ! -d "android" ]; then
-            flutter create . --org com.fpv --project-name fpv_configurator --platforms=android
+          if [ -f "MainActivity.kt" ]; then
+            mkdir -p android/app/src/main/kotlin/com/example/xfire
+            cp MainActivity.kt android/app/src/main/kotlin/com/example/xfire/MainActivity.kt
           fi
 
-      - name: Verify f401.bin asset exists
-        run: |
-          test -f assets/fc401.bin || (echo "Missing assets/fc401.bin" && exit 1)
-
-      - name: Install dependencies
+      - name: Get packages
         run: flutter pub get
 
-      - name: Build APK release
+      - name: Build APK
         run: flutter build apk --release
 
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-release
           path: build/app/outputs/flutter-apk/app-release.apk
-          if-no-files-error: true
