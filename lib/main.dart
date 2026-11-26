@@ -28,7 +28,7 @@ class MyApp extends StatelessWidget {
           error: Colors.redAccent.shade700,
         ),
         scaffoldBackgroundColor: const Color(0xFF0A0A0A),
-        cardTheme: CardThemeData(
+        cardTheme: CardTheme(
           color: const Color(0xFF1C1C1E),
           elevation: 2,
           margin: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 8),
@@ -106,7 +106,7 @@ class XFireDropdownCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: Colors.blueAccent.withValues(alpha: 0.18),
+                    color: Colors.blueAccent.withOpacity(0.18),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
@@ -261,7 +261,6 @@ class _MainContainerState extends State<MainContainer> {
       if (mounted) setState(() {});
     });
 
-    // Автоматическая реакция на физическое отключение кабеля OTG
     _usbEventSub = UsbSerial.usbEventStream?.listen((UsbEvent event) async {
       if (event.event == UsbEvent.ACTION_USB_DETACHED &&
           SerialService.isConnected) {
@@ -640,7 +639,7 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                       decoration: BoxDecoration(
-                        color: Colors.blueAccent.withValues(alpha: 0.2),
+                        color: Colors.blueAccent.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Text(
@@ -1286,19 +1285,16 @@ class SettingsTab extends StatefulWidget {
 }
 
 class _SettingsTabState extends State<SettingsTab> {
-  // 1. Радиомодуль
   double _rtxEn = 1;
   double _rtxProtId = 0;
   double _rtxId = 1;
   double _rtxBand = 2;
 
-  // 2. IMU (гироскоп и акселерометр) + ESC
   double _escProt = 0;
   double _fltEscLimit = 45.0;
   double _imuId = 0;
   double _imuAlign = 0;
 
-  // 3. Компас
   double _comEn = 0;
   double _comId = 0;
   double _comAlign = 0;
@@ -1306,23 +1302,19 @@ class _SettingsTabState extends State<SettingsTab> {
   double _magBiasY = 0.0;
   double _magBiasZ = 0.0;
 
-  // 4. Барометр
   double _baroEn = 1;
   double _barId = 0;
 
-  // 5. Лидар
   double _lidarEn = 1;
   double _lidId = 0;
   double _lidarFilterAlpha = 0.15;
   double _lidarOffsetM = 0.0;
 
-  // 6. VTX (USART6)
   double _vtxEn = 1;
   double _vtxProt = 0;
   double _vtxMhz = 5658;
   double _vtxMw = 25;
 
-  // 7. Батарея и датчик тока
   double _batScaleV = 4.85;
   double _batVMax = 16.8;
   bool _batCompEn = true;
@@ -1330,7 +1322,6 @@ class _SettingsTabState extends State<SettingsTab> {
   double _batOffsetA = 0.0;
   double _batScaleA = 1.0;
 
-  // Режимы полёта и стики (RC)
   double _fmMode = 1;
   double _fmRollMax = 25.0;
   double _fmPitchMax = 25.0;
@@ -1345,13 +1336,11 @@ class _SettingsTabState extends State<SettingsTab> {
   double _rcHorizonTransition = 0.75;
   double _rcFilterSmoothing = 0.35;
 
-  // Failsafe
   double _fsBatEn = 1;
   double _fsRtxEn = 1;
   double _fsVzSpeed = 0.5;
   double _batFsV = 13.8;
 
-  // Фильтры IMU и адаптивный Маджвик
   double _fltAmbEn = 1;
   double _fltLpfEn = 1;
   double _fltNotEn = 1;
@@ -1362,13 +1351,11 @@ class _SettingsTabState extends State<SettingsTab> {
   double _fltAmb = 0.05;
   double _fltAmbMin = 0.003;
 
-  // PID-регуляторы
   double _rollKp = 0.45, _rollKi = 0.010, _rollKd = 0.018;
   double _pitchKp = 0.45, _pitchKi = 0.010, _pitchKd = 0.018;
   double _yawKp = 0.60, _yawKi = 0.010, _yawKd = 0.0;
   double _vzKp = 7.0, _vzKi = 1.2, _vzKd = 0.30;
 
-  // Аргумент для cal_bat <V> и опционального cal_curr [A]
   double _calBatVoltageArg = 14.8;
   double _calCurrAmpsArg = 0.0;
 
@@ -1602,7 +1589,6 @@ class _SettingsTabState extends State<SettingsTab> {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       children: [
-        // 1. РАДИОМОДУЛЬ (ДИАГНОСТИКА RTX)
         XFireExpansionCard(
           title: "Радиомодуль",
           subtitle: "Диагностика LoRa RTX (test_rtx)\nи параметры линка",
@@ -1658,8 +1644,6 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
           ],
         ),
-
-        // 2. IMU (ГИРОСКОП И АКСЕЛЕРОМЕТР) + ESC
         XFireExpansionCard(
           title: "IMU (гироскоп и акселерометр)",
           subtitle: "Тип IMU, поворот осей, ESC,\nкалибровка и тест (test_imu)",
@@ -1765,8 +1749,6 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
           ],
         ),
-
-        // 3. КОМПАС
         XFireExpansionCard(
           title: "Компас",
           subtitle: "Опрос, тип, поворот XY,\nсмещения ±2000 и тест (test_mag)",
@@ -1877,8 +1859,6 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
           ],
         ),
-
-        // 4. БАРОМЕТР
         XFireExpansionCard(
           title: "Барометр",
           subtitle: "Опрос, выбор чипа (0..7),\nобнуление (cal_bar) и тест (test_bar)",
@@ -1943,8 +1923,6 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
           ],
         ),
-
-        // 5. ЛИДАР
         XFireExpansionCard(
           title: "Лидар",
           subtitle: "Опрос, тип (0..4), фильтр,\nсмещение ±5.0 м, cal_lid и test_lid",
@@ -2032,8 +2010,6 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
           ],
         ),
-
-        // 6. VTX (USART6)
         XFireExpansionCard(
           title: "VTX (USART6)",
           subtitle: "Управление передатчиком,\n0 Auto / 1 Tramp / 2 SmartAudio",
@@ -2108,8 +2084,6 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
           ],
         ),
-
-        // 7. ПИТАНИЕ И БАТАРЕЯ
         XFireExpansionCard(
           title: "Питание и батарея",
           subtitle: "Напряжение, компенсация просадки,\nток, калибровка и тест (test_bat)",
@@ -2259,8 +2233,6 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
           ],
         ),
-
-        // 8. РЕЖИМЫ ПОЛЁТА И СТИКИ (RC)
         XFireExpansionCard(
           title: "Режимы полёта и стики\n(RC)",
           subtitle: "Acro/Angle/Horizon/AltHold,\nуглы, Vz и кривые RC",
@@ -2446,8 +2418,6 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
           ],
         ),
-
-        // 9. FAILSAFE И АВАРИЙНАЯ ПОСАДКА
         XFireExpansionCard(
           title: "Failsafe и аварийная посадка",
           subtitle: "Порог батареи, потеря RC\nи скорость снижения в удержании",
@@ -2510,8 +2480,6 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
           ],
         ),
-
-        // 10. ФИЛЬТРЫ IMU И АДАПТИВНЫЙ МАДЖВИК
         XFireExpansionCard(
           title: "Фильтры IMU и адаптивный Маджвик",
           subtitle: "ФНЧ, Notch-фильтр гироскопа\nи адаптивный beta Маджвика",
@@ -2641,8 +2609,6 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
           ],
         ),
-
-        // 11. PID-РЕГУЛЯТОРЫ
         XFireExpansionCard(
           title: "PID-регуляторы\n(Roll, Pitch, Yaw, Vz)",
           subtitle: "Настройки Kp, Ki, Kd для осей\nRoll, Pitch, Yaw и Vz",
@@ -2783,8 +2749,6 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
           ],
         ),
-
-        // 12. СТЕНДОВЫЕ ТЕСТЫ И АВТОКАЛИБРОВКА
         XFireExpansionCard(
           title: "Тесты моторов, PID и автокалибровка",
           subtitle: "test_mot (макс. 250), test_pid (макс. 120)\nи auto_cal / auto_stop",
@@ -2831,8 +2795,6 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
           ],
         ),
-
-        // 13. ТЕЛЕМЕТРИЯ
         XFireExpansionCard(
           title: "Телеметрия",
           subtitle: "Авиогоризонт, HUD и показания\nгироскопа / акселерометра",
@@ -2856,7 +2818,7 @@ class _SettingsTabState extends State<SettingsTab> {
                       decoration: BoxDecoration(
                         color: Colors.black,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                        border: Border.all(color: Colors.white.withOpacity(0.06)),
                       ),
                       child: Column(
                         children: [
@@ -3039,8 +3001,6 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
           ],
         ),
-
-        // 14. ПРОШИВКА И СОХРАНЕНИЕ ВО FLASH
         XFireExpansionCard(
           title: "Прошивка и память Flash",
           subtitle: "Сохранение в ОЗУ->Flash (save),\nсводка (info) и прошивка STM32",
@@ -3961,7 +3921,7 @@ class _TerminalTabState extends State<TerminalTab> {
               decoration: BoxDecoration(
                 color: Colors.black,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                border: Border.all(color: Colors.white.withOpacity(0.06)),
               ),
               child: SingleChildScrollView(
                 reverse: true,
