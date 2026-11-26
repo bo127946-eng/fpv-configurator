@@ -1,7 +1,6 @@
 // main.dart
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:usb_serial/usb_serial.dart';
@@ -3002,8 +3001,8 @@ class _SettingsTabState extends State<SettingsTab> {
           ],
         ),
         XFireExpansionCard(
-          title: "Прошивка и память Flash",
-          subtitle: "Сохранение в ОЗУ->Flash (save),\nсводка (info) и прошивка STM32",
+          title: "Прошивка DFU и память Flash",
+          subtitle: "Сохранение в ОЗУ->Flash (save),\nсводка (info) и прошивка STM32F401 по DFU",
           icon: Icons.memory,
           children: [
             XFireActionCard(
@@ -3025,19 +3024,14 @@ class _SettingsTabState extends State<SettingsTab> {
               ),
             ),
             XFireFlashCard(
-              title: "Прошить полетный контроллер\n(v3.27)",
-              targetName: "Полетный контроллер FC",
+              title: "Прошить STM32F401 по DFU\n(v3.27)",
+              targetName: "Полетный контроллер STM32F401 (DFU)",
               onFlash: (onProgress) async {
-                onProgress("Стирание флеш-памяти STM32...", 0.2);
-                await Future.delayed(const Duration(milliseconds: 800));
-                if (SerialService.isConnected && SerialService.usbPort != null) {
-                  await SerialService.usbPort!.write(Uint8List.fromList([0x7F]));
-                }
-                onProgress("Запись блоков прошивки v3.27...", 0.6);
-                await Future.delayed(const Duration(milliseconds: 1200));
-                onProgress("Проверка контрольной суммы CRC...", 0.9);
-                await Future.delayed(const Duration(milliseconds: 600));
-                onProgress("Готово!", 1.0);
+                await DfuService.flashF401(
+                  assetPath: 'assets/firmware_f401.bin',
+                  startAddress: 0x08000000,
+                  onProgress: onProgress,
+                );
               },
             ),
           ],
