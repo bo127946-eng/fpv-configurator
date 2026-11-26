@@ -250,7 +250,9 @@ class MainActivity : FlutterActivity() {
 
                 val statusAfterWrite = dfuGetStatus(connection, interfaceId)
                 if (statusAfterWrite.state == STATE_DFU_ERROR) {
-                    throw IllegalStateException("Ошибка записи DFU на блоке $blockNum (status=${statusAfterWrite.status})")
+                    throw IllegalStateException(
+                        "Ошибка записи DFU на блоке $blockNum (status=${statusAfterWrite.status})"
+                    )
                 }
 
                 offset += chunkLen
@@ -264,7 +266,7 @@ class MainActivity : FlutterActivity() {
 
             reportProgress("Завершение и перезапуск STM32F401...", 0.95)
             dfuDnload(connection, interfaceId, 0, ByteArray(0))
-            for (_ in 0..5) {
+            for (attempt in 0..5) {
                 try {
                     val endStatus = dfuGetStatus(connection, interfaceId)
                     val waitMs = endStatus.pollTimeoutMs.coerceIn(10, 500).toLong()
@@ -351,15 +353,20 @@ class MainActivity : FlutterActivity() {
     private fun dfuGetStatus(connection: UsbDeviceConnection, interfaceId: Int): DfuStatus {
         val buf = ByteArray(6)
         val requestType = UsbConstants.USB_TYPE_CLASS or UsbConstants.USB_DIR_IN
-        val read = connection.controlTransfer(
-            requestType,
-            DFU_GETSTATUS.toInt(),
-            0,
-            interfaceId,
-            buf,
-            buf.size,
-            1500
-        )
+        var read = -1
+        for (retry in 0..2) {
+            read = connection.controlTransfer(
+                requestType,
+                DFU_GETSTATUS.toInt(),
+                0,
+                interfaceId,
+                buf,
+                buf.size,
+                1500
+            )
+            if (read >= 6) break
+            Thread.sleep(20)
+        }
         if (read < 6) {
             throw IllegalStateException("Сбой DFU_GETSTATUS (read=$read)")
         }
@@ -372,7 +379,7 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun waitUntilNotBusy(connection: UsbDeviceConnection, interfaceId: Int) {
-        for (_ in 0..120) {
+        for (step in 0..120) {
             val st = dfuGetStatus(connection, interfaceId)
             val sleepMs = st.pollTimeoutMs.coerceIn(5, 300).toLong()
             Thread.sleep(sleepMs)
