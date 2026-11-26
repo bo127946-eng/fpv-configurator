@@ -37,6 +37,18 @@ class MainActivity : FlutterActivity() {
         private const val STATE_DFU_DNBUSY = 4
         private const val STATE_DFU_MANIFEST_WAIT_RESET = 8
         private const val STATE_DFU_ERROR = 10
+
+        // Сектора Flash STM32F401 (256/512 КБ карта адресов)
+        private val STM32F401_SECTORS = listOf(
+            0x08000000L to 16 * 1024L,
+            0x08004000L to 16 * 1024L,
+            0x08008000L to 16 * 1024L,
+            0x0800C000L to 16 * 1024L,
+            0x08010000L to 64 * 1024L,
+            0x08020000L to 128 * 1024L,
+            0x08040000L to 128 * 1024L,
+            0x08060000L to 128 * 1024L
+        )
     }
 
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -198,6 +210,30 @@ class MainActivity : FlutterActivity() {
         val state: Int
     )
 
+    private fun eraseTargetSectors(
+        connection: UsbDeviceConnection,
+        interfaceId: Int,
+        startAddress: Long,
+        length: Int
+    ) {
+        val endAddress = startAddress + length.toLong()
+        val sectorsToErase = STM32F401_SECTORS.filter { (sectorStart, sectorSize) ->
+            val sectorEnd = sectorStart + sectorSize
+            sectorEnd > startAddress && sectorStart < endAddress
+        }
+
+        if (sectorsToErase.isEmpty()) {
+            dfuSetAddressPointer(connection, interfaceId, startAddress)
+            dfuEraseSector(connection, interfaceId, startAddress)
+            return
+        }
+
+        for ((sectorStart, _) in sectorsToErase) {
+            dfuSetAddressPointer(connection, interfaceId, sectorStart)
+            dfuEraseSector(connection, interfaceId, sectorStart)
+        }
+    }
+
     private fun flashStm32Dfu(firmware: ByteArray, startAddress: Long) {
         val usbManager = getUsbManager()
         val device = findTargetDfuDevice(usbManager)
@@ -233,8 +269,8 @@ class MainActivity : FlutterActivity() {
             }
 
             reportProgress("Стирание Flash STM32F401...", 0.12)
+            eraseTargetSectors(connection, interfaceId, startAddress, firmware.size)
             dfuSetAddressPointer(connection, interfaceId, startAddress)
-            dfuEraseSector(connection, interfaceId, startAddress)
 
             val blockSize = 1024
             var offset = 0
@@ -266,7 +302,7 @@ class MainActivity : FlutterActivity() {
 
             reportProgress("Завершение и перезапуск STM32F401...", 0.95)
             dfuDnload(connection, interfaceId, 0, ByteArray(0))
-            for (attempt in 0..5) {
+            for (attempt in 0..8) {
                 try {
                     val endStatus = dfuGetStatus(connection, interfaceId)
                     val waitMs = endStatus.pollTimeoutMs.coerceIn(10, 500).toLong()
@@ -379,12 +415,15 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun waitUntilNotBusy(connection: UsbDeviceConnection, interfaceId: Int) {
-        for (step in 0..120) {
+        for (step in 0..200) {
             val st = dfuGetStatus(connection, interfaceId)
             val sleepMs = st.pollTimeoutMs.coerceIn(5, 300).toLong()
             Thread.sleep(sleepMs)
-            if (st.state != STATE_DFU_DNBUSY && st.state != STATE_DFU_DNLOAD_SYNC) {
+            if (st.state == STATE_DFU_IDLE || st.state == STATE_DFU_MANIFEST_WAIT_RESET) {
                 return
+            }
+            if (st.state == STATE_DFU_ERROR) {
+                throw IllegalStateException("DFU перешёл в состояние ошибки (status=${st.status})")
             }
         }
         throw IllegalStateException("Таймаут ожидания готовности STM32 DFU")
