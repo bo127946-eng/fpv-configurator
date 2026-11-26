@@ -33,7 +33,7 @@ jobs:
 
       - name: Verify f401.bin asset exists
         run: |
-          test -f assets/f401.bin || (echo "Missing assets/f401.bin" && exit 1)
+          test -f assets/fc401.bin || (echo "Missing assets/fc401.bin" && exit 1)
 
       - name: Install dependencies
         run: flutter pub get
