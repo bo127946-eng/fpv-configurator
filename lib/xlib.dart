@@ -270,9 +270,10 @@ class DfuService {
     _initialized = true;
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'onDfuProgress') {
-        final args = call.arguments as Map<dynamic, dynamic>?;
-        final status = (args?['status'] as String?) ?? 'Прошивка DFU...';
-        final progress = ((args?['progress'] as num?) ?? 0.0).toDouble();
+        final rawArgs = call.arguments;
+        final Map args = rawArgs is Map ? rawArgs : const {};
+        final status = (args['status'] as String?) ?? 'Прошивка DFU...';
+        final progress = ((args['progress'] as num?) ?? 0.0).toDouble();
         if (!_progressController.isClosed) {
           _progressController.add(DfuProgressEvent(status: status, progress: progress));
         }
@@ -280,17 +281,19 @@ class DfuService {
     });
   }
 
-  static Future?> findDfuDevice() async {
+  static Future findDfuDevice() async {
     _ensureInitialized();
-    final res = await _channel.invokeMethod?>('findDfuDevice');
-    if (res == null) return null;
-    return res.map((k, v) => MapEntry(k.toString(), v));
+    final dynamic res = await _channel.invokeMethod('findDfuDevice');
+    if (res is Map) {
+      return Map.from(res);
+    }
+    return null;
   }
 
   static Future<bool> requestPermission() async {
     _ensureInitialized();
-    final granted = await _channel.invokeMethod<bool>('requestDfuPermission');
-    return granted ?? false;
+    final dynamic granted = await _channel.invokeMethod('requestDfuPermission');
+    return granted == true;
   }
 
   static Future<void> flashF401({
@@ -302,7 +305,7 @@ class DfuService {
     _ensureInitialized();
 
     onProgress?.call("Поиск STM32F401 в режиме DFU...", 0.02);
-    final dev = await findDfuDevice();
+    final Map? dev = await findDfuDevice();
     if (dev == null) {
       throw Exception(
         "DFU-устройство не найдено.\nПереведите F401 в DFU (BOOT0=1 + RESET).",
@@ -310,26 +313,26 @@ class DfuService {
     }
 
     onProgress?.call("Запрос USB-разрешения для DFU...", 0.04);
-    final granted = await requestPermission();
+    final bool granted = await requestPermission();
     if (!granted) {
       throw Exception("Доступ к USB DFU не предоставлен.");
     }
 
     Uint8List firmware = bytes ?? Uint8List(0);
     if (firmware.isEmpty) {
-      final data = await rootBundle.load(assetPath);
+      final ByteData data = await rootBundle.load(assetPath);
       firmware = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
     }
     if (firmware.isEmpty) {
       throw Exception("Файл прошивки ($assetPath) пуст.");
     }
 
-    final sub = progressStream.listen((ev) {
+    final StreamSubscription<DfuProgressEvent> sub = progressStream.listen((ev) {
       onProgress?.call(ev.status, ev.progress);
     });
 
     try {
-      await _channel.invokeMethod<bool>('flashF401', {
+      await _channel.invokeMethod('flashF401', {
         'firmware': firmware,
         'startAddress': startAddress,
       });
