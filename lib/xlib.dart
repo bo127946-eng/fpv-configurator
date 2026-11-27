@@ -271,6 +271,7 @@ class DfuService {
   static final StreamController<DfuProgressEvent> _progressController =
       StreamController<DfuProgressEvent>.broadcast();
 
+  static void Function(String status, double progress)? _activeOnProgress;
   static Stream<DfuProgressEvent> get progressStream => _progressController.stream;
   static bool _initialized = false;
 
@@ -282,10 +283,13 @@ class DfuService {
         final rawArgs = call.arguments;
         final Map args = rawArgs is Map ? rawArgs : const {};
         final status = (args['status'] as String?) ?? 'Прошивка DFU...';
-        final progress = ((args['progress'] as num?) ?? 0.0).toDouble();
+        final rawProg = ((args['progress'] as num?) ?? 0.0).toDouble();
+        final progress = rawProg.isFinite ? rawProg.clamp(0.0, 1.0).toDouble() : 0.0;
+
         if (!_progressController.isClosed) {
           _progressController.add(DfuProgressEvent(status: status, progress: progress));
         }
+        _activeOnProgress?.call(status, progress);
       }
     });
   }
@@ -299,13 +303,16 @@ class DfuService {
     return null;
   }
 
-
   static Future<bool> requestPermission() async {
     _ensureInitialized();
     final dynamic granted = await _channel.invokeMethod('requestDfuPermission');
     return granted == true;
   }
 
+  /// Строго по порядку:
+  /// 1. Находим DFU-устройство
+  /// 2. Запрашиваем и получаем USB-разрешение (до старта записи/DFU_GETSTATUS)
+  /// 3. Загружаем бинарник прошивки и запускаем нативный flashF401
   static Future<void> flashF401({
     Uint8List? bytes,
     String assetPath = 'assets/fc401.bin',
@@ -313,10 +320,7 @@ class DfuService {
     void Function(String status, double progress)? onProgress,
   }) async {
     _ensureInitialized();
-
-    final StreamSubscription<DfuProgressEvent>? sub = onProgress == null
-        ? null
-        : progressStream.listen((ev) => onProgress(ev.status, ev.progress));
+    _activeOnProgress = onProgress;
 
     try {
       onProgress?.call("Поиск STM32F401 в режиме DFU...", 0.02);
@@ -327,12 +331,13 @@ class DfuService {
         );
       }
 
-      onProgress?.call("Запрос USB-разрешения для DFU...", 0.04);
+      onProgress?.call("Запрос USB-разрешения для DFU...", 0.05);
       final bool granted = await requestPermission();
       if (!granted) {
         throw Exception("Доступ к USB DFU не предоставлен.");
       }
 
+      onProgress?.call("Чтение прошивки $assetPath...", 0.08);
       Uint8List firmware = bytes ?? Uint8List(0);
       if (firmware.isEmpty) {
         final ByteData data = await rootBundle.load(assetPath);
@@ -342,13 +347,14 @@ class DfuService {
         throw Exception("Файл прошивки ($assetPath) пуст.");
       }
 
+      onProgress?.call("Запуск DFU-загрузки...", 0.10);
       await _channel.invokeMethod('flashF401', {
         'firmware': firmware,
         'startAddress': startAddress,
       });
     } finally {
-      if (sub != null) {
-        await sub.cancel();
+      if (identical(_activeOnProgress, onProgress)) {
+        _activeOnProgress = null;
       }
     }
   }
@@ -902,7 +908,12 @@ class _XFireFlashCardState extends State<XFireFlashCard> {
       if (mounted) {
         _resetTimer?.cancel();
         _resetTimer = Timer(const Duration(seconds: 3), () {
-          if (mounted) {
+          if (mounted && !_isFlashing) {
+            setState(() {
+              _statusState = "Нажмите для запуска прошивки DFU";
+              _progress = 0.0;
+            });
+          } else if (mounted) {
             setState(() {
               _isFlashing = false;
               _statusState = "Нажмите для запуска прошивки DFU";
