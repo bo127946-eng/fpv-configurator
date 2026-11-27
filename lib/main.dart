@@ -1370,12 +1370,13 @@ class DfuDiagnosticsPanel extends StatelessWidget {
   String _explainFailure(String? err) {
     if (err == null || err.isEmpty) return "";
     final lower = err.toLowerCase();
+    if (lower.contains("таймаут ожидания готовности")) {
+      return "Причина: STM32F401 долго удерживал состояние DNBUSY при стирании сектора Flash или записи блока.\n"
+          "Проверьте питание 5V/3.3V на плате, контакт OTG и статус стирания Flash.";
+    }
     if (lower.contains("getstatus")) {
-      return "Причина: хост отправил DFU_GETSTATUS до выдачи/подтверждения USB-разрешения или контроллер не ответил.\n"
-          "Проверьте:\n"
-          "1) В нативном коде Android перед DFU_GETSTATUS должно быть ожидание результата UsbManager.requestPermission.\n"
-          "2) Плата в ROM DFU (BOOT0=1 при подаче питания), USB Serial полностью закрыт.\n"
-          "3) OTG-кабель и питание 5V без просадок.";
+      return "Причина: сбой DFU_GETSTATUS при обращении к контроллеру.\n"
+          "Проверьте, что плата в ROM DFU (BOOT0=1 при подаче питания), USB Serial закрыт и OTG-кабель надёжен.";
     }
     if (lower.contains("dnload")) {
       return "Причина: ошибка передачи блока прошивки (DFU_DNLOAD) или записи страницы Flash.";
