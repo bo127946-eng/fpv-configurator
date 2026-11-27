@@ -290,14 +290,15 @@ class DfuService {
     });
   }
 
-  static Future?> findDfuDevice() async {
+  static Future<dynamic> findDfuDevice() async {
     _ensureInitialized();
     final dynamic res = await _channel.invokeMethod('findDfuDevice');
     if (res is Map) {
-      return Map<dynamic, dynamic>.from(res);
+      return Map.from(res);
     }
     return null;
   }
+
 
   static Future<bool> requestPermission() async {
     _ensureInitialized();
