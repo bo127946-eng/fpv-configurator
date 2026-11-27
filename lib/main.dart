@@ -27,12 +27,13 @@ class MyApp extends StatelessWidget {
           error: Colors.redAccent.shade700,
         ),
         scaffoldBackgroundColor: const Color(0xFF0A0A0A),
-        cardTheme: CardThemeData(
-          color: const Color(0xFF1C1C1E),
-          elevation: 2,
-          margin: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 8),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      theme: ThemeData.dark().copyWith(
+        cardTheme: const CardTheme(
+          color: Color(0xFF141416),
+          elevation: 0,
         ),
+      ),
+
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: const Color(0xFF242428),
