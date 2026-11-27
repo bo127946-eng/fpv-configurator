@@ -5,7 +5,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.hardware.usb.UsbConstants
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbInterface
@@ -28,6 +27,15 @@ class MainActivity : FlutterActivity() {
         private const val STM32_VID = 0x0483
         private const val STM32_DFU_PID = 0xDF11
 
+        // USB DFU class requests (recipient = Interface: 0x01)
+        private const val USB_DIR_OUT = 0x00
+        private const val USB_DIR_IN = 0x80
+        private const val USB_TYPE_CLASS = 0x20
+        private const val USB_RECIPIENT_INTERFACE = 0x01
+
+        private const val REQTYPE_DFU_OUT = USB_TYPE_CLASS or USB_RECIPIENT_INTERFACE or USB_DIR_OUT // 0x21
+        private const val REQTYPE_DFU_IN = USB_TYPE_CLASS or USB_RECIPIENT_INTERFACE or USB_DIR_IN   // 0xA1
+
         private const val DFU_DNLOAD: Byte = 0x01
         private const val DFU_GETSTATUS: Byte = 0x03
         private const val DFU_CLRSTATUS: Byte = 0x04
@@ -38,7 +46,8 @@ class MainActivity : FlutterActivity() {
         private const val STATE_DFU_MANIFEST_WAIT_RESET = 8
         private const val STATE_DFU_ERROR = 10
 
-        // Сектора Flash STM32F401 (256/512 КБ карта адресов)
+        private const val PERMISSION_TIMEOUT_MS = 30_000L
+
         private val STM32F401_SECTORS = listOf(
             0x08000000L to 16 * 1024L,
             0x08004000L to 16 * 1024L,
@@ -56,24 +65,42 @@ class MainActivity : FlutterActivity() {
     private var dfuChannel: MethodChannel? = null
 
     private var pendingPermissionResult: MethodChannel.Result? = null
+    private var permissionTimeoutRunnable: Runnable? = null
     private var permissionReceiverRegistered = false
 
     private val permissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action != ACTION_USB_PERMISSION) return
+
+            permissionTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+            permissionTimeoutRunnable = null
+
             val device: UsbDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
             } else {
                 @Suppress("DEPRECATION")
                 intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
             }
+
+            val usbManager = getUsbManager()
+            val targetDev = device ?: findTargetDfuDevice(usbManager)
             val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false) ||
-                (device != null && getUsbManager().hasPermission(device))
+                (targetDev != null && usbManager.hasPermission(targetDev))
 
             val callback = pendingPermissionResult
             pendingPermissionResult = null
+
             if (callback != null) {
-                mainHandler.post { callback.success(granted) }
+                if (granted) {
+                    reportProgress("USB-разрешение получено, стабилизация шины...", 0.06)
+                    mainHandler.postDelayed({
+                        callback.success(true)
+                    }, 300)
+                } else {
+                    mainHandler.post {
+                        callback.success(false)
+                    }
+                }
             }
         }
     }
@@ -145,7 +172,7 @@ class MainActivity : FlutterActivity() {
                         return@setMethodCallHandler
                     }
                     if (usbManager.hasPermission(dev)) {
-                        result.success(true)
+                        mainHandler.postDelayed({ result.success(true) }, 150)
                         return@setMethodCallHandler
                     }
                     if (pendingPermissionResult != null) {
@@ -154,6 +181,16 @@ class MainActivity : FlutterActivity() {
                     }
 
                     pendingPermissionResult = result
+
+                    val timeoutTask = Runnable {
+                        val cb = pendingPermissionResult
+                        pendingPermissionResult = null
+                        permissionTimeoutRunnable = null
+                        cb?.error("PERMISSION_TIMEOUT", "Таймаут ожидания ответа диалога USB-разрешения", null)
+                    }
+                    permissionTimeoutRunnable = timeoutTask
+                    mainHandler.postDelayed(timeoutTask, PERMISSION_TIMEOUT_MS)
+
                     val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                         PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
                     } else {
@@ -190,6 +227,8 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        permissionTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+        permissionTimeoutRunnable = null
         dfuChannel?.setMethodCallHandler(null)
         dfuChannel = null
         pendingPermissionResult = null
@@ -235,6 +274,8 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun flashStm32Dfu(firmware: ByteArray, startAddress: Long) {
+        Thread.sleep(200)
+
         val usbManager = getUsbManager()
         val device = findTargetDfuDevice(usbManager)
             ?: throw IllegalStateException("STM32F401 в режиме DFU не найден")
@@ -259,13 +300,16 @@ class MainActivity : FlutterActivity() {
 
         try {
             if (!connection.claimInterface(targetInterface, true)) {
-                throw IllegalStateException("Не удалось захватить DFU-интерфейс")
+                throw IllegalStateException("Не удалось захватить DFU-интерфейс (id=$interfaceId)")
             }
 
-            val st = dfuGetStatus(connection, interfaceId)
+            Thread.sleep(100)
+
+            var st = dfuGetStatus(connection, interfaceId)
             if (st.state == STATE_DFU_ERROR) {
                 dfuClrStatus(connection, interfaceId)
-                dfuGetStatus(connection, interfaceId)
+                Thread.sleep(50)
+                st = dfuGetStatus(connection, interfaceId)
             }
 
             reportProgress("Стирание Flash STM32F401...", 0.12)
@@ -358,9 +402,8 @@ class MainActivity : FlutterActivity() {
         blockNum: Int,
         data: ByteArray
     ) {
-        val requestType = UsbConstants.USB_TYPE_CLASS or UsbConstants.USB_DIR_OUT
         val sent = connection.controlTransfer(
-            requestType,
+            REQTYPE_DFU_OUT,
             DFU_DNLOAD.toInt(),
             blockNum,
             interfaceId,
@@ -374,9 +417,8 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun dfuClrStatus(connection: UsbDeviceConnection, interfaceId: Int) {
-        val requestType = UsbConstants.USB_TYPE_CLASS or UsbConstants.USB_DIR_OUT
         connection.controlTransfer(
-            requestType,
+            REQTYPE_DFU_OUT,
             DFU_CLRSTATUS.toInt(),
             0,
             interfaceId,
@@ -388,11 +430,10 @@ class MainActivity : FlutterActivity() {
 
     private fun dfuGetStatus(connection: UsbDeviceConnection, interfaceId: Int): DfuStatus {
         val buf = ByteArray(6)
-        val requestType = UsbConstants.USB_TYPE_CLASS or UsbConstants.USB_DIR_IN
         var read = -1
-        for (retry in 0..2) {
+        for (retry in 0..3) {
             read = connection.controlTransfer(
-                requestType,
+                REQTYPE_DFU_IN,
                 DFU_GETSTATUS.toInt(),
                 0,
                 interfaceId,
@@ -401,7 +442,7 @@ class MainActivity : FlutterActivity() {
                 1500
             )
             if (read >= 6) break
-            Thread.sleep(20)
+            Thread.sleep(40)
         }
         if (read < 6) {
             throw IllegalStateException("Сбой DFU_GETSTATUS (read=$read)")
