@@ -294,7 +294,7 @@ class DfuService {
     _ensureInitialized();
     final dynamic res = await _channel.invokeMethod('findDfuDevice');
     if (res is Map) {
-      return Map.from(res);
+      return Map<dynamic, dynamic>.from(res);
     }
     return null;
   }
@@ -319,7 +319,7 @@ class DfuService {
 
     try {
       onProgress?.call("Поиск STM32F401 в режиме DFU...", 0.02);
-      final Map? dev = await findDfuDevice();
+      final Map<dynamic, dynamic>? dev = await findDfuDevice();
       if (dev == null) {
         throw Exception(
           "DFU-устройство не найдено.\nПереведите F401 в DFU (BOOT0=1 + RESET).",
@@ -580,7 +580,7 @@ class XFireActionCard extends StatelessWidget {
                   Text(
                     commandName,
                     style: TextStyle(
-                      color: Colors.amberAccent.withValues(alpha: 0.9),
+                      color: Colors.amberAccent.withOpacity(0.9),
                       fontSize: 14,
                       fontFamily: 'monospace',
                       fontWeight: FontWeight.w600,
@@ -804,7 +804,7 @@ class _XFireTextHexCardState extends State<XFireTextHexCard> {
           Text(
             widget.commandName,
             style: TextStyle(
-              color: Colors.amberAccent.withValues(alpha: 0.9),
+              color: Colors.amberAccent.withOpacity(0.9),
               fontSize: 14,
               fontFamily: 'monospace',
               fontWeight: FontWeight.w600,
@@ -922,7 +922,7 @@ class _XFireFlashCardState extends State<XFireFlashCard> {
           color: const Color(0xFF141416),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: _isFlashing ? Colors.amberAccent.withValues(alpha: 0.5) : Colors.white12,
+            color: _isFlashing ? Colors.amberAccent.withOpacity(0.5) : Colors.white12,
           ),
         ),
         child: Material(
@@ -1144,7 +1144,7 @@ class _XFireSliderCardState extends State<XFireSliderCard> {
                       Text(
                         widget.commandName,
                         style: TextStyle(
-                          color: Colors.amberAccent.withValues(alpha: 0.9),
+                          color: Colors.amberAccent.withOpacity(0.9),
                           fontSize: 14,
                           fontFamily: 'monospace',
                           fontWeight: FontWeight.w600,
@@ -1211,9 +1211,9 @@ class _XFireSliderCardState extends State<XFireSliderCard> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
                           decoration: BoxDecoration(
-                            color: Colors.blueAccent.withValues(alpha: 0.18),
+                            color: Colors.blueAccent.withOpacity(0.18),
                             borderRadius: BorderRadius.circular(9),
-                            border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.35)),
+                            border: Border.all(color: Colors.blueAccent.withOpacity(0.35)),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -1303,7 +1303,7 @@ class XFireSwitchCard extends StatelessWidget {
                 Text(
                   commandName,
                   style: TextStyle(
-                    color: Colors.amberAccent.withValues(alpha: 0.9),
+                    color: Colors.amberAccent.withOpacity(0.9),
                     fontSize: 14,
                     fontFamily: 'monospace',
                     fontWeight: FontWeight.w600,
@@ -1358,7 +1358,7 @@ class XFireSegmentedCard extends StatelessWidget {
           Text(
             commandName,
             style: TextStyle(
-              color: Colors.amberAccent.withValues(alpha: 0.9),
+              color: Colors.amberAccent.withOpacity(0.9),
               fontSize: 14,
               fontFamily: 'monospace',
               fontWeight: FontWeight.w600,
@@ -1584,7 +1584,7 @@ class _PidAxisCardWidgetState extends State<PidAxisCardWidget> {
           Text(
             "${widget.kpCmd} / ${widget.kiCmd} / ${widget.kdCmd}",
             style: TextStyle(
-              color: Colors.amberAccent.withValues(alpha: 0.9),
+              color: Colors.amberAccent.withOpacity(0.9),
               fontSize: 13,
               fontFamily: 'monospace',
               fontWeight: FontWeight.w600,
@@ -1669,7 +1669,7 @@ class RtxLinkCalculatorCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF141416),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: themeColor.withValues(alpha: 0.4)),
+        border: Border.all(color: themeColor.withOpacity(0.4)),
       ),
       child: Column(
         children: [
@@ -2030,7 +2030,7 @@ class DipoleSchematicPainter extends CustomPainter {
 
     if (hasSleeve) {
       final sleevePaint = Paint()
-        ..color = Colors.blueAccent.withValues(alpha: 0.3)
+        ..color = Colors.blueAccent.withOpacity(0.3)
         ..style = PaintingStyle.fill;
       canvas.drawRRect(
         RRect.fromRectAndRadius(
