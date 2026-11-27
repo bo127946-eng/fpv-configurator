@@ -1317,8 +1317,11 @@ class DfuDiagnosticsPanel extends StatelessWidget {
   final double progress;
   final List<DfuDiagEntry> entries;
   final List<String> usbDeviceSummary;
+  final List<String> portConflictWarnings;
+  final String serialStateSummary;
   final bool isScanningUsb;
   final VoidCallback onScanUsb;
+  final VoidCallback onForceReleaseSerial;
   final VoidCallback onClearLog;
 
   const DfuDiagnosticsPanel({
@@ -1330,8 +1333,11 @@ class DfuDiagnosticsPanel extends StatelessWidget {
     required this.progress,
     required this.entries,
     required this.usbDeviceSummary,
+    required this.portConflictWarnings,
+    required this.serialStateSummary,
     required this.isScanningUsb,
     required this.onScanUsb,
+    required this.onForceReleaseSerial,
     required this.onClearLog,
   });
 
@@ -1376,12 +1382,12 @@ class DfuDiagnosticsPanel extends StatelessWidget {
       return "Причина: ошибка передачи блока прошивки (DFU_DNLOAD) или записи страницы Flash.";
     }
     if (lower.contains("detach") || lower.contains("claim") || lower.contains("interface")) {
-      return "Причина: не удалось захватить USB DFU интерфейс Android (проверьте разрешение USB Host).";
+      return "Причина: не удалось захватить USB DFU интерфейс Android (проверьте разрешение USB Host и отсутствие другого открытого порта).";
     }
     if (lower.contains("not found") || lower.contains("не найден")) {
       return "Причина: STM32 в режиме DFU (VID 0x0483, PID 0xDF11) не обнаружен на шине USB.";
     }
-    return "Проверьте подключение OTG, режим BOOT0 и полный лог ниже.";
+    return "Проверьте подключение OTG, режим BOOT0, отсутствие лишних устройств/портов и полный лог ниже.";
   }
 
   @override
@@ -1409,7 +1415,7 @@ class DfuDiagnosticsPanel extends StatelessWidget {
               children: [
                 const Expanded(
                   child: Text(
-                    "Полная диагностика DFU",
+                    "Полная диагностика DFU и портов",
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -1436,6 +1442,60 @@ class DfuDiagnosticsPanel extends StatelessWidget {
                 ),
               ],
             ),
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A1A1E),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.white10),
+              ),
+              child: Text(
+                "Состояние SerialService: $serialStateSummary",
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 12,
+                  color: Colors.white70,
+                ),
+              ),
+            ),
+            if (portConflictWarnings.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.orangeAccent.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.orangeAccent.withOpacity(0.45)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Проверка портов и шины (возможные помехи):",
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orangeAccent,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    ...portConflictWarnings.map(
+                      (w) => Text(
+                        "• $w",
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.white,
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 10),
             Row(
               children: [
@@ -1524,7 +1584,7 @@ class DfuDiagnosticsPanel extends StatelessWidget {
                     onPressed: isScanningUsb ? null : onScanUsb,
                     icon: const Icon(Icons.usb_rounded, size: 18),
                     label: Text(
-                      isScanningUsb ? "Поиск USB..." : "Проверить USB / DFU",
+                      isScanningUsb ? "Поиск USB..." : "Проверить порты / DFU",
                       style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
                     ),
                     style: OutlinedButton.styleFrom(
@@ -1536,9 +1596,29 @@ class DfuDiagnosticsPanel extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                IconButton(
-                  tooltip: "Скопировать лог DFU",
+                const SizedBox(width: 6),
+                OutlinedButton(
+                  onPressed: onForceReleaseSerial,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.cyanAccent,
+                    side: const BorderSide(color: Colors.white24),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: const Text(
+                    "Сброс Serial",
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton.icon(
                   onPressed: entries.isEmpty
                       ? null
                       : () {
@@ -1550,21 +1630,18 @@ class DfuDiagnosticsPanel extends StatelessWidget {
                             ),
                           );
                         },
-                  icon: const Icon(Icons.copy_rounded, size: 20, color: Colors.white70),
+                  icon: const Icon(Icons.copy_rounded, size: 18, color: Colors.white70),
+                  label: const Text("Копировать лог", style: TextStyle(color: Colors.white70, fontSize: 13)),
                 ),
-                IconButton(
-                  tooltip: "Очистить лог DFU",
+                TextButton.icon(
                   onPressed: entries.isEmpty ? null : onClearLog,
-                  icon: const Icon(
-                    Icons.delete_outline_rounded,
-                    size: 20,
-                    color: Colors.white70,
-                  ),
+                  icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.white70),
+                  label: const Text("Очистить", style: TextStyle(color: Colors.white70, fontSize: 13)),
                 ),
               ],
             ),
             if (usbDeviceSummary.isNotEmpty) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(10),
@@ -1621,7 +1698,7 @@ class DfuDiagnosticsPanel extends StatelessWidget {
               ),
               child: entries.isEmpty
                   ? const Text(
-                      "Журнал пуст. Нажмите «Проверить USB / DFU» или запустите прошивку STM32F401.",
+                      "Журнал пуст. Нажмите «Проверить порты / DFU» или запустите прошивку STM32F401.",
                       style: TextStyle(
                         fontFamily: 'monospace',
                         fontSize: 12,
@@ -1733,7 +1810,7 @@ class _SettingsTabState extends State<SettingsTab> {
   double _calBatVoltageArg = 14.8;
   double _calCurrAmpsArg = 0.0;
 
-  // Состояние диагностики DFU
+  // Состояние диагностики DFU и проверки портов
   DfuDiagStatus _dfuStatus = DfuDiagStatus.idle;
   String _dfuStage = "Готов к прошивке";
   String? _dfuFailureStage;
@@ -1741,6 +1818,7 @@ class _SettingsTabState extends State<SettingsTab> {
   double _dfuProgress = 0.0;
   final List<DfuDiagEntry> _dfuEntries = [];
   List<String> _dfuUsbSummary = [];
+  List<String> _portConflictWarnings = [];
   bool _isScanningDfuUsb = false;
 
   @override
@@ -1759,9 +1837,20 @@ class _SettingsTabState extends State<SettingsTab> {
     super.dispose();
   }
 
+  String _getSerialStateSummary() {
+    final active = SerialService.activeDevice;
+    final activeInfo = active != null
+        ? "${active.productName ?? active.deviceName} (id=${active.deviceId}, vid=${active.vid}, pid=${active.pid})"
+        : "нет";
+    final portRef = SerialService.usbPort != null ? "присутствует" : "null";
+    return "connected=${SerialService.isConnected}, busy=${SerialService.isBusy}, port=$portRef, dev=$activeInfo";
+  }
+
   String _inferDfuStage(String msg) {
     final lower = msg.toLowerCase();
-    if (lower.contains("serial") || lower.contains("закрытие")) return "USB_RELEASE";
+    if (lower.contains("serial") || lower.contains("закрытие") || lower.contains("порт")) {
+      return "PORT_CHECK";
+    }
     if (lower.contains("поиск") || lower.contains("find") || lower.contains("device")) {
       return "USB_DISCOVERY";
     }
@@ -1808,12 +1897,37 @@ class _SettingsTabState extends State<SettingsTab> {
     });
   }
 
-  Future<List<String>> _inspectUsbBusForDfu() async {
-    final devices = await UsbSerial.listDevices();
-    if (devices.isEmpty) {
-      return ["• USB устройства не найдены (проверьте OTG-кабель и питание платы)"];
+  Future<(List<String>, List<String>)> _inspectBusAndConflicts(List<UsbDevice> devices) async {
+    final warnings = <String>[];
+
+    if (SerialService.isConnected || SerialService.usbPort != null || SerialService.activeDevice != null) {
+      warnings.add(
+        "SerialService всё ещё помечен активным или имеет ссылку на порт (${_getSerialStateSummary()}).",
+      );
     }
-    return devices.map((d) {
+    if (SerialService.isBusy) {
+      warnings.add("SerialService занят (isBusy=true) — возможна блокировка операции.");
+    }
+
+    if (devices.isEmpty) {
+      warnings.add("На USB-шине нет ни одного устройства.");
+      return (["• USB устройства не найдены"], warnings);
+    }
+
+    if (devices.length > 1) {
+      warnings.add(
+        "На шине подключено сразу ${devices.length} USB-устройств — лишнее устройство/хаб может мешать захватить DFU или давать просадку 5V.",
+      );
+    }
+
+    final dfuCount = devices.where((d) => d.vid == 0x0483 && d.pid == 0xDF11).length;
+    if (dfuCount == 0) {
+      warnings.add("Устройство в режиме STM32 ROM DFU (VID 0x0483, PID 0xDF11) не найдено.");
+    } else if (dfuCount > 1) {
+      warnings.add("Найдено сразу $dfuCount устройств с PID 0xDF11 — оставьте подключенным только один чип.");
+    }
+
+    final summary = devices.map((d) {
       final vidHex = d.vid != null
           ? "0x${d.vid!.toRadixString(16).padLeft(4, '0').toUpperCase()}"
           : "----";
@@ -1822,35 +1936,58 @@ class _SettingsTabState extends State<SettingsTab> {
           : "----";
       final isStmDfu = d.vid == 0x0483 && d.pid == 0xDF11;
       final isStmCdc = d.vid == 0x0483 && d.pid == 0x5740;
+      if (!isStmDfu) {
+        warnings.add(
+          "Постороннее/не-DFU устройство: ${d.productName ?? d.deviceName} (VID:$vidHex PID:$pidHex, id=${d.deviceId}).",
+        );
+      }
       final modeTag = isStmDfu
           ? "[STM32 ROM DFU — OK]"
           : (isStmCdc
-              ? "[STM32 CDC/CLI — плата НЕ в DFU, зажмите BOOT0]"
-              : "[Неизвестный режим]");
+              ? "[STM32 CDC/Serial порт — НЕ DFU]"
+              : "[Другой порт/устройство]");
       final name = (d.productName != null && d.productName!.trim().isNotEmpty)
           ? d.productName!.trim()
           : d.deviceName;
-      return "• $name | VID:$vidHex PID:$pidHex $modeTag";
+      return "• $name (id=${d.deviceId}) | VID:$vidHex PID:$pidHex $modeTag";
     }).toList();
+
+    return (summary, warnings);
   }
 
   Future<void> _scanDfuDevicesManually() async {
     if (_isScanningDfuUsb) return;
     setState(() => _isScanningDfuUsb = true);
     try {
-      final summary = await _inspectUsbBusForDfu();
+      final devices = await UsbSerial.listDevices();
+      final (summary, warnings) = await _inspectBusAndConflicts(devices);
       if (!mounted) return;
-      setState(() => _dfuUsbSummary = summary);
+      setState(() {
+        _dfuUsbSummary = summary;
+        _portConflictWarnings = warnings;
+      });
       _recordDfuLog(
-        "USB_SCAN",
-        "Найдено устройств: ${summary.length}. ${summary.join(' ; ')}",
+        "PORT_CHECK",
+        "Устройств: ${devices.length}, предупреждений по портам/шине: ${warnings.length}. ${warnings.isEmpty ? 'Конфликтов не выявлено' : warnings.join(' ; ')}",
         _dfuProgress,
       );
     } catch (e) {
-      _recordDfuLog("USB_SCAN", "Ошибка опроса USB шины: $e", _dfuProgress, isError: true);
+      _recordDfuLog("PORT_CHECK", "Ошибка проверки портов/USB: $e", _dfuProgress, isError: true);
     } finally {
       if (mounted) setState(() => _isScanningDfuUsb = false);
     }
+  }
+
+  Future<void> _forceReleaseSerial() async {
+    _recordDfuLog("PORT_CHECK", "Принудительное освобождение SerialService...", _dfuProgress);
+    try {
+      await SerialService.disconnect().timeout(const Duration(seconds: 2));
+      _recordDfuLog("PORT_CHECK", "SerialService освобождён (${_getSerialStateSummary()})", _dfuProgress);
+    } catch (e) {
+      _recordDfuLog("PORT_CHECK", "Таймаут/ошибка при освобождении SerialService: $e", _dfuProgress, isError: true);
+    }
+    await _scanDfuDevicesManually();
+    if (mounted) setState(() {});
   }
 
   Future<void> _runDfuWithFullDiagnostics(
@@ -1864,37 +2001,38 @@ class _SettingsTabState extends State<SettingsTab> {
         _dfuFailureDetails = null;
         _dfuProgress = 0.0;
         _dfuEntries.clear();
+        _portConflictWarnings = [];
       });
     }
 
     _recordDfuLog("INIT", "Запуск прошивки assets/fc401.bin @ 0x08000000", 0.01);
 
     try {
-      if (SerialService.isConnected) {
+      _recordDfuLog("PORT_CHECK", "Состояние до отключения: ${_getSerialStateSummary()}", 0.02);
+      if (SerialService.isConnected || SerialService.usbPort != null) {
         const msg = "Закрытие активного USB Serial соединения перед DFU...";
         onProgress(msg, 0.02);
-        _recordDfuLog("USB_RELEASE", msg, 0.02);
-        await SerialService.disconnect();
+        _recordDfuLog("PORT_CHECK", msg, 0.02);
+        try {
+          await SerialService.disconnect().timeout(const Duration(seconds: 3));
+        } catch (e) {
+          _recordDfuLog("PORT_CHECK", "Предупреждение при disconnect(): $e", 0.03);
+        }
         await Future.delayed(const Duration(milliseconds: 250));
-        _recordDfuLog("USB_RELEASE", "USB Serial порт освобождён", 0.04);
-      } else {
-        _recordDfuLog("USB_RELEASE", "USB Serial уже отключён", 0.04);
       }
+      _recordDfuLog("PORT_CHECK", "Состояние после отключения: ${_getSerialStateSummary()}", 0.04);
 
-      final summary = await _inspectUsbBusForDfu();
+      final devices = await UsbSerial.listDevices();
+      final (summary, warnings) = await _inspectBusAndConflicts(devices);
       if (mounted) {
-        setState(() => _dfuUsbSummary = summary);
+        setState(() {
+          _dfuUsbSummary = summary;
+          _portConflictWarnings = warnings;
+        });
       }
       _recordDfuLog("USB_DISCOVERY", summary.join(" | "), 0.06);
-
-      final hasCdcOnly = summary.any((s) => s.contains("0x5740")) &&
-          !summary.any((s) => s.contains("0xDF11"));
-      if (hasCdcOnly) {
-        _recordDfuLog(
-          "USB_DISCOVERY",
-          "Предупреждение: обнаружен CDC 0x5740 вместо DFU 0xDF11 (возможно, не зажат BOOT0)",
-          0.07,
-        );
+      if (warnings.isNotEmpty) {
+        _recordDfuLog("PORT_CHECK", "Предупреждения: ${warnings.join(' ; ')}", 0.07);
       }
 
       await DfuService.flashF401(
@@ -3579,8 +3717,11 @@ class _SettingsTabState extends State<SettingsTab> {
               progress: _dfuProgress,
               entries: _dfuEntries,
               usbDeviceSummary: _dfuUsbSummary,
+              portConflictWarnings: _portConflictWarnings,
+              serialStateSummary: _getSerialStateSummary(),
               isScanningUsb: _isScanningDfuUsb,
               onScanUsb: _scanDfuDevicesManually,
+              onForceReleaseSerial: _forceReleaseSerial,
               onClearLog: () {
                 setState(() {
                   _dfuEntries.clear();
