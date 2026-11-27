@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.hardware.usb.UsbConstants
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbInterface
@@ -12,7 +13,6 @@ import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -22,114 +22,81 @@ import java.util.concurrent.Executors
 
 class MainActivity : FlutterActivity() {
     companion object {
-        private const val DFU_CHANNEL_NAME = "xfire/dfu"
-        private const val ACTION_USB_PERMISSION = "com.example.xfire.DFU_USB_PERMISSION"
+        private const val CHANNEL = "xfire/dfu"
+        private const val ACTION_USB_PERMISSION = "com.example.xfire.USB_DFU_PERMISSION"
+
         private const val STM32_VID = 0x0483
         private const val STM32_DFU_PID = 0xDF11
 
-        // USB DFU class requests (recipient = Interface: 0x01)
         private const val USB_DIR_OUT = 0x00
         private const val USB_DIR_IN = 0x80
         private const val USB_TYPE_CLASS = 0x20
-        private const val USB_RECIPIENT_INTERFACE = 0x01
+        private const val USB_RECIP_INTERFACE = 0x01
 
-        private const val REQTYPE_DFU_OUT = USB_TYPE_CLASS or USB_RECIPIENT_INTERFACE or USB_DIR_OUT // 0x21
-        private const val REQTYPE_DFU_IN = USB_TYPE_CLASS or USB_RECIPIENT_INTERFACE or USB_DIR_IN   // 0xA1
+        private const val REQ_DETACH: Byte = 0x00
+        private const val REQ_DNLOAD: Byte = 0x01
+        private const val REQ_UPLOAD: Byte = 0x02
+        private const val REQ_GETSTATUS: Byte = 0x03
+        private const val REQ_CLRSTATUS: Byte = 0x04
+        private const val REQ_GETSTATE: Byte = 0x05
+        private const val REQ_ABORT: Byte = 0x06
 
-        private const val DFU_DNLOAD: Byte = 0x01
-        private const val DFU_GETSTATUS: Byte = 0x03
-        private const val DFU_CLRSTATUS: Byte = 0x04
-
+        private const val STATE_APP_IDLE = 0
+        private const val STATE_APP_DETACH = 1
         private const val STATE_DFU_IDLE = 2
         private const val STATE_DFU_DNLOAD_SYNC = 3
         private const val STATE_DFU_DNBUSY = 4
+        private const val STATE_DFU_DNLOAD_IDLE = 5
+        private const val STATE_DFU_MANIFEST_SYNC = 6
+        private const val STATE_DFU_MANIFEST = 7
         private const val STATE_DFU_MANIFEST_WAIT_RESET = 8
+        private const val STATE_DFU_UPLOAD_IDLE = 9
         private const val STATE_DFU_ERROR = 10
 
-        private const val PERMISSION_TIMEOUT_MS = 30_000L
-
-        private val STM32F401_SECTORS = listOf(
-            0x08000000L to 16 * 1024L,
-            0x08004000L to 16 * 1024L,
-            0x08008000L to 16 * 1024L,
-            0x0800C000L to 16 * 1024L,
-            0x08010000L to 64 * 1024L,
-            0x08020000L to 128 * 1024L,
-            0x08040000L to 128 * 1024L,
-            0x08060000L to 128 * 1024L
-        )
+        private const val FLASH_START_ADDR = 0x08000000
+        private const val DFU_XFER_SIZE = 2048
     }
 
+    private data class DfuStatus(
+        val status: Int,
+        val pollTimeoutMs: Int,
+        val state: Int,
+        val iString: Int
+    )
+
+    private val executor = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val dfuExecutor = Executors.newSingleThreadExecutor()
-    private var dfuChannel: MethodChannel? = null
+    private var methodChannel: MethodChannel? = null
 
     private var pendingPermissionResult: MethodChannel.Result? = null
+    private var permissionReceiver: BroadcastReceiver? = null
     private var permissionTimeoutRunnable: Runnable? = null
-    private var permissionReceiverRegistered = false
 
-    private val permissionReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action != ACTION_USB_PERMISSION) return
-
-            permissionTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
-            permissionTimeoutRunnable = null
-
-            val device: UsbDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
-            } else {
-                @Suppress("DEPRECATION")
-                intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
-            }
-
-            val usbManager = getUsbManager()
-            val targetDev = device ?: findTargetDfuDevice(usbManager)
-            val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false) ||
-                (targetDev != null && usbManager.hasPermission(targetDev))
-
-            val callback = pendingPermissionResult
-            pendingPermissionResult = null
-
-            if (callback != null) {
-                if (granted) {
-                    reportProgress("USB-разрешение получено, стабилизация шины...", 0.06)
-                    mainHandler.postDelayed({
-                        callback.success(true)
-                    }, 300)
-                } else {
-                    mainHandler.post {
-                        callback.success(false)
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        super.configureFlutterEngine(flutterEngine)
+        methodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
+        methodChannel?.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "findDfuDevice" -> handleFindDfuDevice(result)
+                "requestDfuPermission" -> handleRequestDfuPermission(result)
+                "flashF401" -> {
+                    val args = call.arguments as? Map<*, *>
+                    val firmware = args?.get("firmware") as? ByteArray
+                    val startAddress = (args?.get("startAddress") as? Number)?.toInt() ?: FLASH_START_ADDR
+                    if (firmware == null || firmware.isEmpty()) {
+                        result.error("INVALID_ARGS", "Пустой буфер прошивки (firmware)", null)
+                    } else {
+                        handleFlashF401(firmware, startAddress, result)
                     }
                 }
+                else -> result.notImplemented()
             }
         }
     }
 
-    private fun getUsbManager(): UsbManager {
-        return getSystemService(Context.USB_SERVICE) as UsbManager
-    }
-
-    private fun findTargetDfuDevice(usbManager: UsbManager): UsbDevice? {
-        return usbManager.deviceList.values.firstOrNull { dev ->
-            dev.vendorId == STM32_VID && dev.productId == STM32_DFU_PID
-        }
-    }
-
-    private fun ensurePermissionReceiver() {
-        if (permissionReceiverRegistered) return
-        val filter = IntentFilter(ACTION_USB_PERMISSION)
-        ContextCompat.registerReceiver(
-            this,
-            permissionReceiver,
-            filter,
-            ContextCompat.RECEIVER_NOT_EXPORTED
-        )
-        permissionReceiverRegistered = true
-    }
-
-    private fun reportProgress(status: String, progress: Double) {
+    private fun postProgress(status: String, progress: Double) {
         mainHandler.post {
-            dfuChannel?.invokeMethod(
+            methodChannel?.invokeMethod(
                 "onDfuProgress",
                 mapOf(
                     "status" to status,
@@ -139,334 +106,405 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
-        super.configureFlutterEngine(flutterEngine)
-        ensurePermissionReceiver()
+    private fun getUsbManager(): UsbManager =
+        getSystemService(Context.USB_SERVICE) as UsbManager
 
-        val channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DFU_CHANNEL_NAME)
-        dfuChannel = channel
-
-        channel.setMethodCallHandler { call, result ->
-            when (call.method) {
-                "findDfuDevice" -> {
-                    val dev = findTargetDfuDevice(getUsbManager())
-                    if (dev == null) {
-                        result.success(null)
-                    } else {
-                        result.success(
-                            mapOf(
-                                "deviceName" to dev.deviceName,
-                                "vendorId" to dev.vendorId,
-                                "productId" to dev.productId,
-                                "deviceId" to dev.deviceId
-                            )
-                        )
-                    }
+    private fun findStm32DfuDevice(usbManager: UsbManager): UsbDevice? {
+        val deviceList = usbManager.deviceList.values
+        deviceList.firstOrNull { it.vendorId == STM32_VID && it.productId == STM32_DFU_PID }?.let {
+            return it
+        }
+        return deviceList.firstOrNull { dev ->
+            for (i in 0 until dev.interfaceCount) {
+                val intf = dev.getInterface(i)
+                if (intf.interfaceClass == UsbConstants.USB_CLASS_APP_SPEC &&
+                    intf.interfaceSubclass == 0x01
+                ) {
+                    return@firstOrNull true
                 }
-
-                "requestDfuPermission" -> {
-                    val usbManager = getUsbManager()
-                    val dev = findTargetDfuDevice(usbManager)
-                    if (dev == null) {
-                        result.success(false)
-                        return@setMethodCallHandler
-                    }
-                    if (usbManager.hasPermission(dev)) {
-                        mainHandler.postDelayed({ result.success(true) }, 150)
-                        return@setMethodCallHandler
-                    }
-                    if (pendingPermissionResult != null) {
-                        result.error("PERMISSION_IN_PROGRESS", "Запрос USB-разрешения уже выполняется", null)
-                        return@setMethodCallHandler
-                    }
-
-                    pendingPermissionResult = result
-
-                    val timeoutTask = Runnable {
-                        val cb = pendingPermissionResult
-                        pendingPermissionResult = null
-                        permissionTimeoutRunnable = null
-                        cb?.error("PERMISSION_TIMEOUT", "Таймаут ожидания ответа диалога USB-разрешения", null)
-                    }
-                    permissionTimeoutRunnable = timeoutTask
-                    mainHandler.postDelayed(timeoutTask, PERMISSION_TIMEOUT_MS)
-
-                    val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-                    } else {
-                        PendingIntent.FLAG_UPDATE_CURRENT
-                    }
-                    val intent = Intent(ACTION_USB_PERMISSION).apply { setPackage(packageName) }
-                    val pendingIntent = PendingIntent.getBroadcast(this, 0, intent, flags)
-                    usbManager.requestPermission(dev, pendingIntent)
-                }
-
-                "flashF401" -> {
-                    val firmware = call.argument<ByteArray>("firmware")
-                    val startAddress = call.argument<Int>("startAddress") ?: 0x08000000
-                    if (firmware == null || firmware.isEmpty()) {
-                        result.error("NO_FIRMWARE", "Пустой буфер прошивки", null)
-                        return@setMethodCallHandler
-                    }
-
-                    dfuExecutor.execute {
-                        try {
-                            flashStm32Dfu(firmware, startAddress.toLong() and 0xFFFFFFFFL)
-                            mainHandler.post { result.success(true) }
-                        } catch (ex: Exception) {
-                            mainHandler.post {
-                                result.error("DFU_ERROR", ex.message ?: "Ошибка прошивки DFU", null)
-                            }
-                        }
-                    }
-                }
-
-                else -> result.notImplemented()
             }
+            false
         }
     }
 
-    override fun onDestroy() {
-        permissionTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
-        permissionTimeoutRunnable = null
-        dfuChannel?.setMethodCallHandler(null)
-        dfuChannel = null
-        pendingPermissionResult = null
-        if (permissionReceiverRegistered) {
+    private fun handleFindDfuDevice(result: MethodChannel.Result) {
+        executor.execute {
             try {
-                unregisterReceiver(permissionReceiver)
-            } catch (_: Exception) {
-            }
-            permissionReceiverRegistered = false
-        }
-        dfuExecutor.shutdownNow()
-        super.onDestroy()
-    }
-
-    private data class DfuStatus(
-        val status: Int,
-        val pollTimeoutMs: Int,
-        val state: Int
-    )
-
-    private fun eraseTargetSectors(
-        connection: UsbDeviceConnection,
-        interfaceId: Int,
-        startAddress: Long,
-        length: Int
-    ) {
-        val endAddress = startAddress + length.toLong()
-        val sectorsToErase = STM32F401_SECTORS.filter { (sectorStart, sectorSize) ->
-            val sectorEnd = sectorStart + sectorSize
-            sectorEnd > startAddress && sectorStart < endAddress
-        }
-
-        if (sectorsToErase.isEmpty()) {
-            dfuSetAddressPointer(connection, interfaceId, startAddress)
-            dfuEraseSector(connection, interfaceId, startAddress)
-            return
-        }
-
-        for ((sectorStart, _) in sectorsToErase) {
-            dfuSetAddressPointer(connection, interfaceId, sectorStart)
-            dfuEraseSector(connection, interfaceId, sectorStart)
-        }
-    }
-
-    private fun flashStm32Dfu(firmware: ByteArray, startAddress: Long) {
-        Thread.sleep(200)
-
-        val usbManager = getUsbManager()
-        val device = findTargetDfuDevice(usbManager)
-            ?: throw IllegalStateException("STM32F401 в режиме DFU не найден")
-
-        if (!usbManager.hasPermission(device)) {
-            throw SecurityException("Нет USB-разрешения для DFU-устройства")
-        }
-
-        var dfuInterface: UsbInterface? = null
-        for (i in 0 until device.interfaceCount) {
-            val intf = device.getInterface(i)
-            if (intf.interfaceClass == 0xFE && intf.interfaceSubclass == 0x01) {
-                dfuInterface = intf
-                break
-            }
-        }
-        val targetInterface = dfuInterface ?: device.getInterface(0)
-        val interfaceId = targetInterface.id
-
-        val connection: UsbDeviceConnection = usbManager.openDevice(device)
-            ?: throw IllegalStateException("Не удалось открыть USB-соединение с DFU")
-
-        try {
-            if (!connection.claimInterface(targetInterface, true)) {
-                throw IllegalStateException("Не удалось захватить DFU-интерфейс (id=$interfaceId)")
-            }
-
-            Thread.sleep(100)
-
-            var st = dfuGetStatus(connection, interfaceId)
-            if (st.state == STATE_DFU_ERROR) {
-                dfuClrStatus(connection, interfaceId)
-                Thread.sleep(50)
-                st = dfuGetStatus(connection, interfaceId)
-            }
-
-            reportProgress("Стирание Flash STM32F401...", 0.12)
-            eraseTargetSectors(connection, interfaceId, startAddress, firmware.size)
-            dfuSetAddressPointer(connection, interfaceId, startAddress)
-
-            val blockSize = 1024
-            var offset = 0
-            var blockNum = 2
-            val totalBytes = firmware.size
-
-            while (offset < totalBytes) {
-                val chunkLen = minOf(blockSize, totalBytes - offset)
-                val chunk = firmware.copyOfRange(offset, offset + chunkLen)
-
-                dfuDnload(connection, interfaceId, blockNum, chunk)
-                waitUntilNotBusy(connection, interfaceId)
-
-                val statusAfterWrite = dfuGetStatus(connection, interfaceId)
-                if (statusAfterWrite.state == STATE_DFU_ERROR) {
-                    throw IllegalStateException(
-                        "Ошибка записи DFU на блоке $blockNum (status=${statusAfterWrite.status})"
+                val usbManager = getUsbManager()
+                val dev = findStm32DfuDevice(usbManager)
+                val map = dev?.let {
+                    mapOf(
+                        "deviceId" to it.deviceId,
+                        "deviceName" to it.deviceName,
+                        "productName" to (it.productName ?: "STM32 DFU"),
+                        "vendorId" to it.vendorId,
+                        "productId" to it.productId,
+                        "hasPermission" to usbManager.hasPermission(it)
                     )
                 }
-
-                offset += chunkLen
-                blockNum++
-                val writeRatio = offset.toDouble() / totalBytes.toDouble()
-                reportProgress(
-                    "Запись прошивки: ${offset / 1024}/${totalBytes / 1024} КБ...",
-                    0.18 + writeRatio * 0.72
-                )
-            }
-
-            reportProgress("Завершение и перезапуск STM32F401...", 0.95)
-            dfuDnload(connection, interfaceId, 0, ByteArray(0))
-            for (attempt in 0..8) {
-                try {
-                    val endStatus = dfuGetStatus(connection, interfaceId)
-                    val waitMs = endStatus.pollTimeoutMs.coerceIn(10, 500).toLong()
-                    Thread.sleep(waitMs)
-                    if (endStatus.state == STATE_DFU_MANIFEST_WAIT_RESET || endStatus.state == STATE_DFU_IDLE) {
-                        break
-                    }
-                } catch (_: Exception) {
-                    break
+                mainHandler.post { result.success(map) }
+            } catch (e: Exception) {
+                mainHandler.post {
+                    result.error("FIND_ERROR", "Ошибка поиска DFU устройства: ${e.message}", null)
                 }
             }
+        }
+    }
 
-            reportProgress("Прошивка STM32F401 завершена!", 1.0)
-        } finally {
+    private fun cleanupPermissionReceiver() {
+        permissionTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+        permissionTimeoutRunnable = null
+        permissionReceiver?.let {
             try {
-                connection.releaseInterface(targetInterface)
+                unregisterReceiver(it)
             } catch (_: Exception) {
             }
+        }
+        permissionReceiver = null
+    }
+
+    private fun handleRequestDfuPermission(result: MethodChannel.Result) {
+        mainHandler.post {
+            val usbManager = getUsbManager()
+            val dev = findStm32DfuDevice(usbManager)
+            if (dev == null) {
+                result.success(false)
+                return@post
+            }
+
+            if (usbManager.hasPermission(dev)) {
+                postProgress("USB-разрешение получено, стабилизация шины...", 0.06)
+                result.success(true)
+                return@post
+            }
+
+            if (pendingPermissionResult != null) {
+                result.error("PERMISSION_BUSY", "Запрос USB-разрешения уже выполняется", null)
+                return@post
+            }
+
+            pendingPermissionResult = result
+            cleanupPermissionReceiver()
+
+            val receiver = object : BroadcastReceiver() {
+                override fun onReceive(context: Context?, intent: Intent?) {
+                    if (intent?.action != ACTION_USB_PERMISSION) return
+                    val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
+                    cleanupPermissionReceiver()
+                    val pending = pendingPermissionResult
+                    pendingPermissionResult = null
+                    if (granted) {
+                        postProgress("USB-разрешение получено, стабилизация шины...", 0.06)
+                    }
+                    pending?.success(granted)
+                }
+            }
+            permissionReceiver = receiver
+
+            val filter = IntentFilter(ACTION_USB_PERMISSION)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                @Suppress("UnspecifiedRegisterReceiverFlag")
+                registerReceiver(receiver, filter)
+            }
+
+            val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            } else {
+                PendingIntent.FLAG_UPDATE_CURRENT
+            }
+            val intent = Intent(ACTION_USB_PERMISSION).apply {
+                setPackage(packageName)
+            }
+            val pendingIntent = PendingIntent.getBroadcast(this, 0, intent, flags)
+
+            val timeoutRunnable = Runnable {
+                val grantedNow = getUsbManager().hasPermission(dev)
+                cleanupPermissionReceiver()
+                val pending = pendingPermissionResult
+                pendingPermissionResult = null
+                pending?.success(grantedNow)
+            }
+            permissionTimeoutRunnable = timeoutRunnable
+            mainHandler.postDelayed(timeoutRunnable, 30_000L)
+
+            usbManager.requestPermission(dev, pendingIntent)
+        }
+    }
+
+    private fun handleFlashF401(firmware: ByteArray, startAddress: Int, result: MethodChannel.Result) {
+        executor.execute {
+            var connection: UsbDeviceConnection? = null
+            var claimedInterface: UsbInterface? = null
             try {
-                connection.close()
-            } catch (_: Exception) {
+                val usbManager = getUsbManager()
+                val device = findStm32DfuDevice(usbManager)
+                    ?: throw IllegalStateException("STM32F401 в режиме DFU не найден")
+
+                if (!usbManager.hasPermission(device)) {
+                    throw SecurityException("Нет USB-разрешения для DFU устройства")
+                }
+
+                postProgress("Открытие USB соединения с STM32 DFU...", 0.12)
+                var dfuInterface: UsbInterface? = null
+                for (i in 0 until device.interfaceCount) {
+                    val candidate = device.getInterface(i)
+                    if (candidate.interfaceClass == UsbConstants.USB_CLASS_APP_SPEC &&
+                        candidate.interfaceSubclass == 0x01
+                    ) {
+                        dfuInterface = candidate
+                        break
+                    }
+                }
+                val targetInterface = dfuInterface ?: device.getInterface(0)
+                    ?: throw IllegalStateException("DFU интерфейс не найден")
+
+                val conn = usbManager.openDevice(device)
+                    ?: throw IllegalStateException("Не удалось открыть UsbDeviceConnection")
+                connection = conn
+
+                if (!conn.claimInterface(targetInterface, true)) {
+                    throw IllegalStateException("Не удалось захватить DFU интерфейс #${targetInterface.id}")
+                }
+                claimedInterface = targetInterface
+                val interfaceId = targetInterface.id
+
+                Thread.sleep(150)
+
+                var status = getDfuStatus(conn, interfaceId, timeoutMs = 2000)
+                if (status.state == STATE_DFU_ERROR) {
+                    postProgress("DFU_CLRSTATUS: сброс ошибки DFU...", 0.14)
+                    clearDfuStatus(conn, interfaceId)
+                    Thread.sleep(100)
+                    status = getDfuStatus(conn, interfaceId, timeoutMs = 2000)
+                }
+                if (status.state == STATE_APP_IDLE) {
+                    postProgress("DFU_DETACH: перевод в DFU_IDLE...", 0.15)
+                    detachApp(conn, interfaceId)
+                    Thread.sleep(300)
+                    status = getDfuStatus(conn, interfaceId, timeoutMs = 2000)
+                }
+
+                // Стирание секторов STM32F401 (0x08000000..0x0803FFFF) в зависимости от размера прошивки
+                val sectorsToErase = getF401SectorsForRange(startAddress, firmware.size)
+                val totalSectors = sectorsToErase.size.coerceAtLeast(1)
+
+                for ((idx, sectorAddr) in sectorsToErase.withIndex()) {
+                    val eraseProgress = 0.16 + (0.24 * (idx.toDouble() / totalSectors.toDouble()))
+                    postProgress(
+                        "DFU_ERASE: стирание сектора 0x${sectorAddr.toUInt().toString(16).uppercase()} (${idx + 1}/$totalSectors)...",
+                        eraseProgress
+                    )
+                    erasePage(conn, interfaceId, sectorAddr)
+                    waitUntilReady(conn, interfaceId, extraWaitMs = 900, maxWaitMs = 8000)
+                }
+
+                // Установка адреса записи (wBlockNum = 0, команда 0x21)
+                postProgress("DFU_DNLOAD: установка адреса 0x${startAddress.toUInt().toString(16).uppercase()}...", 0.41)
+                setAddressPointer(conn, interfaceId, startAddress)
+                waitUntilReady(conn, interfaceId, extraWaitMs = 60, maxWaitMs = 3000)
+
+                // Запись блоков начиная с wBlockNum = 2 (по протоколу AN3156)
+                val totalBlocks = ((firmware.size + DFU_XFER_SIZE - 1) / DFU_XFER_SIZE).coerceAtLeast(1)
+                var offset = 0
+                var blockIndex = 0
+                while (offset < firmware.size) {
+                    val chunkSize = minOf(DFU_XFER_SIZE, firmware.size - offset)
+                    val chunk = firmware.copyOfRange(offset, offset + chunkSize)
+                    val wBlockNum = blockIndex + 2
+
+                    val writeProgress = 0.42 + (0.50 * ((blockIndex + 1).toDouble() / totalBlocks.toDouble()))
+                    postProgress(
+                        "DFU_DNLOAD: запись блока ${blockIndex + 1}/$totalBlocks ($chunkSize Б)...",
+                        writeProgress
+                    )
+
+                    dnloadBlock(conn, interfaceId, wBlockNum, chunk)
+                    waitUntilReady(conn, interfaceId, extraWaitMs = 60, maxWaitMs = 4000)
+
+                    offset += chunkSize
+                    blockIndex++
+                }
+
+                // Завершение передачи (нулевой пакет DNLOAD) и выход из DFU (Manifest)
+                postProgress("DFU_MANIFEST: завершение записи и запуск прошивки...", 0.94)
+                dnloadBlock(conn, interfaceId, 2, ByteArray(0))
+                try {
+                    getDfuStatus(conn, interfaceId, timeoutMs = 2000)
+                } catch (_: Exception) {
+                }
+
+                postProgress("DFU_MANIFEST: перезагрузка STM32F401...", 0.98)
+                try {
+                    Thread.sleep(250)
+                } catch (_: Exception) {
+                }
+
+                postProgress("Прошивка STM32F401 успешно завершена!", 1.0)
+                mainHandler.post { result.success(true) }
+            } catch (e: Exception) {
+                val msg = e.message ?: e.javaClass.simpleName
+                postProgress("Ошибка DFU: $msg", 0.0)
+                mainHandler.post {
+                    result.error("DFU_ERROR", msg, null)
+                }
+            } finally {
+                try {
+                    if (connection != null && claimedInterface != null) {
+                        connection.releaseInterface(claimedInterface)
+                    }
+                } catch (_: Exception) {
+                }
+                try {
+                    connection?.close()
+                } catch (_: Exception) {
+                }
             }
         }
     }
 
-    private fun dfuSetAddressPointer(connection: UsbDeviceConnection, interfaceId: Int, address: Long) {
-        val cmd = ByteBuffer.allocate(5).order(ByteOrder.LITTLE_ENDIAN).apply {
-            put(0x21.toByte())
-            put((address and 0xFFL).toByte())
-            put(((address ushr 8) and 0xFFL).toByte())
-            put(((address ushr 16) and 0xFFL).toByte())
-            put(((address ushr 24) and 0xFFL).toByte())
-        }.array()
-        dfuDnload(connection, interfaceId, 0, cmd)
-        waitUntilNotBusy(connection, interfaceId)
-    }
-
-    private fun dfuEraseSector(connection: UsbDeviceConnection, interfaceId: Int, sectorAddress: Long) {
-        val cmd = ByteBuffer.allocate(5).order(ByteOrder.LITTLE_ENDIAN).apply {
-            put(0x41.toByte())
-            put((sectorAddress and 0xFFL).toByte())
-            put(((sectorAddress ushr 8) and 0xFFL).toByte())
-            put(((sectorAddress ushr 16) and 0xFFL).toByte())
-            put(((sectorAddress ushr 24) and 0xFFL).toByte())
-        }.array()
-        dfuDnload(connection, interfaceId, 0, cmd)
-        waitUntilNotBusy(connection, interfaceId)
-    }
-
-    private fun dfuDnload(
-        connection: UsbDeviceConnection,
-        interfaceId: Int,
-        blockNum: Int,
-        data: ByteArray
-    ) {
-        val sent = connection.controlTransfer(
-            REQTYPE_DFU_OUT,
-            DFU_DNLOAD.toInt(),
-            blockNum,
-            interfaceId,
-            if (data.isEmpty()) null else data,
-            data.size,
-            2500
+    private fun getF401SectorsForRange(startAddr: Int, length: Int): List<Int> {
+        val endAddr = startAddr.toLong() + length.coerceAtLeast(1).toLong() - 1L
+        val sectorMap = listOf(
+            0x08000000L to 0x08003FFFL, // Sector 0: 16 KB
+            0x08004000L to 0x08007FFFL, // Sector 1: 16 KB
+            0x08008000L to 0x0800BFFFL, // Sector 2: 16 KB
+            0x0800C000L to 0x0800FFFFL, // Sector 3: 16 KB
+            0x08010000L to 0x0801FFFFL, // Sector 4: 64 KB
+            0x08020000L to 0x0803FFFFL  // Sector 5: 128 KB
         )
-        if (sent < 0) {
-            throw IllegalStateException("Сбой DFU_DNLOAD (block=$blockNum)")
-        }
+        val matched = sectorMap
+            .filter { (sStart, sEnd) -> endAddr >= sStart && startAddr.toLong() <= sEnd }
+            .map { it.first.toInt() }
+        return if (matched.isEmpty()) listOf(0x08000000) else matched
     }
 
-    private fun dfuClrStatus(connection: UsbDeviceConnection, interfaceId: Int) {
-        connection.controlTransfer(
-            REQTYPE_DFU_OUT,
-            DFU_CLRSTATUS.toInt(),
+    private fun detachApp(conn: UsbDeviceConnection, interfaceId: Int) {
+        val sent = conn.controlTransfer(
+            USB_DIR_OUT or USB_TYPE_CLASS or USB_RECIP_INTERFACE,
+            REQ_DETACH.toInt(),
             0,
             interfaceId,
             null,
             0,
-            1500
+            1000
+        )
+        if (sent < 0) throw IllegalStateException("Сбой DFU_DETACH ($sent)")
+    }
+
+    private fun clearDfuStatus(conn: UsbDeviceConnection, interfaceId: Int) {
+        val sent = conn.controlTransfer(
+            USB_DIR_OUT or USB_TYPE_CLASS or USB_RECIP_INTERFACE,
+            REQ_CLRSTATUS.toInt(),
+            0,
+            interfaceId,
+            null,
+            0,
+            1000
+        )
+        if (sent < 0) throw IllegalStateException("Сбой DFU_CLRSTATUS ($sent)")
+    }
+
+    private fun getDfuStatus(conn: UsbDeviceConnection, interfaceId: Int, timeoutMs: Int = 1500): DfuStatus {
+        val buf = ByteArray(6)
+        val read = conn.controlTransfer(
+            USB_DIR_IN or USB_TYPE_CLASS or USB_RECIP_INTERFACE,
+            REQ_GETSTATUS.toInt(),
+            0,
+            interfaceId,
+            buf,
+            buf.size,
+            timeoutMs
+        )
+        if (read < 6) {
+            throw IllegalStateException("Сбой DFU_GETSTATUS (прочитано $read байт)")
+        }
+        val bStatus = buf[0].toInt() and 0xFF
+        val pollTimeout = ((buf[1].toInt() and 0xFF)) or
+            ((buf[2].toInt() and 0xFF) shl 8) or
+            ((buf[3].toInt() and 0xFF) shl 16)
+        val bState = buf[4].toInt() and 0xFF
+        val iString = buf[5].toInt() and 0xFF
+        return DfuStatus(bStatus, pollTimeout, bState, iString)
+    }
+
+    private fun erasePage(conn: UsbDeviceConnection, interfaceId: Int, pageAddr: Int) {
+        val cmd = ByteArray(5)
+        cmd[0] = 0x41.toByte() // Erase command (AN3156)
+        val addrBuf = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(pageAddr).array()
+        System.arraycopy(addrBuf, 0, cmd, 1, 4)
+        dnloadBlock(conn, interfaceId, 0, cmd)
+    }
+
+    private fun setAddressPointer(conn: UsbDeviceConnection, interfaceId: Int, address: Int) {
+        val cmd = ByteArray(5)
+        cmd[0] = 0x21.toByte() // Set Address Pointer (AN3156)
+        val addrBuf = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(address).array()
+        System.arraycopy(addrBuf, 0, cmd, 1, 4)
+        dnloadBlock(conn, interfaceId, 0, cmd)
+    }
+
+    private fun dnloadBlock(conn: UsbDeviceConnection, interfaceId: Int, wBlockNum: Int, data: ByteArray) {
+        val sent = conn.controlTransfer(
+            USB_DIR_OUT or USB_TYPE_CLASS or USB_RECIP_INTERFACE,
+            REQ_DNLOAD.toInt(),
+            wBlockNum,
+            interfaceId,
+            if (data.isEmpty()) null else data,
+            data.size,
+            3000
+        )
+        if (sent < 0) {
+            throw IllegalStateException("Сбой DFU_DNLOAD (wBlockNum=$wBlockNum, ret=$sent)")
+        }
+    }
+
+    private fun waitUntilReady(
+        conn: UsbDeviceConnection,
+        interfaceId: Int,
+        extraWaitMs: Long = 50L,
+        maxWaitMs: Long = 6000L
+    ) {
+        val deadline = System.currentTimeMillis() + maxWaitMs
+        var lastStatus: DfuStatus? = null
+
+        while (System.currentTimeMillis() < deadline) {
+            val st = getDfuStatus(conn, interfaceId, timeoutMs = 2000)
+            lastStatus = st
+
+            if (st.state == STATE_DFU_ERROR) {
+                try {
+                    clearDfuStatus(conn, interfaceId)
+                } catch (_: Exception) {
+                }
+                throw IllegalStateException("Ошибка DFU контроллера (status=0x${st.status.toString(16)})")
+            }
+
+            if (st.state != STATE_DFU_DNBUSY && st.state != STATE_DFU_MANIFEST_SYNC && st.state != STATE_DFU_MANIFEST) {
+                if (extraWaitMs > 0) {
+                    Thread.sleep(extraWaitMs)
+                }
+                return
+            }
+
+            val stepSleep = st.pollTimeoutMs.toLong().coerceIn(25L, 250L)
+            val remaining = (deadline - System.currentTimeMillis()).coerceAtLeast(0L)
+            if (remaining <= 0L) break
+            Thread.sleep(minOf(stepSleep, remaining))
+        }
+
+        throw IllegalStateException(
+            "Таймаут ожидания готовности STM32 DFU (state=${lastStatus?.state}, status=${lastStatus?.status}, poll=${lastStatus?.pollTimeoutMs}ms)"
         )
     }
 
-    private fun dfuGetStatus(connection: UsbDeviceConnection, interfaceId: Int): DfuStatus {
-        val buf = ByteArray(6)
-        var read = -1
-        for (retry in 0..3) {
-            read = connection.controlTransfer(
-                REQTYPE_DFU_IN,
-                DFU_GETSTATUS.toInt(),
-                0,
-                interfaceId,
-                buf,
-                buf.size,
-                1500
-            )
-            if (read >= 6) break
-            Thread.sleep(40)
-        }
-        if (read < 6) {
-            throw IllegalStateException("Сбой DFU_GETSTATUS (read=$read)")
-        }
-        val statusCode = buf[0].toInt() and 0xFF
-        val pollTimeoutMs = (buf[1].toInt() and 0xFF) or
-            ((buf[2].toInt() and 0xFF) shl 8) or
-            ((buf[3].toInt() and 0xFF) shl 16)
-        val state = buf[4].toInt() and 0xFF
-        return DfuStatus(statusCode, pollTimeoutMs, state)
-    }
-
-    private fun waitUntilNotBusy(connection: UsbDeviceConnection, interfaceId: Int) {
-        for (step in 0..200) {
-            val st = dfuGetStatus(connection, interfaceId)
-            val sleepMs = st.pollTimeoutMs.coerceIn(5, 300).toLong()
-            Thread.sleep(sleepMs)
-            if (st.state == STATE_DFU_IDLE || st.state == STATE_DFU_MANIFEST_WAIT_RESET) {
-                return
-            }
-            if (st.state == STATE_DFU_ERROR) {
-                throw IllegalStateException("DFU перешёл в состояние ошибки (status=${st.status})")
-            }
-        }
-        throw IllegalStateException("Таймаут ожидания готовности STM32 DFU")
+    override fun onDestroy() {
+        cleanupPermissionReceiver()
+        pendingPermissionResult = null
+        methodChannel?.setMethodCallHandler(null)
+        methodChannel = null
+        executor.shutdownNow()
+        super.onDestroy()
     }
 }
