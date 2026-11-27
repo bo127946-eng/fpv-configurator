@@ -320,7 +320,7 @@ class DfuService {
 
     try {
       onProgress?.call("Поиск STM32F401 в режиме DFU...", 0.02);
-      final Map<dynamic, dynamic>? dev = await findDfuDevice();
+      final dynamic dev = await findDfuDevice();
       if (dev == null) {
         throw Exception(
           "DFU-устройство не найдено.\nПереведите F401 в DFU (BOOT0=1 + RESET).",
