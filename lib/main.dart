@@ -208,7 +208,7 @@ class _SplashScreenState extends State<SplashScreen>
       backgroundColor: Color(0xFF0A0A0A),
       body: Center(
         child: Text(
-          "XFire v3.27",
+          "XFire v3.22",
           style: TextStyle(
             fontSize: 52,
             fontWeight: FontWeight.bold,
@@ -641,7 +641,7 @@ class _InfoConnectionTabState extends State<InfoConnectionTab> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Text(
-                        'v.3.27 (CLI)',
+                        'v.3.22 (CLI)',
                         style: TextStyle(
                           color: Colors.blueAccent,
                           fontSize: 15,
@@ -1099,7 +1099,7 @@ class _ProfilesTabState extends State<ProfilesTab> {
                   children: [
                     Expanded(
                       child: Text(
-                        "ФИЗИЧЕСКИЙ РАСЧЕТ\nИ НАГРУЗКИ (v.3.27)",
+                        "ФИЗИЧЕСКИЙ РАСЧЕТ\nИ НАГРУЗКИ (v.3.22)",
                         style: TextStyle(
                           color: Colors.amberAccent,
                           fontSize: 16,
@@ -1373,20 +1373,20 @@ class DfuDiagnosticsPanel extends StatelessWidget {
     if (lower.contains("getstatus")) {
       return "Причина: хост отправил DFU_GETSTATUS до выдачи/подтверждения USB-разрешения или контроллер не ответил.\n"
           "Проверьте:\n"
-          "1) В нативном коде Android перед DFU_GETSTATUS должно быть ожидание результата UsbManager.requestPermission (BroadcastReceiver / CompletableDeferred).\n"
-          "2) Плата в ROM DFU (BOOT0=1 при подаче питания), USB Serial отпущен.\n"
-          "3) OTG-кабель и D+/D- без просадки 5V.";
+          "1) В нативном коде Android перед DFU_GETSTATUS должно быть ожидание результата UsbManager.requestPermission.\n"
+          "2) Плата в ROM DFU (BOOT0=1 при подаче питания), USB Serial полностью закрыт.\n"
+          "3) OTG-кабель и питание 5V без просадок.";
     }
     if (lower.contains("dnload")) {
       return "Причина: ошибка передачи блока прошивки (DFU_DNLOAD) или записи страницы Flash.";
     }
     if (lower.contains("detach") || lower.contains("claim") || lower.contains("interface")) {
-      return "Причина: не удалось захватить USB DFU интерфейс Android (проверьте разрешение USB Host и отсутствие другого открытого порта).";
+      return "Причина: не удалось захватить USB DFU интерфейс Android (проверьте разрешение USB Host и освобождение Serial-порта).";
     }
     if (lower.contains("not found") || lower.contains("не найден")) {
       return "Причина: STM32 в режиме DFU (VID 0x0483, PID 0xDF11) не обнаружен на шине USB.";
     }
-    return "Проверьте подключение OTG, режим BOOT0, отсутствие лишних устройств/портов и полный лог ниже.";
+    return "Проверьте подключение OTG, режим BOOT0, освобождение Serial-порта и полный лог ниже.";
   }
 
   @override
@@ -1818,18 +1818,19 @@ class _SettingsTabState extends State<SettingsTab> {
   List<String> _dfuUsbSummary = [];
   List<String> _portConflictWarnings = [];
   bool _isScanningDfuUsb = false;
+  bool _isDfuRunning = false;
 
   @override
   void initState() {
     super.initState();
-    if (SerialService.isConnected && SerialService.usbPort != null) {
+    if (!_isDfuRunning && SerialService.isConnected && SerialService.usbPort != null) {
       unawaited(SerialService.sendCommand("mon"));
     }
   }
 
   @override
   void dispose() {
-    if (SerialService.isConnected && SerialService.usbPort != null) {
+    if (!_isDfuRunning && SerialService.isConnected && SerialService.usbPort != null) {
       unawaited(SerialService.sendCommand("stop"));
     }
     super.dispose();
@@ -1887,7 +1888,7 @@ class _SettingsTabState extends State<SettingsTab> {
       _dfuStage = stage;
       _dfuProgress = progress;
       _dfuEntries.add(entry);
-      if (isError) {
+      if (isError && _dfuStatus != DfuDiagStatus.error) {
         _dfuStatus = DfuDiagStatus.error;
         _dfuFailureStage = stage;
         _dfuFailureDetails = message;
@@ -1900,11 +1901,11 @@ class _SettingsTabState extends State<SettingsTab> {
 
     if (SerialService.isConnected || SerialService.usbPort != null || SerialService.activeDevice != null) {
       warnings.add(
-        "SerialService всё ещё помечен активным или имеет ссылку на порт (${_getSerialStateSummary()}).",
+        "SerialService всё ещё активен или удерживает порт (${_getSerialStateSummary()}).",
       );
     }
     if (SerialService.isBusy) {
-      warnings.add("SerialService занят (isBusy=true) — возможна блокировка операции.");
+      warnings.add("SerialService занят (isBusy=true) — нажмите «Сброс Serial».");
     }
 
     if (devices.isEmpty) {
@@ -1914,15 +1915,15 @@ class _SettingsTabState extends State<SettingsTab> {
 
     if (devices.length > 1) {
       warnings.add(
-        "На шине подключено сразу ${devices.length} USB-устройств — лишнее устройство/хаб может мешать захватить DFU или давать просадку 5V.",
+        "На шине подключено сразу ${devices.length} USB-устройств — оставьте только плату STM32 в режиме DFU.",
       );
     }
 
     final dfuCount = devices.where((d) => d.vid == 0x0483 && d.pid == 0xDF11).length;
     if (dfuCount == 0) {
-      warnings.add("Устройство в режиме STM32 ROM DFU (VID 0x0483, PID 0xDF11) не найдено.");
+      warnings.add("Устройство STM32 ROM DFU (VID 0x0483, PID 0xDF11) не найдено.");
     } else if (dfuCount > 1) {
-      warnings.add("Найдено сразу $dfuCount устройств с PID 0xDF11 — оставьте подключенным только один чип.");
+      warnings.add("Найдено сразу $dfuCount устройств с PID 0xDF11 — оставьте только одно.");
     }
 
     final summary = devices.map((d) {
@@ -1936,14 +1937,14 @@ class _SettingsTabState extends State<SettingsTab> {
       final isStmCdc = d.vid == 0x0483 && d.pid == 0x5740;
       if (!isStmDfu) {
         warnings.add(
-          "Постороннее/не-DFU устройство: ${d.productName ?? d.deviceName} (VID:$vidHex PID:$pidHex, id=${d.deviceId}).",
+          "Устройство не в DFU: ${d.productName ?? d.deviceName} (VID:$vidHex PID:$pidHex, id=${d.deviceId}).",
         );
       }
       final modeTag = isStmDfu
           ? "[STM32 ROM DFU — OK]"
           : (isStmCdc
-              ? "[STM32 CDC/Serial порт — НЕ DFU]"
-              : "[Другой порт/устройство]");
+              ? "[STM32 CDC/Serial — НЕ DFU]"
+              : "[Другое USB-устройство]");
       final name = (d.productName != null && d.productName!.trim().isNotEmpty)
           ? d.productName!.trim()
           : d.deviceName;
@@ -1966,7 +1967,7 @@ class _SettingsTabState extends State<SettingsTab> {
       });
       _recordDfuLog(
         "PORT_CHECK",
-        "Устройств: ${devices.length}, предупреждений по портам/шине: ${warnings.length}. ${warnings.isEmpty ? 'Конфликтов не выявлено' : warnings.join(' ; ')}",
+        "Устройств: ${devices.length}, предупреждений: ${warnings.length}. ${warnings.isEmpty ? 'Конфликтов нет' : warnings.join(' ; ')}",
         _dfuProgress,
       );
     } catch (e) {
@@ -1977,13 +1978,20 @@ class _SettingsTabState extends State<SettingsTab> {
   }
 
   Future<void> _forceReleaseSerial() async {
-    _recordDfuLog("PORT_CHECK", "Принудительное освобождение SerialService...", _dfuProgress);
+    _recordDfuLog("PORT_CHECK", "Остановка мониторинга и освобождение SerialService...", _dfuProgress);
+    try {
+      if (SerialService.isConnected && SerialService.usbPort != null) {
+        await SerialService.sendCommand("stop").timeout(const Duration(milliseconds: 500));
+      }
+    } catch (_) {}
+
     try {
       await SerialService.disconnect().timeout(const Duration(seconds: 2));
       _recordDfuLog("PORT_CHECK", "SerialService освобождён (${_getSerialStateSummary()})", _dfuProgress);
     } catch (e) {
       _recordDfuLog("PORT_CHECK", "Таймаут/ошибка при освобождении SerialService: $e", _dfuProgress, isError: true);
     }
+    await Future.delayed(const Duration(milliseconds: 250));
     await _scanDfuDevicesManually();
     if (mounted) setState(() {});
   }
@@ -1991,6 +1999,9 @@ class _SettingsTabState extends State<SettingsTab> {
   Future<void> _runDfuWithFullDiagnostics(
     void Function(String status, double progress) onProgress,
   ) async {
+    if (_isDfuRunning) return;
+    _isDfuRunning = true;
+
     if (mounted) {
       setState(() {
         _dfuStatus = DfuDiagStatus.running;
@@ -2007,16 +2018,21 @@ class _SettingsTabState extends State<SettingsTab> {
 
     try {
       _recordDfuLog("PORT_CHECK", "Состояние до отключения: ${_getSerialStateSummary()}", 0.02);
-      if (SerialService.isConnected || SerialService.usbPort != null) {
-        const msg = "Закрытие активного USB Serial соединения перед DFU...";
+      if (SerialService.isConnected || SerialService.usbPort != null || SerialService.activeDevice != null) {
+        const msg = "Остановка потока и закрытие USB Serial перед DFU...";
         onProgress(msg, 0.02);
         _recordDfuLog("PORT_CHECK", msg, 0.02);
+        try {
+          if (SerialService.isConnected && SerialService.usbPort != null) {
+            await SerialService.sendCommand("stop").timeout(const Duration(milliseconds: 500));
+          }
+        } catch (_) {}
         try {
           await SerialService.disconnect().timeout(const Duration(seconds: 3));
         } catch (e) {
           _recordDfuLog("PORT_CHECK", "Предупреждение при disconnect(): $e", 0.03);
         }
-        await Future.delayed(const Duration(milliseconds: 300));
+        await Future.delayed(const Duration(milliseconds: 350));
       }
       _recordDfuLog("PORT_CHECK", "Состояние после отключения: ${_getSerialStateSummary()}", 0.04);
 
@@ -2033,7 +2049,6 @@ class _SettingsTabState extends State<SettingsTab> {
         _recordDfuLog("PORT_CHECK", "Предупреждения: ${warnings.join(' ; ')}", 0.07);
       }
 
-      // Небольшая стабилизация шины перед передачей управления в DfuService.flashF401
       await Future.delayed(const Duration(milliseconds: 250));
 
       await DfuService.flashF401(
@@ -2056,14 +2071,18 @@ class _SettingsTabState extends State<SettingsTab> {
       _recordDfuLog("COMPLETE", "Прошивка STM32F401 успешно завершена!", 1.0);
     } catch (e) {
       final errStr = e.toString();
-      final failStage = _inferDfuStage(errStr);
-      _recordDfuLog(
-        failStage,
-        "Исключение на этапе $_dfuStage: $errStr",
-        _dfuProgress,
-        isError: true,
-      );
+      if (_dfuStatus != DfuDiagStatus.error) {
+        final failStage = _inferDfuStage(errStr);
+        _recordDfuLog(
+          failStage,
+          "Исключение на этапе $failStage: $errStr",
+          _dfuProgress,
+          isError: true,
+        );
+      }
       rethrow;
+    } finally {
+      _isDfuRunning = false;
     }
   }
 
@@ -3706,7 +3725,7 @@ class _SettingsTabState extends State<SettingsTab> {
               ),
             ),
             XFireFlashCard(
-              title: "Прошить STM32F401 по DFU\n(v3.27)",
+              title: "Прошить STM32F401 по DFU\n(v3.22)",
               targetName: "Полетный контроллер STM32F401 (DFU)",
               onFlash: (onProgress) => _runDfuWithFullDiagnostics(onProgress),
             ),
