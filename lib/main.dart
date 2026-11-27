@@ -1371,12 +1371,11 @@ class DfuDiagnosticsPanel extends StatelessWidget {
     if (err == null || err.isEmpty) return "";
     final lower = err.toLowerCase();
     if (lower.contains("getstatus")) {
-      return "Причина: хост отправил DFU_GETSTATUS, но контроллер не ответил, вернул некорректный пакет или ушёл в dfuERROR.\n"
+      return "Причина: хост отправил DFU_GETSTATUS до выдачи/подтверждения USB-разрешения или контроллер не ответил.\n"
           "Проверьте:\n"
-          "1) Плата переведена в аппаратный ROM DFU через BOOT0=1 перед подачей USB.\n"
-          "2) USB Serial полностью отключён и не держит интерфейс.\n"
-          "3) Кабель/OTG-переходник имеет линии D+/D- без просадки 5V.\n"
-          "4) На плате запаян кварц 8 или 25 МГц и снят RDP.";
+          "1) В нативном коде Android перед DFU_GETSTATUS должно быть ожидание результата UsbManager.requestPermission (BroadcastReceiver / CompletableDeferred).\n"
+          "2) Плата в ROM DFU (BOOT0=1 при подаче питания), USB Serial отпущен.\n"
+          "3) OTG-кабель и D+/D- без просадки 5V.";
     }
     if (lower.contains("dnload")) {
       return "Причина: ошибка передачи блока прошивки (DFU_DNLOAD) или записи страницы Flash.";
@@ -1810,7 +1809,6 @@ class _SettingsTabState extends State<SettingsTab> {
   double _calBatVoltageArg = 14.8;
   double _calCurrAmpsArg = 0.0;
 
-  // Состояние диагностики DFU и проверки портов
   DfuDiagStatus _dfuStatus = DfuDiagStatus.idle;
   String _dfuStage = "Готов к прошивке";
   String? _dfuFailureStage;
@@ -2018,7 +2016,7 @@ class _SettingsTabState extends State<SettingsTab> {
         } catch (e) {
           _recordDfuLog("PORT_CHECK", "Предупреждение при disconnect(): $e", 0.03);
         }
-        await Future.delayed(const Duration(milliseconds: 250));
+        await Future.delayed(const Duration(milliseconds: 300));
       }
       _recordDfuLog("PORT_CHECK", "Состояние после отключения: ${_getSerialStateSummary()}", 0.04);
 
@@ -2034,6 +2032,9 @@ class _SettingsTabState extends State<SettingsTab> {
       if (warnings.isNotEmpty) {
         _recordDfuLog("PORT_CHECK", "Предупреждения: ${warnings.join(' ; ')}", 0.07);
       }
+
+      // Небольшая стабилизация шины перед передачей управления в DfuService.flashF401
+      await Future.delayed(const Duration(milliseconds: 250));
 
       await DfuService.flashF401(
         assetPath: 'assets/fc401.bin',
